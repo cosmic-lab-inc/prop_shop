@@ -1,0 +1,19 @@
+@font-face {
+    font-family: researcherBold;
+    src: url('./fonts/Researcher-Bold.ttf');
+}
+
+@font-face {
+    font-family: titilliumLight;
+    src: url('./fonts/TitilliumWeb-Light.ttf');
+}
+
+@font-face {
+    font-family: titilliumRegular;
+    src: url('./fonts/TitilliumWeb-Regular.ttf');
+}
+
+@font-face {
+    font-family: titilliumBold;
+    src: url('./fonts/TitilliumWeb-SemiBold.ttf');
+}

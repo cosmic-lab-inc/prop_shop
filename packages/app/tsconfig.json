@@ -1,0 +1,29 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "composite": true,
+    "downlevelIteration": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "jsx": "react",
+    "noEmit": true,
+    "module": "ESNext",
+    "target": "ESNext",
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "strictNullChecks": true,
+    "noImplicitAny": true
+  },
+  "include": [
+    "src/**/*",
+    "package.json"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

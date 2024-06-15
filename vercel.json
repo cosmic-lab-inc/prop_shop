@@ -1,0 +1,14 @@
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "index.html"
+    }
+  ],
+  "installCommand": "yarn install",
+  "buildCommand": "yarn build:app",
+  "devCommand": "yarn start:app",
+  "framework": "vite",
+  "outputDirectory": "packages/app/dist",
+  "public": true
+}
