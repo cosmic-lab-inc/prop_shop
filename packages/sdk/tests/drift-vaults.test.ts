@@ -1,5 +1,5 @@
 import { AnchorProvider, Program, setProvider } from "@coral-xyz/anchor";
-import { DriftVaults, IDL } from "../src";
+import { DRIFT_VAULTS_PROGRAM_ID, DriftVaults, IDL } from "../src";
 import {
   AdminClient,
   BN,
@@ -10,8 +10,7 @@ import {
   UserAccount,
   ZERO,
 } from "@drift-labs/sdk";
-import { Keypair, PublicKey } from "@solana/web3.js";
-// import { assert } from "chai";
+import { Keypair } from "@solana/web3.js";
 import {
   encodeName,
   getVaultAddressSync,
@@ -48,7 +47,7 @@ describe("Drift Vaults", () => {
 
   const program = new Program<DriftVaults>(
     IDL,
-    new PublicKey("vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR"),
+    DRIFT_VAULTS_PROGRAM_ID,
     provider,
   );
   const adminClient = new AdminClient({
@@ -78,7 +77,6 @@ describe("Drift Vaults", () => {
   const usdcAmount = new BN(1000 * 10 ** 6);
 
   beforeAll(async () => {
-    console.log("BEFORE");
     usdcMint = await mockUSDCMint(provider);
     userUSDCAccount = await mockUserUSDCAccount(usdcMint, usdcAmount, provider);
     await adminClient.initialize(usdcMint.publicKey, false);
@@ -86,7 +84,6 @@ describe("Drift Vaults", () => {
     await initializeQuoteSpotMarket(adminClient, usdcMint.publicKey);
     bulkAccountLoader.startPolling();
     await bulkAccountLoader.load();
-    console.log("FINISH BEFORE");
   });
 
   afterAll(async () => {
