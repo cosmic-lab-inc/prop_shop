@@ -1,0 +1,13 @@
+[config]
+default_to_workspace = false
+
+[tasks.solana]
+command = "solana-install"
+args = ["init", "1.16.27"]
+
+[tasks.avm]
+command = "avm"
+args = ["use", "0.29.0"]
+
+[tasks.setup]
+dependencies = ["avm", "solana"]

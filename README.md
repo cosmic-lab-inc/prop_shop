@@ -1,20 +1,64 @@
-<p align="center">
-  <a href="https://epoch.fm">
-    <img alt="Epoch" src="https://cosmic-lab-inc.github.io/logo/epoch_logo.png" width="250px" style="border-radius: 50%;"/>
-  </a>
-</p>
+# Drift Vaults
 
+soon^TM
 
-<h1 align="center" style="font-size: 50px">
-    Epoch ⏳
-</h1>
+[did you see the CLI?](./ts/sdk/README.md) and the [wiki?](https://github.com/drift-labs/drift-vaults/wiki)
 
-### Development
+## Install Dependencies
 
-In `packages/app` copy the `.env.example` into a `.env` file and replace `REACT_APP_OPENAI_KEY` with your OpenAI API
-key.
-The `REACT_APP_EPOCH_ENDPOINT` can remain the same if running the server locally.
+If you don't have Anchor Version Manager (AVM) installed run:
 
-[**Task Board**](https://github.com/orgs/cosmic-lab-inc/projects/2/views/2)
+```shell
+cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+```
 
-[Token Extensions Guide](https://github.com/solana-foundation/developer-content/blob/main/content/guides/token-extensions/transfer-fee.md)
+If you don't have anchor `0.29.0` installed run:
+
+```shell
+avm install 0.29.0
+```
+
+If you don't have cargo make installed run:
+
+```shell
+cargo install cargo-make
+```
+
+## Build
+
+Set versions for build dependencies:
+
+```shell
+cargo make setup
+```
+
+First assert that cargo compiles the project:
+
+```shell
+cargo build
+```
+
+Next assert that anchor can compile. On MacOS this is where you might get hung up:
+
+```shell
+anchor build
+```
+
+If on MacOS and you get an error compiling the `blake` crate that mentions something like `someHeaderFile.h not found`,
+then try linking `/usr/include` which newer versions of MacOS don't symlink by default to compile C code:
+
+```shell
+sudo ln -s /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/* /usr/local/include/
+```
+
+## Run tests
+
+```shell
+cd ts && yarn && cd sdk && yarn && yarn build
+
+cd .. && export ANCHOR_WALLET=~/.config/solana/id.json && anchor test
+```
+
+## Future Work
+
+Use vault to interact with Phoenix: [here](https://github.com/drift-labs/drift-vaults/blob/wphan/phoenix-tests/tests/vaultPhoenix.ts)
