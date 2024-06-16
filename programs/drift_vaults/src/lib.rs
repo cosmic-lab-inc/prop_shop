@@ -1,9 +1,10 @@
 use anchor_lang::prelude::*;
+
 use instructions::*;
 use state::*;
 
 mod constants;
-mod cpi;
+mod drift_cpi;
 mod error;
 mod instructions;
 pub mod macros;
@@ -14,9 +15,9 @@ declare_id!("vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR");
 
 #[program]
 pub mod drift_vaults {
-    use super::*;
+  use super::*;
 
-    pub fn initialize_vault<'c: 'info, 'info>(
+  pub fn initialize_vault<'c: 'info, 'info>(
     ctx: Context<'_, '_, 'c, 'info, InitializeVault<'info>>,
     params: VaultParams,
   ) -> Result<()> {
