@@ -114,6 +114,7 @@ pub struct InitializeVault<'info> {
   #[account(constraint = drift_spot_market.load() ?.mint.eq(& drift_spot_market_mint.key()))]
   pub drift_spot_market_mint: Box<Account<'info, Mint>>,
   pub manager: Signer<'info>,
+  pub protocol: Signer<'info>,
   #[account(mut)]
   pub payer: Signer<'info>,
   pub rent: Sysvar<'info, Rent>,

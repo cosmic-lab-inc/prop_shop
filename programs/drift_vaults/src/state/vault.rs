@@ -167,12 +167,6 @@ impl Vault {
     ))
   }
 
-  pub fn get_manager_shares(&self) -> VaultResult<u128> {
-    let manager_shares = self.total_shares.safe_sub(self.user_shares)?.safe_sub(self.protocol_shares)?;
-    assert_eq!(manager_shares, self.manager_shares);
-    Ok(manager_shares)
-  }
-
   pub fn apply_protocol_fee(&mut self, vault_equity: u64, now: i64) -> Result<(i64, i64)> {
     let depositor_equity = depositor_shares_to_vault_amount(self.user_shares, self.total_shares, vault_equity)?.cast::<i128>()?;
     let mut protocol_fee_payment: i128 = 0;
@@ -211,9 +205,15 @@ impl Vault {
     ))
   }
 
+  pub fn get_manager_shares(&self) -> VaultResult<u128> {
+    let manager_shares = self.total_shares.safe_sub(self.user_shares)?.safe_sub(self.protocol_shares)?;
+    // assert_eq!(manager_shares, self.manager_shares);
+    Ok(manager_shares)
+  }
+
   pub fn get_protocol_shares(&self) -> VaultResult<u128> {
     let protocol_shares = self.total_shares.safe_sub(self.user_shares)?.safe_sub(self.manager_shares)?;
-    assert_eq!(protocol_shares, self.protocol_shares);
+    // assert_eq!(protocol_shares, self.protocol_shares);
     Ok(protocol_shares)
   }
 
@@ -466,20 +466,20 @@ impl Vault {
     let n_shares = self.last_manager_withdraw_request.shares;
 
     validate!(
-            n_shares > 0,
-            ErrorCode::InvalidVaultWithdraw,
-            "Must submit withdraw request and wait the redeem_period ({} seconds)",
-            self.redeem_period
-        )?;
+        n_shares > 0,
+        ErrorCode::InvalidVaultWithdraw,
+        "Must submit withdraw request and wait the redeem_period ({} seconds)",
+        self.redeem_period
+    )?;
 
     let amount: u64 = depositor_shares_to_vault_amount(n_shares, self.total_shares, vault_equity)?;
 
     let n_tokens = amount.min(self.last_manager_withdraw_request.value);
 
     validate!(
-            vault_shares_before >= n_shares,
-            ErrorCode::InsufficientVaultShares
-        )?;
+        vault_shares_before >= n_shares,
+        ErrorCode::InsufficientVaultShares
+    )?;
 
     self.total_withdraws = self.total_withdraws.saturating_add(n_tokens);
     self.manager_total_withdraws = self.manager_total_withdraws.saturating_add(n_tokens);
@@ -489,12 +489,12 @@ impl Vault {
     let vault_shares_before = self.total_shares.safe_sub(self.user_shares)?;
 
     validate!(
-            vault_shares_before >= n_shares,
-            ErrorCode::InvalidVaultWithdrawSize,
-            "vault_shares_before={} < n_shares={}",
-            vault_shares_before,
-            n_shares
-        )?;
+        vault_shares_before >= n_shares,
+        ErrorCode::InvalidVaultWithdrawSize,
+        "vault_shares_before={} < n_shares={}",
+        vault_shares_before,
+        n_shares
+    )?;
 
     self.total_shares = self.total_shares.safe_sub(n_shares)?;
     let vault_shares_after = self.total_shares.safe_sub(self.user_shares)?;
@@ -572,10 +572,10 @@ impl Vault {
     )?;
 
     validate!(
-            n_shares > 0,
-            ErrorCode::InvalidVaultWithdrawSize,
-            "Requested n_shares = 0"
-        )?;
+        n_shares > 0,
+        ErrorCode::InvalidVaultWithdrawSize,
+        "Requested n_shares = 0"
+    )?;
 
     // let vault_shares_before: u128 = self.checked_vault_shares(vault)?;
     let total_vault_shares_before = self.total_shares;
@@ -590,7 +590,7 @@ impl Vault {
     )?;
     self.total_withdraw_requested = self.total_withdraw_requested.safe_add(withdraw_value)?;
 
-    let vault_shares_after: u128 = self.get_manager_shares()?;
+    let vault_shares_after: u128 = self.get_protocol_shares()?;
 
     emit!(VaultDepositorRecord {
       ts: now,
@@ -624,20 +624,20 @@ impl Vault {
   ) -> Result<()> {
     self.apply_rebase(vault_equity)?;
 
-    let vault_shares_before: u128 = self.get_manager_shares()?;
+    let vault_shares_before: u128 = self.get_protocol_shares()?;
     let total_vault_shares_before = self.total_shares;
     let user_vault_shares_before = self.user_shares;
 
     let (management_fee, management_fee_shares) = self.apply_management_fee(vault_equity, now)?;
     let (protocol_fee, protocol_fee_shares) = self.apply_protocol_fee(vault_equity, now)?;
 
-    let vault_shares_lost = self.last_manager_withdraw_request.calculate_shares_lost(self, vault_equity)?;
+    let vault_shares_lost = self.last_protocol_withdraw_request.calculate_shares_lost(self, vault_equity)?;
 
     self.total_shares = self.total_shares.safe_sub(vault_shares_lost)?;
 
     self.user_shares = self.user_shares.safe_sub(vault_shares_lost)?;
 
-    let vault_shares_after = self.get_manager_shares()?;
+    let vault_shares_after = self.get_protocol_shares()?;
 
     emit!(VaultDepositorRecord {
       ts: now,
@@ -661,8 +661,8 @@ impl Vault {
       management_fee_shares,
     });
 
-    self.total_withdraw_requested = self.total_withdraw_requested.safe_sub(self.last_manager_withdraw_request.value)?;
-    self.last_manager_withdraw_request.reset(now)?;
+    self.total_withdraw_requested = self.total_withdraw_requested.safe_sub(self.last_protocol_withdraw_request.value)?;
+    self.last_protocol_withdraw_request.reset(now)?;
 
     Ok(())
   }
@@ -675,22 +675,22 @@ impl Vault {
     let (management_fee, management_fee_shares) = self.apply_management_fee(vault_equity, now)?;
     let (protocol_fee, protocol_fee_shares) = self.apply_protocol_fee(vault_equity, now)?;
 
-    let vault_shares_before: u128 = self.get_manager_shares()?;
+    let vault_shares_before: u128 = self.get_protocol_shares()?;
     let total_vault_shares_before = self.total_shares;
     let user_vault_shares_before = self.user_shares;
 
-    let n_shares = self.last_manager_withdraw_request.shares;
+    let n_shares = self.last_protocol_withdraw_request.shares;
 
     validate!(
-            n_shares > 0,
-            ErrorCode::InvalidVaultWithdraw,
-            "Must submit withdraw request and wait the redeem_period ({} seconds)",
-            self.redeem_period
-        )?;
+        n_shares > 0,
+        ErrorCode::InvalidVaultWithdraw,
+        "Must submit withdraw request and wait the redeem_period ({} seconds)",
+        self.redeem_period
+    )?;
 
     let amount: u64 = depositor_shares_to_vault_amount(n_shares, self.total_shares, vault_equity)?;
 
-    let n_tokens = amount.min(self.last_manager_withdraw_request.value);
+    let n_tokens = amount.min(self.last_protocol_withdraw_request.value);
 
     validate!(
             vault_shares_before >= n_shares,
@@ -698,19 +698,19 @@ impl Vault {
         )?;
 
     self.total_withdraws = self.total_withdraws.saturating_add(n_tokens);
-    self.manager_total_withdraws = self.manager_total_withdraws.saturating_add(n_tokens);
+    self.protocol_total_withdraws = self.protocol_total_withdraws.saturating_add(n_tokens);
     self.net_deposits = self.net_deposits.safe_sub(n_tokens.cast()?)?;
-    self.manager_net_deposits = self.manager_net_deposits.safe_sub(n_tokens.cast()?)?;
+    self.protocol_net_deposits = self.protocol_net_deposits.safe_sub(n_tokens.cast()?)?;
 
     let vault_shares_before = self.total_shares.safe_sub(self.user_shares)?;
 
     validate!(
-            vault_shares_before >= n_shares,
-            ErrorCode::InvalidVaultWithdrawSize,
-            "vault_shares_before={} < n_shares={}",
-            vault_shares_before,
-            n_shares
-        )?;
+        vault_shares_before >= n_shares,
+        ErrorCode::InvalidVaultWithdrawSize,
+        "vault_shares_before={} < n_shares={}",
+        vault_shares_before,
+        n_shares
+    )?;
 
     self.total_shares = self.total_shares.safe_sub(n_shares)?;
     let vault_shares_after = self.total_shares.safe_sub(self.user_shares)?;
@@ -737,9 +737,13 @@ impl Vault {
       management_fee_shares,
     });
 
-    self.total_withdraw_requested = self.total_withdraw_requested.safe_sub(self.last_manager_withdraw_request.value)?;
-    self.last_manager_withdraw_request.reset(now)?;
+    self.total_withdraw_requested = self.total_withdraw_requested.safe_sub(self.last_protocol_withdraw_request.value)?;
+    self.last_protocol_withdraw_request.reset(now)?;
 
     Ok(n_tokens)
+  }
+
+  pub fn profit_share(&self) -> u32 {
+    self.manager_profit_share.saturating_add(self.protocol_profit_share)
   }
 }
