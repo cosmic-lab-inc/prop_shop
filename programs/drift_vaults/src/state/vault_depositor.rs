@@ -680,9 +680,9 @@ mod tests {
     let amount: u64 = 100 * QUOTE_PRECISION_U64; // $100 in total equity for vault
     vd.deposit(amount, vault_equity, vault, now + 20).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault).unwrap(), 100_000_000); // 100_000_000 shares across $200 in equity
-    assert_eq!(vault.user_shares, 100_000_000); // depositor confirmed to have $100 in equity
-    assert_eq!(vault.total_shares, 200_000_000); // total equity is $200
+    assert_eq!(vd.checked_vault_shares(vault).unwrap(), 100_000_000); // 100_000_000 shares or $200 in equity
+    assert_eq!(vault.user_shares, 100_000_000);
+    assert_eq!(vault.total_shares, 200_000_000);
 
     vault.manager_profit_share = 100_000; // 10% profit share
     vault.protocol_profit_share = 50_000; // 5% profit share
@@ -744,9 +744,9 @@ mod tests {
     let amount: u64 = 100 * QUOTE_PRECISION_U64; // $100 in total equity for vault
     vd.deposit(amount, vault_equity, vault, now + 20).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault).unwrap(), 100_000_000); // 100_000_000 shares across $200 in equity
-    assert_eq!(vault.user_shares, 100_000_000); // depositor confirmed to have $100 in equity
-    assert_eq!(vault.total_shares, 200_000_000); // total equity is $200
+    assert_eq!(vd.checked_vault_shares(vault).unwrap(), 100_000_000); // 100_000_000 shares or $200 in equity
+    assert_eq!(vault.user_shares, 100_000_000);
+    assert_eq!(vault.total_shares, 200_000_000);
 
     vault.manager_profit_share = 100_000; // 10% profit share
     vault_equity = 400 * QUOTE_PRECISION_U64; // vault gains 100% in value ($200 -> $400)

@@ -33,8 +33,8 @@ pub struct Vault {
   /// The manager of the vault who has ability to update vault params
   pub manager: Pubkey,
   /// The protocol, company, or entity that services the product using this vault.
-  /// This is analogous to Apple charging 30% on App Store transactions, or Visa charging 2% on credit card transactions.
-  // pub protocol: Pubkey,
+  /// The protocol is not allowed to deposit into the vault but can profit share and collect annual fees just like the manager.
+  pub protocol: Pubkey,
   /// The vaults token account. Used to receive tokens between deposits and withdrawals
   pub token_account: Pubkey,
   /// The drift user stats account for the vault
@@ -50,13 +50,12 @@ pub struct Vault {
   pub user_shares: u128,
   /// The sum of all shares: deposits from users, manager deposits, manager profit/fee, and protocol profit/fee.
   /// The manager deposits are total_shares - user_shares - protocol_profit_and_fee_shares.
-  /// The protocol is not allowed to deposit into the vault.
   pub total_shares: u128,
   /// The shares from profit share and annual fee unclaimed by the protocol.
   pub protocol_profit_and_fee_shares: u128,
   /// Last fee update unix timestamp
   pub last_fee_update_ts: i64,
-  /// When the liquidation start
+  /// When the liquidation starts
   pub liquidation_start_ts: i64,
   /// The period (in seconds) that a vault depositor must wait after requesting a withdrawal to finalize withdrawal.
   /// Currently, the maximum is 90 days.
@@ -121,7 +120,7 @@ impl Vault {
 }
 
 impl Size for Vault {
-  const SIZE: usize = 624 + 8;
+  const SIZE: usize = 656 + 8;
 }
 const_assert_eq!(Vault::SIZE, std::mem::size_of::<Vault>() + 8);
 
