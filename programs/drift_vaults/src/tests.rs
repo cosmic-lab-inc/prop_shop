@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod vault_fcn {
-    use anchor_lang::prelude::Pubkey;
-    use drift::math::constants::{ONE_YEAR, QUOTE_PRECISION_U64};
-    use drift::math::insurance::if_shares_to_vault_amount as depositor_shares_to_vault_amount;
+  use anchor_lang::prelude::Pubkey;
+  use drift::math::constants::{ONE_YEAR, QUOTE_PRECISION_U64};
+  use drift::math::insurance::if_shares_to_vault_amount as depositor_shares_to_vault_amount;
 
-    use crate::{Vault, VaultDepositor, WithdrawUnit};
+  use crate::{Vault, VaultDepositor, WithdrawUnit};
 
-    #[test]
+  #[test]
   fn test_manager_withdraw() {
     let now = 0;
     let vault = &mut Vault::default();
@@ -275,7 +275,7 @@ mod vault_fcn {
 
     now += 60 * 60 * 24; // 1 day later
 
-    vd.apply_manager_profit_share(vault_equity, vault).unwrap();
+    vd.apply_profit_share(vault_equity, vault).unwrap();
     vault.apply_management_fee(vault_equity, now).unwrap();
 
     let vault_manager_amount = depositor_shares_to_vault_amount(
@@ -329,7 +329,7 @@ mod vault_fcn {
     while (vault.total_shares == 2000000000 + 100000000) && cnt < 400 {
       now += 60 * 60 * 24; // 1 day later
 
-      vd.apply_manager_profit_share(vault_equity, vault).unwrap();
+      vd.apply_profit_share(vault_equity, vault).unwrap();
       vault.apply_management_fee(vault_equity, now).unwrap();
       // crate::msg!("vault last ts: {} vs {}", vault.last_fee_update_ts, now);
       cnt += 1;
@@ -404,7 +404,7 @@ mod vault_fcn {
     while (vault.total_shares == 2000000000 + 100000000) && cnt < 400 {
       now += 60 * 60 * 24; // 1 day later
 
-      vd.apply_manager_profit_share(vault_equity, vault).unwrap();
+      vd.apply_profit_share(vault_equity, vault).unwrap();
       vault.apply_management_fee(vault_equity, now).unwrap();
       // crate::msg!("vault last ts: {} vs {}", vault.last_fee_update_ts, now);
       cnt += 1;

@@ -48,53 +48,50 @@ pub struct Vault {
   pub liquidation_delegate: Pubkey,
   /// The sum of all shares held by the users (vault depositors)
   pub user_shares: u128,
-  /// The sum of all shares (including vault manager)
+  /// The sum of all shares: deposits from users, manager deposits, manager profit/fee, and protocol profit/fee.
+  /// The manager deposits are total_shares - user_shares - protocol_profit_and_fee_shares.
+  /// The protocol is not allowed to deposit into the vault.
   pub total_shares: u128,
-  /// The shares owned by the manager
-  pub manager_shares: u128,
-  /// The shares owned by the protocol
-  pub protocol_shares: u128,
+  /// The shares from profit share and annual fee unclaimed by the protocol.
+  pub protocol_profit_and_fee_shares: u128,
   /// Last fee update unix timestamp
   pub last_fee_update_ts: i64,
   /// When the liquidation start
   pub liquidation_start_ts: i64,
-  /// The period (in seconds) that a vault depositor must wait after requesting a withdrawal to finalize withdrawal
+  /// The period (in seconds) that a vault depositor must wait after requesting a withdrawal to finalize withdrawal.
+  /// Currently, the maximum is 90 days.
   pub redeem_period: i64,
   /// The sum of all outstanding withdraw requests
   pub total_withdraw_requested: u64,
   /// Max token capacity, once hit/passed vault will reject new deposits (updatable)
   pub max_tokens: u64,
-  /// The manager's fee charged on deposits on a yearly basis
+  /// The annual fee charged on deposits by the manager (traditional hedge funds typically charge 2% per year on assets under management)
   pub management_fee: i64,
-  /// The protocol's fee charged on deposits on a yearly basis
+  /// The annual fee charged on deposits by the protocol (traditional hedge funds typically charge 2% per year on assets under management)
   pub protocol_fee: i64,
   /// Timestamp vault initialized
   pub init_ts: i64,
   /// The net deposits for the vault
   pub net_deposits: i64,
-  /// The net deposits for the vault manager
+  /// The net deposits for the manager
   pub manager_net_deposits: i64,
-  /// The net deposits for the vault protocol
-  pub protocol_net_deposits: u64,
   /// Total deposits
   pub total_deposits: u64,
   /// Total withdraws
   pub total_withdraws: u64,
-  /// Total deposits for the vault manager
+  /// Total deposits for the manager
   pub manager_total_deposits: u64,
-  /// Total deposits for the vault protocol
-  pub protocol_total_deposits: u64,
-  /// Total withdraws for the vault manager
+  /// Total withdraws for the manager
   pub manager_total_withdraws: u64,
-  /// Total withdraws for the vault protocol
+  /// Total withdraws for the protocol
   pub protocol_total_withdraws: u64,
-  /// Total mgmt fee charged by vault manager
+  /// Total management fee charged by the manager (annual management fee + profit share)
   pub manager_total_fee: i64,
-  /// Total fee charged by the vault protocol
+  /// Total fee charged by the protocol (annual management fee + profit share)
   pub protocol_total_fee: i64,
-  /// Total profit share charged by vault manager (`profit_share` applied to profits realized by depositors)
+  /// Total profit share charged by the manager
   pub manager_total_profit_share: u64,
-  /// Total profit share charged by the vault protocol (`profit_share` applied to profits realized by depositors)
+  /// Total profit share charged by the protocol
   pub protocol_total_profit_share: u64,
   /// The minimum deposit amount
   pub min_deposit_amount: u64,
@@ -102,9 +99,9 @@ pub struct Vault {
   pub last_protocol_withdraw_request: WithdrawRequest,
   /// The base 10 exponent of the shares (given massive share inflation can occur at near zero vault equity)
   pub shares_base: u32,
-  /// Percentage cut the manager charges on all profits realized by depositors: PERCENTAGE_PRECISION
+  /// Percentage the manager charges on all profits realized by depositors: PERCENTAGE_PRECISION
   pub manager_profit_share: u32,
-  /// Percentage cut the protocol charges on all profits realized by depositors: PERCENTAGE_PRECISION
+  /// Percentage the protocol charges on all profits realized by depositors: PERCENTAGE_PRECISION
   pub protocol_profit_share: u32,
   /// Vault manager only collect incentive fees during periods when returns are higher than this amount: PERCENTAGE_PRECISION
   pub hurdle_rate: u32,
@@ -124,7 +121,7 @@ impl Vault {
 }
 
 impl Size for Vault {
-  const SIZE: usize = 528 + 8 + 16 + 16 + 8 + 8 + 8 + 8 + 8 + 8 + 32 + 16;
+  const SIZE: usize = 624 + 8;
 }
 const_assert_eq!(Vault::SIZE, std::mem::size_of::<Vault>() + 8);
 
@@ -190,6 +187,7 @@ impl Vault {
       protocol_fee_shares = new_total_shares.cast::<i128>()?.safe_sub(self.total_shares.cast()?)?;
       self.total_shares = new_total_shares;
       self.protocol_total_fee = self.protocol_total_fee.saturating_add(protocol_fee_payment.cast()?);
+      self.protocol_profit_and_fee_shares = self.protocol_profit_and_fee_shares.cast::<i128>()?.safe_add(protocol_fee_shares)?.cast::<u128>()?;
 
       // in case total_shares is pushed to level that warrants a rebase
       self.apply_rebase(vault_equity)?;
@@ -206,15 +204,12 @@ impl Vault {
   }
 
   pub fn get_manager_shares(&self) -> VaultResult<u128> {
-    let manager_shares = self.total_shares.safe_sub(self.user_shares)?.safe_sub(self.protocol_shares)?;
-    // assert_eq!(manager_shares, self.manager_shares);
+    let manager_shares = self.total_shares.safe_sub(self.user_shares)?.safe_sub(self.protocol_profit_and_fee_shares)?;
     Ok(manager_shares)
   }
 
   pub fn get_protocol_shares(&self) -> VaultResult<u128> {
-    let protocol_shares = self.total_shares.safe_sub(self.user_shares)?.safe_sub(self.manager_shares)?;
-    // assert_eq!(protocol_shares, self.protocol_shares);
-    Ok(protocol_shares)
+    Ok(self.protocol_profit_and_fee_shares)
   }
 
   pub fn get_profit_share(&self) -> VaultResult<u32> {
@@ -228,8 +223,7 @@ impl Vault {
       if expo_diff != 0 {
         self.total_shares = self.total_shares.safe_div(rebase_divisor)?;
         self.user_shares = self.user_shares.safe_div(rebase_divisor)?;
-        self.manager_shares = self.manager_shares.safe_div(rebase_divisor)?;
-        self.protocol_shares = self.protocol_shares.safe_div(rebase_divisor)?;
+        self.protocol_profit_and_fee_shares = self.protocol_profit_and_fee_shares.safe_div(rebase_divisor)?;
         self.shares_base = self.shares_base.safe_add(expo_diff)?;
 
         msg!("rebasing vault: expo_diff={}", expo_diff);
@@ -278,7 +272,7 @@ impl Vault {
 
     let user_vault_shares_before = self.user_shares;
     let total_vault_shares_before = self.total_shares;
-    let vault_shares_before = self.total_shares.safe_sub(self.user_shares)?;
+    let vault_shares_before: u128 = self.get_manager_shares()?;
 
     let n_shares = vault_amount_to_depositor_shares(amount, total_vault_shares_before, vault_equity)?;
 
@@ -288,29 +282,29 @@ impl Vault {
     self.manager_net_deposits = self.manager_net_deposits.safe_add(amount.cast()?)?;
 
     self.total_shares = self.total_shares.safe_add(n_shares)?;
-    let vault_shares_after = self.total_shares.safe_sub(self.user_shares)?;
+    let vault_shares_after = self.get_manager_shares()?;
 
     emit!(VaultDepositorRecord {
-            ts: now,
-            vault: self.pubkey,
-            depositor_authority: self.manager,
-            action: VaultDepositorAction::Deposit,
-            amount: 0,
-            spot_market_index: self.spot_market_index,
-            vault_equity_before: vault_equity,
-            vault_shares_before,
-            user_vault_shares_before,
-            total_vault_shares_before,
-            vault_shares_after,
-            total_vault_shares_after: self.total_shares,
-            user_vault_shares_after: self.user_shares,
-            protocol_profit_share: 0,
-            protocol_fee,
-            protocol_fee_shares,
-            manager_profit_share: 0,
-            management_fee,
-            management_fee_shares,
-        });
+      ts: now,
+      vault: self.pubkey,
+      depositor_authority: self.manager,
+      action: VaultDepositorAction::Deposit,
+      amount: 0,
+      spot_market_index: self.spot_market_index,
+      vault_equity_before: vault_equity,
+      vault_shares_before,
+      user_vault_shares_before,
+      total_vault_shares_before,
+      vault_shares_after,
+      total_vault_shares_after: self.total_shares,
+      user_vault_shares_after: self.user_shares,
+      protocol_profit_share: 0,
+      protocol_fee,
+      protocol_fee_shares,
+      manager_profit_share: 0,
+      management_fee,
+      management_fee_shares,
+    });
 
     Ok(())
   }
@@ -356,12 +350,16 @@ impl Vault {
     )?;
 
     validate!(
-            n_shares > 0,
-            ErrorCode::InvalidVaultWithdrawSize,
-            "Requested n_shares = 0"
-        )?;
+        n_shares > 0,
+        ErrorCode::InvalidVaultWithdrawSize,
+        "Requested n_shares = 0"
+    )?;
+    validate!(
+      vault_shares_before >= n_shares,
+      ErrorCode::InvalidVaultWithdrawSize,
+      "Requested n_shares={} > manager shares={}", n_shares, vault_shares_before,
+    )?;
 
-    // let vault_shares_before: u128 = self.checked_vault_shares(vault)?;
     let total_vault_shares_before = self.total_shares;
     let user_vault_shares_before = self.user_shares;
 
@@ -486,7 +484,7 @@ impl Vault {
     self.net_deposits = self.net_deposits.safe_sub(n_tokens.cast()?)?;
     self.manager_net_deposits = self.manager_net_deposits.safe_sub(n_tokens.cast()?)?;
 
-    let vault_shares_before = self.total_shares.safe_sub(self.user_shares)?;
+    let vault_shares_before = self.get_manager_shares()?;
 
     validate!(
         vault_shares_before >= n_shares,
@@ -497,7 +495,7 @@ impl Vault {
     )?;
 
     self.total_shares = self.total_shares.safe_sub(n_shares)?;
-    let vault_shares_after = self.total_shares.safe_sub(self.user_shares)?;
+    let vault_shares_after = self.get_manager_shares()?;
 
     emit!(VaultDepositorRecord {
       ts: now,
@@ -700,9 +698,8 @@ impl Vault {
     self.total_withdraws = self.total_withdraws.saturating_add(n_tokens);
     self.protocol_total_withdraws = self.protocol_total_withdraws.saturating_add(n_tokens);
     self.net_deposits = self.net_deposits.safe_sub(n_tokens.cast()?)?;
-    self.protocol_net_deposits = self.protocol_net_deposits.safe_sub(n_tokens.cast()?)?;
 
-    let vault_shares_before = self.total_shares.safe_sub(self.user_shares)?;
+    let vault_shares_before = self.get_protocol_shares()?;
 
     validate!(
         vault_shares_before >= n_shares,
@@ -713,7 +710,8 @@ impl Vault {
     )?;
 
     self.total_shares = self.total_shares.safe_sub(n_shares)?;
-    let vault_shares_after = self.total_shares.safe_sub(self.user_shares)?;
+    self.protocol_profit_and_fee_shares = self.protocol_profit_and_fee_shares.safe_sub(n_shares)?;
+    let vault_shares_after = self.get_protocol_shares()?;
 
     emit!(VaultDepositorRecord {
       ts: now,

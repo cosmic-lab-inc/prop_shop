@@ -6,8 +6,8 @@ use drift::state::user::User;
 use crate::{Vault, VaultDepositor};
 use crate::AccountMapProvider;
 use crate::constraints::{
-    is_delegate_for_vault, is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault,
-    is_vault_for_vault_depositor,
+  is_delegate_for_vault, is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault,
+  is_vault_for_vault_depositor,
 };
 
 pub fn apply_profit_share<'c: 'info, 'info>(
@@ -29,8 +29,7 @@ pub fn apply_profit_share<'c: 'info, 'info>(
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  vault_depositor.apply_manager_profit_share(vault_equity, &mut vault)?;
-  vault_depositor.apply_protocol_profit_share(vault_equity, &mut vault)?;
+  vault_depositor.apply_profit_share(vault_equity, &mut vault)?;
 
   Ok(())
 }
