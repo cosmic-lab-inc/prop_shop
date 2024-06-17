@@ -961,7 +961,7 @@ mod tests {
     assert_eq!(vault.total_shares, 200000000);
 
     vault.manager_profit_share = 100_000; // 10% profit share
-    vault.protocol_profit_share = 50_000; // 5% profit share
+    // vault.protocol_profit_share = 50_000; // 5% profit share
     vault_equity = 400 * QUOTE_PRECISION_U64; // up 100%
 
     vd.realize_profits(vault_equity, vault, now).unwrap();

@@ -575,7 +575,6 @@ impl Vault {
         "Requested n_shares = 0"
     )?;
 
-    // let vault_shares_before: u128 = self.checked_vault_shares(vault)?;
     let total_vault_shares_before = self.total_shares;
     let user_vault_shares_before = self.user_shares;
 
@@ -691,9 +690,9 @@ impl Vault {
     let n_tokens = amount.min(self.last_protocol_withdraw_request.value);
 
     validate!(
-            vault_shares_before >= n_shares,
-            ErrorCode::InsufficientVaultShares
-        )?;
+        vault_shares_before >= n_shares,
+        ErrorCode::InsufficientVaultShares
+    )?;
 
     self.total_withdraws = self.total_withdraws.saturating_add(n_tokens);
     self.protocol_total_withdraws = self.protocol_total_withdraws.saturating_add(n_tokens);
