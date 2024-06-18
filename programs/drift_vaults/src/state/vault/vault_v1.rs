@@ -18,23 +18,21 @@ use static_assertions::const_assert_eq;
 use crate::{Size, validate, VaultDepositor, WithdrawUnit};
 use crate::constants::TIME_FOR_LIQUIDATION;
 use crate::error::{ErrorCode, VaultResult};
-use crate::events::{VaultDepositorAction, VaultDepositorRecord};
+use crate::events::{VaultDepositorAction, VaultDepositorV1Record};
+use crate::state::{VaultFee, VaultTrait};
 use crate::state::withdraw_request::WithdrawRequest;
 
 // #[assert_no_slop]
 #[account(zero_copy(unsafe))]
 #[derive(Default, Eq, PartialEq, Debug)]
 #[repr(C)]
-pub struct Vault {
+pub struct VaultV1 {
   /// The name of the vault. Vault pubkey is derived from this name.
   pub name: [u8; 32],
   /// The vault's pubkey. It is a pda of name and also used as the authority for drift user
   pub pubkey: Pubkey,
   /// The manager of the vault who has ability to update vault params
   pub manager: Pubkey,
-  /// The protocol, company, or entity that services the product using this vault.
-  /// The protocol is not allowed to deposit into the vault but can profit share and collect annual fees just like the manager.
-  pub protocol: Pubkey,
   /// The vaults token account. Used to receive tokens between deposits and withdrawals
   pub token_account: Pubkey,
   /// The drift user stats account for the vault
@@ -51,8 +49,6 @@ pub struct Vault {
   /// The sum of all shares: deposits from users, manager deposits, manager profit/fee, and protocol profit/fee.
   /// The manager deposits are total_shares - user_shares - protocol_profit_and_fee_shares.
   pub total_shares: u128,
-  /// The shares from profit share and annual fee unclaimed by the protocol.
-  pub protocol_profit_and_fee_shares: u128,
   /// Last fee update unix timestamp
   pub last_fee_update_ts: i64,
   /// When the liquidation starts
@@ -66,8 +62,6 @@ pub struct Vault {
   pub max_tokens: u64,
   /// The annual fee charged on deposits by the manager (traditional hedge funds typically charge 2% per year on assets under management)
   pub management_fee: i64,
-  /// The annual fee charged on deposits by the protocol (traditional hedge funds typically charge 2% per year on assets under management)
-  pub protocol_fee: i64,
   /// Timestamp vault initialized
   pub init_ts: i64,
   /// The net deposits for the vault
@@ -82,26 +76,17 @@ pub struct Vault {
   pub manager_total_deposits: u64,
   /// Total withdraws for the manager
   pub manager_total_withdraws: u64,
-  /// Total withdraws for the protocol
-  pub protocol_total_withdraws: u64,
   /// Total management fee charged by the manager (annual management fee + profit share)
   pub manager_total_fee: i64,
-  /// Total fee charged by the protocol (annual management fee + profit share)
-  pub protocol_total_fee: i64,
   /// Total profit share charged by the manager
   pub manager_total_profit_share: u64,
-  /// Total profit share charged by the protocol
-  pub protocol_total_profit_share: u64,
   /// The minimum deposit amount
   pub min_deposit_amount: u64,
   pub last_manager_withdraw_request: WithdrawRequest,
-  pub last_protocol_withdraw_request: WithdrawRequest,
   /// The base 10 exponent of the shares (given massive share inflation can occur at near zero vault equity)
   pub shares_base: u32,
   /// Percentage the manager charges on all profits realized by depositors: PERCENTAGE_PRECISION
   pub manager_profit_share: u32,
-  /// Percentage the protocol charges on all profits realized by depositors: PERCENTAGE_PRECISION
-  pub protocol_profit_share: u32,
   /// Vault manager only collect incentive fees during periods when returns are higher than this amount: PERCENTAGE_PRECISION
   pub hurdle_rate: u32,
   /// The spot market index the vault deposits into/withdraws from
@@ -110,22 +95,61 @@ pub struct Vault {
   pub bump: u8,
   /// Whether anybody can be a depositor
   pub permissioned: bool,
-  pub padding: [u64; 8],
+
+  /// The protocol, company, or entity that services the product using this vault.
+  /// The protocol is not allowed to deposit into the vault but can profit share and collect annual fees just like the manager.
+  pub protocol: Pubkey,
+  /// The shares from profit share and annual fee unclaimed by the protocol.
+  pub protocol_profit_and_fee_shares: u128,
+  /// The annual fee charged on deposits by the protocol (traditional hedge funds typically charge 2% per year on assets under management)
+  pub protocol_fee: i64,
+  /// Total withdraws for the protocol
+  pub protocol_total_withdraws: u64,
+  /// Total fee charged by the protocol (annual management fee + profit share)
+  pub protocol_total_fee: i64,
+  /// Total profit share charged by the protocol
+  pub protocol_total_profit_share: u64,
+  pub last_protocol_withdraw_request: WithdrawRequest,
+  /// Percentage the protocol charges on all profits realized by depositors: PERCENTAGE_PRECISION
+  pub protocol_profit_share: u32,
+
+  pub version: u8,
+  pub padding1: [u8; 7],
+  pub padding: [u64; 7],
 }
 
-impl Vault {
-  pub fn get_vault_signer_seeds<'a>(name: &'a [u8], bump: &'a u8) -> [&'a [u8]; 3] {
-    [b"vault".as_ref(), name, bytemuck::bytes_of(bump)]
-  }
-}
-
-impl Size for Vault {
+impl Size for VaultV1 {
   const SIZE: usize = 656 + 8;
 }
-const_assert_eq!(Vault::SIZE, std::mem::size_of::<Vault>() + 8);
+const_assert_eq!(VaultV1::SIZE, std::mem::size_of::<VaultV1>() + 8);
 
-impl Vault {
-  pub fn apply_management_fee(&mut self, vault_equity: u64, now: i64) -> Result<(i64, i64)> {
+impl VaultTrait for VaultV1 {
+  fn shares_base(&self) -> u32 { self.shares_base }
+
+  fn user_shares(&self) -> u128 { self.user_shares }
+
+  fn total_shares(&self) -> u128 { self.total_shares }
+
+  fn redeem_period(&self) -> i64 { self.redeem_period }
+
+  fn max_tokens(&self) -> u64 { self.max_tokens }
+
+  fn min_deposit_amount(&self) -> u64 { self.min_deposit_amount }
+
+  fn total_deposits(&self) -> u64 { self.total_deposits }
+
+  fn net_deposits(&self) -> i64 { self.net_deposits }
+
+  fn liquidation_delegate(&self) -> Pubkey { self.liquidation_delegate }
+
+  fn spot_market_index(&self) -> u16 { self.spot_market_index }
+
+  fn get_vault_signer_seeds<'a>(name: &'a [u8], bump: &'a u8) -> [&'a [u8]; 3] {
+    [b"vault".as_ref(), name, bytemuck::bytes_of(bump)]
+  }
+
+  fn apply_fee(&mut self, vault_equity: u64, now: i64) -> Result<VaultFee> {
+    // calculate management fee
     let depositor_equity = depositor_shares_to_vault_amount(self.user_shares, self.total_shares, vault_equity)?.cast::<i128>()?;
     let mut management_fee_payment: i128 = 0;
     let mut management_fee_shares: i128 = 0;
@@ -157,13 +181,7 @@ impl Vault {
       self.last_fee_update_ts = now;
     }
 
-    Ok((
-      management_fee_payment.cast::<i64>()?,
-      management_fee_shares.cast::<i64>()?,
-    ))
-  }
-
-  pub fn apply_protocol_fee(&mut self, vault_equity: u64, now: i64) -> Result<(i64, i64)> {
+    // calculate protocol fee
     let depositor_equity = depositor_shares_to_vault_amount(self.user_shares, self.total_shares, vault_equity)?.cast::<i128>()?;
     let mut protocol_fee_payment: i128 = 0;
     let mut protocol_fee_shares: i128 = 0;
@@ -196,26 +214,28 @@ impl Vault {
       self.last_fee_update_ts = now;
     }
 
-    Ok((
-      protocol_fee_payment.cast::<i64>()?,
-      protocol_fee_shares.cast::<i64>()?,
-    ))
+    Ok(VaultFee {
+      management_fee_payment: management_fee_payment.cast::<i64>()?,
+      management_fee_shares: management_fee_shares.cast::<i64>()?,
+      protocol_fee_payment: protocol_fee_payment.cast::<i64>()?,
+      protocol_fee_shares: protocol_fee_shares.cast::<i64>()?,
+    })
   }
 
-  pub fn get_manager_shares(&self) -> VaultResult<u128> {
+  fn get_manager_shares(&self) -> VaultResult<u128> {
     let manager_shares = self.total_shares.safe_sub(self.user_shares)?.safe_sub(self.protocol_profit_and_fee_shares)?;
     Ok(manager_shares)
   }
 
-  pub fn get_protocol_shares(&self) -> VaultResult<u128> {
+  fn get_protocol_shares(&self) -> VaultResult<u128> {
     Ok(self.protocol_profit_and_fee_shares)
   }
 
-  pub fn get_profit_share(&self) -> VaultResult<u32> {
+  fn get_profit_share(&self) -> VaultResult<u32> {
     Ok(self.manager_profit_share.safe_add(self.protocol_profit_share)?)
   }
 
-  pub fn apply_rebase(&mut self, vault_equity: u64) -> Result<()> {
+  fn apply_rebase(&mut self, vault_equity: u64) -> Result<()> {
     if vault_equity != 0 && vault_equity.cast::<u128>()? < self.total_shares {
       let (expo_diff, rebase_divisor) = calculate_rebase_info(self.total_shares, vault_equity)?;
 
@@ -236,8 +256,7 @@ impl Vault {
     Ok(())
   }
 
-  /// Returns the equity value of the vault, in the vault's spot market token min precision
-  pub fn calculate_equity(
+  fn calculate_equity(
     &self,
     user: &User,
     perp_market_map: &PerpMarketMap,
@@ -264,10 +283,14 @@ impl Vault {
     Ok(vault_equity.safe_mul(spot_market_precision)?.safe_div(oracle_price)?.cast::<u64>()?)
   }
 
-  pub fn manager_deposit(&mut self, amount: u64, vault_equity: u64, now: i64) -> Result<()> {
+  fn manager_deposit(&mut self, amount: u64, vault_equity: u64, now: i64) -> Result<()> {
     self.apply_rebase(vault_equity)?;
-    let (management_fee, management_fee_shares) = self.apply_management_fee(vault_equity, now)?;
-    let (protocol_fee, protocol_fee_shares) = self.apply_protocol_fee(vault_equity, now)?;
+    let VaultFee {
+      management_fee_payment,
+      management_fee_shares,
+      protocol_fee_payment,
+      protocol_fee_shares
+    } = self.apply_fee(vault_equity, now)?;
 
     let user_vault_shares_before = self.user_shares;
     let total_vault_shares_before = self.total_shares;
@@ -283,7 +306,7 @@ impl Vault {
     self.total_shares = self.total_shares.safe_add(n_shares)?;
     let vault_shares_after = self.get_manager_shares()?;
 
-    emit!(VaultDepositorRecord {
+    emit!(VaultDepositorV1Record {
       ts: now,
       vault: self.pubkey,
       depositor_authority: self.manager,
@@ -298,17 +321,17 @@ impl Vault {
       total_vault_shares_after: self.total_shares,
       user_vault_shares_after: self.user_shares,
       protocol_profit_share: 0,
-      protocol_fee,
+      protocol_fee: protocol_fee_payment,
       protocol_fee_shares,
       manager_profit_share: 0,
-      management_fee,
+      management_fee: management_fee_payment,
       management_fee_shares,
     });
 
     Ok(())
   }
 
-  pub fn check_delegate_available_for_liquidation(
+  fn check_delegate_available_for_liquidation(
     &self,
     vault_depositor: &VaultDepositor,
     now: i64,
@@ -328,7 +351,7 @@ impl Vault {
     Ok(())
   }
 
-  pub fn manager_request_withdraw(
+  fn manager_request_withdraw(
     &mut self,
     withdraw_amount: u64,
     withdraw_unit: WithdrawUnit,
@@ -336,8 +359,12 @@ impl Vault {
     now: i64,
   ) -> Result<()> {
     self.apply_rebase(vault_equity)?;
-    let (management_fee, management_fee_shares) = self.apply_management_fee(vault_equity, now)?;
-    let (protocol_fee, protocol_fee_shares) = self.apply_protocol_fee(vault_equity, now)?;
+    let VaultFee {
+      management_fee_payment,
+      management_fee_shares,
+      protocol_fee_payment,
+      protocol_fee_shares
+    } = self.apply_fee(vault_equity, now)?;
 
     let vault_shares_before: u128 = self.get_manager_shares()?;
 
@@ -373,7 +400,7 @@ impl Vault {
 
     let vault_shares_after: u128 = self.get_manager_shares()?;
 
-    emit!(VaultDepositorRecord {
+    emit!(VaultDepositorV1Record {
       ts: now,
       vault: self.pubkey,
       depositor_authority: self.manager,
@@ -388,18 +415,18 @@ impl Vault {
       total_vault_shares_after: self.total_shares,
       user_vault_shares_after: self.user_shares,
       protocol_profit_share: 0,
-      protocol_fee,
+      protocol_fee: protocol_fee_payment,
       protocol_fee_shares,
       manager_profit_share: 0,
-      management_fee,
+      management_fee: management_fee_payment,
       management_fee_shares,
     });
 
     Ok(())
   }
 
-  pub fn manager_cancel_withdraw_request(
-    self: &mut Vault,
+  fn manager_cancel_withdraw_request(
+    self: &mut VaultV1,
     vault_equity: u64,
     now: i64,
   ) -> Result<()> {
@@ -409,8 +436,12 @@ impl Vault {
     let total_vault_shares_before = self.total_shares;
     let user_vault_shares_before = self.user_shares;
 
-    let (management_fee, management_fee_shares) = self.apply_management_fee(vault_equity, now)?;
-    let (protocol_fee, protocol_fee_shares) = self.apply_protocol_fee(vault_equity, now)?;
+    let VaultFee {
+      management_fee_payment,
+      management_fee_shares,
+      protocol_fee_payment,
+      protocol_fee_shares
+    } = self.apply_fee(vault_equity, now)?;
 
     let vault_shares_lost = self.last_manager_withdraw_request.calculate_shares_lost(self, vault_equity)?;
 
@@ -420,7 +451,7 @@ impl Vault {
 
     let vault_shares_after = self.get_manager_shares()?;
 
-    emit!(VaultDepositorRecord {
+    emit!(VaultDepositorV1Record {
       ts: now,
       vault: self.pubkey,
       depositor_authority: self.manager,
@@ -435,10 +466,10 @@ impl Vault {
       total_vault_shares_after: self.total_shares,
       user_vault_shares_after: self.user_shares,
       protocol_profit_share: 0,
-      protocol_fee,
+      protocol_fee: protocol_fee_payment,
       protocol_fee_shares,
       manager_profit_share: 0,
-      management_fee,
+      management_fee: management_fee_payment,
       management_fee_shares,
     });
 
@@ -448,13 +479,17 @@ impl Vault {
     Ok(())
   }
 
-  pub fn manager_withdraw(&mut self, vault_equity: u64, now: i64) -> Result<u64> {
+  fn manager_withdraw(&mut self, vault_equity: u64, now: i64) -> Result<u64> {
     self.last_manager_withdraw_request.check_redeem_period_finished(self, now)?;
 
     self.apply_rebase(vault_equity)?;
 
-    let (management_fee, management_fee_shares) = self.apply_management_fee(vault_equity, now)?;
-    let (protocol_fee, protocol_fee_shares) = self.apply_protocol_fee(vault_equity, now)?;
+    let VaultFee {
+      management_fee_payment,
+      management_fee_shares,
+      protocol_fee_payment,
+      protocol_fee_shares
+    } = self.apply_fee(vault_equity, now)?;
 
     let vault_shares_before: u128 = self.get_manager_shares()?;
     let total_vault_shares_before = self.total_shares;
@@ -496,7 +531,7 @@ impl Vault {
     self.total_shares = self.total_shares.safe_sub(n_shares)?;
     let vault_shares_after = self.get_manager_shares()?;
 
-    emit!(VaultDepositorRecord {
+    emit!(VaultDepositorV1Record {
       ts: now,
       vault: self.pubkey,
       depositor_authority: self.manager,
@@ -511,10 +546,10 @@ impl Vault {
       total_vault_shares_after: self.total_shares,
       user_vault_shares_after: self.user_shares,
       protocol_profit_share: 0,
-      protocol_fee,
+      protocol_fee: protocol_fee_payment,
       protocol_fee_shares,
       manager_profit_share: 0,
-      management_fee,
+      management_fee: management_fee_payment,
       management_fee_shares,
     });
 
@@ -524,11 +559,11 @@ impl Vault {
     Ok(n_tokens)
   }
 
-  pub fn in_liquidation(&self) -> bool {
+  fn in_liquidation(&self) -> bool {
     self.liquidation_delegate != Pubkey::default()
   }
 
-  pub fn check_can_exit_liquidation(&self, now: i64) -> VaultResult {
+  fn check_can_exit_liquidation(&self, now: i64) -> VaultResult {
     validate!(
             now.saturating_sub(self.liquidation_start_ts) > TIME_FOR_LIQUIDATION,
             ErrorCode::VaultInLiquidation,
@@ -538,17 +573,17 @@ impl Vault {
     Ok(())
   }
 
-  pub fn set_liquidation_delegate(&mut self, liquidation_delegate: Pubkey, now: i64) {
+  fn set_liquidation_delegate(&mut self, liquidation_delegate: Pubkey, now: i64) {
     self.liquidation_delegate = liquidation_delegate;
     self.liquidation_start_ts = now;
   }
 
-  pub fn reset_liquidation_delegate(&mut self) {
+  fn reset_liquidation_delegate(&mut self) {
     self.liquidation_delegate = Pubkey::default();
     self.liquidation_start_ts = 0;
   }
 
-  pub fn protocol_request_withdraw(
+  fn protocol_request_withdraw(
     &mut self,
     withdraw_amount: u64,
     withdraw_unit: WithdrawUnit,
@@ -556,8 +591,12 @@ impl Vault {
     now: i64,
   ) -> Result<()> {
     self.apply_rebase(vault_equity)?;
-    let (management_fee, management_fee_shares) = self.apply_management_fee(vault_equity, now)?;
-    let (protocol_fee, protocol_fee_shares) = self.apply_protocol_fee(vault_equity, now)?;
+    let VaultFee {
+      management_fee_payment,
+      management_fee_shares,
+      protocol_fee_payment,
+      protocol_fee_shares
+    } = self.apply_fee(vault_equity, now)?;
 
     let vault_shares_before: u128 = self.get_protocol_shares()?;
 
@@ -588,7 +627,7 @@ impl Vault {
 
     let vault_shares_after: u128 = self.get_protocol_shares()?;
 
-    emit!(VaultDepositorRecord {
+    emit!(VaultDepositorV1Record {
       ts: now,
       vault: self.pubkey,
       depositor_authority: self.manager,
@@ -603,18 +642,18 @@ impl Vault {
       total_vault_shares_after: self.total_shares,
       user_vault_shares_after: self.user_shares,
       protocol_profit_share: 0,
-      protocol_fee,
+      protocol_fee: protocol_fee_payment,
       protocol_fee_shares,
       manager_profit_share: 0,
-      management_fee,
+      management_fee: management_fee_payment,
       management_fee_shares,
     });
 
     Ok(())
   }
 
-  pub fn protocol_cancel_withdraw_request(
-    self: &mut Vault,
+  fn protocol_cancel_withdraw_request(
+    self: &mut VaultV1,
     vault_equity: u64,
     now: i64,
   ) -> Result<()> {
@@ -624,8 +663,12 @@ impl Vault {
     let total_vault_shares_before = self.total_shares;
     let user_vault_shares_before = self.user_shares;
 
-    let (management_fee, management_fee_shares) = self.apply_management_fee(vault_equity, now)?;
-    let (protocol_fee, protocol_fee_shares) = self.apply_protocol_fee(vault_equity, now)?;
+    let VaultFee {
+      management_fee_payment,
+      management_fee_shares,
+      protocol_fee_payment,
+      protocol_fee_shares
+    } = self.apply_fee(vault_equity, now)?;
 
     let vault_shares_lost = self.last_protocol_withdraw_request.calculate_shares_lost(self, vault_equity)?;
 
@@ -635,7 +678,7 @@ impl Vault {
 
     let vault_shares_after = self.get_protocol_shares()?;
 
-    emit!(VaultDepositorRecord {
+    emit!(VaultDepositorV1Record {
       ts: now,
       vault: self.pubkey,
       depositor_authority: self.manager,
@@ -650,10 +693,10 @@ impl Vault {
       total_vault_shares_after: self.total_shares,
       user_vault_shares_after: self.user_shares,
       protocol_profit_share: 0,
-      protocol_fee,
+      protocol_fee: protocol_fee_payment,
       protocol_fee_shares,
       manager_profit_share: 0,
-      management_fee,
+      management_fee: management_fee_payment,
       management_fee_shares,
     });
 
@@ -663,13 +706,17 @@ impl Vault {
     Ok(())
   }
 
-  pub fn protocol_withdraw(&mut self, vault_equity: u64, now: i64) -> Result<u64> {
+  fn protocol_withdraw(&mut self, vault_equity: u64, now: i64) -> Result<u64> {
     self.last_manager_withdraw_request.check_redeem_period_finished(self, now)?;
 
     self.apply_rebase(vault_equity)?;
 
-    let (management_fee, management_fee_shares) = self.apply_management_fee(vault_equity, now)?;
-    let (protocol_fee, protocol_fee_shares) = self.apply_protocol_fee(vault_equity, now)?;
+    let VaultFee {
+      management_fee_payment,
+      management_fee_shares,
+      protocol_fee_payment,
+      protocol_fee_shares
+    } = self.apply_fee(vault_equity, now)?;
 
     let vault_shares_before: u128 = self.get_protocol_shares()?;
     let total_vault_shares_before = self.total_shares;
@@ -711,7 +758,7 @@ impl Vault {
     self.protocol_profit_and_fee_shares = self.protocol_profit_and_fee_shares.safe_sub(n_shares)?;
     let vault_shares_after = self.get_protocol_shares()?;
 
-    emit!(VaultDepositorRecord {
+    emit!(VaultDepositorV1Record {
       ts: now,
       vault: self.pubkey,
       depositor_authority: self.manager,
@@ -726,10 +773,10 @@ impl Vault {
       total_vault_shares_after: self.total_shares,
       user_vault_shares_after: self.user_shares,
       protocol_profit_share: 0,
-      protocol_fee,
+      protocol_fee: protocol_fee_payment,
       protocol_fee_shares,
       manager_profit_share: 0,
-      management_fee,
+      management_fee: management_fee_payment,
       management_fee_shares,
     });
 
@@ -739,7 +786,7 @@ impl Vault {
     Ok(n_tokens)
   }
 
-  pub fn profit_share(&self) -> u32 {
+  fn profit_share(&self) -> u32 {
     self.manager_profit_share.saturating_add(self.protocol_profit_share)
   }
 }
