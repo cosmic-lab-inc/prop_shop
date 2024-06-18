@@ -9,6 +9,7 @@ use crate::constraints::{
   is_delegate_for_vault, is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault,
   is_vault_for_vault_depositor,
 };
+use crate::state::VaultTrait;
 
 pub fn apply_profit_share<'c: 'info, 'info>(
   ctx: Context<'_, '_, 'c, 'info, ApplyProfitShare<'info>>,

@@ -2,8 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
 use bytemuck::Zeroable;
 use drift::math::insurance::{
-    if_shares_to_vault_amount as depositor_shares_to_vault_amount,
-    vault_amount_to_if_shares as vault_amount_to_depositor_shares,
+  if_shares_to_vault_amount as depositor_shares_to_vault_amount,
+  vault_amount_to_if_shares as vault_amount_to_depositor_shares,
 };
 use drift::math::safe_math::SafeMath;
 use drift_macros::assert_no_slop;
@@ -74,28 +74,28 @@ impl WithdrawRequest {
     now: i64,
   ) -> VaultResult {
     validate!(
-            self.value == 0,
-            ErrorCode::VaultWithdrawRequestInProgress,
-            "withdraw request is already in progress"
-        )?;
+        self.value == 0,
+        ErrorCode::VaultWithdrawRequestInProgress,
+        "withdraw request is already in progress"
+    )?;
 
     validate!(
-            withdraw_shares <= current_shares,
-            ErrorCode::InvalidVaultWithdrawSize,
-            "shares requested exceeds vault_shares {} > {}",
-            withdraw_shares,
-            current_shares
-        )?;
+        withdraw_shares <= current_shares,
+        ErrorCode::InvalidVaultWithdrawSize,
+        "shares requested exceeds vault_shares {} > {}",
+        withdraw_shares,
+        current_shares
+    )?;
 
     self.shares = withdraw_shares;
 
     validate!(
-            withdraw_value == 0 || withdraw_value <= vault_equity,
-            ErrorCode::InvalidVaultWithdrawSize,
-            "Requested withdraw value {} is not equal or below vault_equity {}",
-            withdraw_value,
-            vault_equity
-        )?;
+        withdraw_value == 0 || withdraw_value <= vault_equity,
+        ErrorCode::InvalidVaultWithdrawSize,
+        "Requested withdraw value {} is not equal or below vault_equity {}",
+        withdraw_value,
+        vault_equity
+    )?;
 
     self.value = withdraw_value;
 
@@ -117,9 +117,9 @@ impl WithdrawRequest {
     let time_since_withdraw_request = now.safe_sub(self.ts)?;
 
     validate!(
-            time_since_withdraw_request >= vault.redeem_period(),
-            ErrorCode::CannotWithdrawBeforeRedeemPeriodEnd
-        )?;
+        time_since_withdraw_request >= vault.redeem_period(),
+        ErrorCode::CannotWithdrawBeforeRedeemPeriodEnd
+    )?;
 
     Ok(())
   }
