@@ -848,7 +848,7 @@ mod legacy_vault_tests {
   use drift::math::insurance::if_shares_to_vault_amount;
 
   use crate::{Vault, VaultDepositor, WithdrawUnit};
-  use crate::state::VaultVersion;
+  use crate::state::{VaultTrait, VaultVersion};
 
   #[test]
   fn base_init() {
@@ -861,8 +861,8 @@ mod legacy_vault_tests {
   #[test]
   fn test_deposit_withdraw() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
-    let vault = vault_version.legacy_mut().unwrap();
+    let mut _vault = Vault::default();
+    let vault_version = &mut VaultVersion::Legacy(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
@@ -888,20 +888,20 @@ mod legacy_vault_tests {
   #[test]
   fn test_deposit_partial_withdraw_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
-    let vault = vault_version.legacy_mut().unwrap();
+    let mut _vault = Vault::default();
+    let mut vault_version = VaultVersion::Legacy(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64;
     let amount: u64 = 100 * QUOTE_PRECISION_U64;
-    vd.deposit(amount, vault_equity, vault_version, now + 20).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now + 20).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
-    assert_eq!(vault.user_shares, 100000000);
-    assert_eq!(vault.total_shares, 200000000);
+    assert_eq!(vd.checked_vault_shares(&mut vault_version).unwrap(), 100000000);
+    assert_eq!(vault_version.user_shares(), 100000000);
+    assert_eq!(vault_version.total_shares(), 200000000);
 
-    vault.profit_share = 100000; // 10% profit share
+    vault_version.legacy_mut().unwrap().profit_share = 100000; // 10% profit share
     vault_equity = 400 * QUOTE_PRECISION_U64; // up 100%
 
     // withdraw principal
@@ -909,38 +909,38 @@ mod legacy_vault_tests {
       amount.cast().unwrap(),
       WithdrawUnit::Token,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 95000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 95000000);
 
     assert_eq!(vd.last_withdraw_request.shares, 50000000);
     assert_eq!(vd.last_withdraw_request.value, 100000000);
     assert_eq!(vd.last_withdraw_request.ts, now + 20);
 
-    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, vault_version, now + 20).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 45000000);
+    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, &mut vault_version, now + 20).unwrap();
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 45000000);
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vault.user_shares, 45000000);
-    assert_eq!(vault.total_shares, 150000000);
+    assert_eq!(vault_version.user_shares(), 45000000);
+    assert_eq!(vault_version.total_shares(), 150000000);
     assert_eq!(withdraw_amount, amount);
 
     vault_equity -= withdraw_amount;
 
-    let manager_owned_shares = vault.total_shares.checked_sub(vault.user_shares).unwrap();
-    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault.total_shares, vault_equity).unwrap();
+    let manager_owned_shares = vault_version.total_shares().checked_sub(vault_version.user_shares()).unwrap();
+    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
     assert_eq!(manager_owned_amount, 210000000); // $210
 
-    let user_owned_shares = vault.user_shares;
-    let user_owned_amount = if_shares_to_vault_amount(user_owned_shares, vault.total_shares, vault_equity).unwrap();
+    let user_owned_shares = vault_version.user_shares();
+    let user_owned_amount = if_shares_to_vault_amount(user_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
     assert_eq!(user_owned_amount, 90000000); // $90
   }
 
   #[test]
   fn test_deposit_full_withdraw_profit_share() {
     let now = 1000;
-    let mut vault_version = VaultVersion::Legacy(&mut Vault::default());
-    let vault = vault_version.legacy_mut().unwrap();
+    let mut _vault = Vault::default();
+    let mut vault_version = VaultVersion::Legacy(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
@@ -949,10 +949,10 @@ mod legacy_vault_tests {
     vd.deposit(amount, vault_equity, &mut vault_version, now + 20).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
     assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
-    assert_eq!(vault.user_shares, 100000000);
-    assert_eq!(vault.total_shares, 200000000);
+    assert_eq!(vault_version.user_shares(), 100000000);
+    assert_eq!(vault_version.total_shares(), 200000000);
 
-    vault.profit_share = 100000; // 10% profit share
+    vault_version.legacy_mut().unwrap().profit_share = 100000; // 10% profit share
     vault_equity = 400 * QUOTE_PRECISION_U64; // up 100%
 
     // withdraw all
@@ -972,63 +972,63 @@ mod legacy_vault_tests {
     let (withdraw_amount, _) = vd.withdraw(vault_equity, &mut vault_version, now + 20).unwrap();
     assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 0);
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vault.user_shares, 0);
-    assert_eq!(vault.total_shares, 105000000);
+    assert_eq!(vault_version.user_shares(), 0);
+    assert_eq!(vault_version.total_shares(), 105000000);
     assert_eq!(withdraw_amount, amount * 2 - amount * 2 / 20);
     assert_eq!(vd.cumulative_profit_share_amount, 100000000); // $100
 
     vault_equity -= withdraw_amount;
 
-    let manager_owned_shares = vault.total_shares.checked_sub(vault.user_shares).unwrap();
-    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault.total_shares, vault_equity).unwrap();
+    let manager_owned_shares = vault_version.total_shares().checked_sub(vault_version.user_shares()).unwrap();
+    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
     assert_eq!(manager_owned_amount, 210000000); // $210
   }
 
   #[test]
   fn test_force_realize_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
-    let vault = vault_version.legacy_mut().unwrap();
+    let mut _vault = Vault::default();
+    let mut vault_version = VaultVersion::Legacy(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64;
     let amount: u64 = 100 * QUOTE_PRECISION_U64;
-    vd.deposit(amount, vault_equity, vault_version, now).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
-    assert_eq!(vault.user_shares, 100000000);
-    assert_eq!(vault.total_shares, 200000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
+    assert_eq!(vault_version.user_shares(), 100000000);
+    assert_eq!(vault_version.total_shares(), 200000000);
 
-    vault.profit_share = 100000; // 10% profit share
+    vault_version.legacy_mut().unwrap().profit_share = 100000; // 10% profit share
     vault_equity = 400 * QUOTE_PRECISION_U64; // up 100%
 
-    vd.realize_profits(vault_equity, vault_version, now).unwrap();
+    vd.realize_profits(vault_equity, &mut vault_version, now).unwrap();
 
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 95000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 95000000);
     assert_eq!(vd.cumulative_profit_share_amount, 100000000); // $100
-    assert_eq!(vault.user_shares, 95000000); // $95
-    assert_eq!(vault.total_shares, 200000000); // $200
+    assert_eq!(vault_version.user_shares(), 95000000); // $95
+    assert_eq!(vault_version.total_shares(), 200000000); // $200
 
     // withdraw all
     vd.request_withdraw(
       190 * QUOTE_PRECISION_U64,
       WithdrawUnit::Token,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 95000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 95000000);
 
     assert_eq!(vd.last_withdraw_request.value, 190000000);
     assert_eq!(vd.last_withdraw_request.ts, now + 20);
     // assert_eq!(vd.last_withdraw_request.shares, 100000000);
 
-    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, vault_version, now + 20).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 0);
+    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, &mut vault_version, now + 20).unwrap();
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 0);
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vault.user_shares, 0);
-    assert_eq!(vault.total_shares, 105000000);
+    assert_eq!(vault_version.user_shares(), 0);
+    assert_eq!(vault_version.total_shares(), 105000000);
     assert_eq!(withdraw_amount, amount * 2 - amount * 2 / 20);
     assert_eq!(vd.cumulative_profit_share_amount, 100000000); // $100
   }
@@ -1041,51 +1041,51 @@ mod legacy_vault_tests {
     // should get request withdraw valuation and not break invariants
 
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
-    let vault = vault_version.legacy_mut().unwrap();
+    let mut _vault = Vault::default();
+    let mut vault_version = VaultVersion::Legacy(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64;
     let amount: u64 = 100 * QUOTE_PRECISION_U64;
-    vd.deposit(amount, vault_equity, vault_version, now).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
-    assert_eq!(vault.user_shares, 100000000);
-    assert_eq!(vault.total_shares, 200000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
+    assert_eq!(vault_version.user_shares(), 100000000);
+    assert_eq!(vault_version.total_shares(), 200000000);
 
-    vault.profit_share = 100000; // 10% profit share
-    vault.redeem_period = 3600; // 1 hour
+    vault_version.legacy_mut().unwrap().profit_share = 100000; // 10% profit share
+    vault_version.legacy_mut().unwrap().redeem_period = 3600; // 1 hour
     vault_equity = 100 * QUOTE_PRECISION_U64; // down 50%
 
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
     assert_eq!(vd.cumulative_profit_share_amount, 0); // $0
-    assert_eq!(vault.user_shares, 100000000);
-    assert_eq!(vault.total_shares, 200000000);
+    assert_eq!(vault_version.user_shares(), 100000000);
+    assert_eq!(vault_version.total_shares(), 200000000);
 
     // let vault_before = vault;
-    vd.realize_profits(vault_equity, vault_version, now).unwrap(); // should be noop
+    vd.realize_profits(vault_equity, &mut vault_version, now).unwrap(); // should be noop
 
     // request withdraw all
     vd.request_withdraw(
       PERCENTAGE_PRECISION_U64,
       WithdrawUnit::SharesPercent,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
 
     assert_eq!(vd.last_withdraw_request.value, 50000000);
     assert_eq!(vd.last_withdraw_request.ts, now + 20);
 
     vault_equity *= 5; // up 400%
 
-    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, vault_version, now + 20 + 3600).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 0);
+    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, &mut vault_version, now + 20 + 3600).unwrap();
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 0);
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vault.user_shares, 0);
-    assert_eq!(vault.total_shares, 100000000);
+    assert_eq!(vault_version.user_shares(), 0);
+    assert_eq!(vault_version.total_shares(), 100000000);
     assert_eq!(withdraw_amount, 50000000);
     assert_eq!(vd.cumulative_profit_share_amount, 0); // $0
   }
@@ -1098,51 +1098,51 @@ mod legacy_vault_tests {
     // should get withdraw valuation and not break invariants
 
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
-    let vault = vault_version.legacy_mut().unwrap();
+    let mut _vault = Vault::default();
+    let mut vault_version = VaultVersion::Legacy(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64;
     let amount: u64 = 100 * QUOTE_PRECISION_U64;
-    vd.deposit(amount, vault_equity, vault_version, now).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
-    assert_eq!(vault.user_shares, 100000000);
-    assert_eq!(vault.total_shares, 200000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
+    assert_eq!(vault_version.user_shares(), 100000000);
+    assert_eq!(vault_version.total_shares(), 200000000);
 
-    vault.profit_share = 100000; // 10% profit share
-    vault.redeem_period = 3600; // 1 hour
+    vault_version.legacy_mut().unwrap().profit_share = 100000; // 10% profit share
+    vault_version.legacy_mut().unwrap().redeem_period = 3600; // 1 hour
     vault_equity = 200 * QUOTE_PRECISION_U64;
 
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
     assert_eq!(vd.cumulative_profit_share_amount, 0); // $0
-    assert_eq!(vault.user_shares, 100000000);
-    assert_eq!(vault.total_shares, 200000000);
+    assert_eq!(vault_version.user_shares(), 100000000);
+    assert_eq!(vault_version.total_shares(), 200000000);
 
     // let vault_before = vault;
-    vd.realize_profits(vault_equity, vault_version, now).unwrap(); // should be noop
+    vd.realize_profits(vault_equity, &mut vault_version, now).unwrap(); // should be noop
 
     // request withdraw all
     vd.request_withdraw(
       PERCENTAGE_PRECISION_U64,
       WithdrawUnit::SharesPercent,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
 
     assert_eq!(vd.last_withdraw_request.value, 100000000);
     assert_eq!(vd.last_withdraw_request.ts, now + 20);
 
     vault_equity /= 5; // down 80%
 
-    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, vault_version, now + 20 + 3600).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 0);
+    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, &mut vault_version, now + 20 + 3600).unwrap();
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 0);
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vault.user_shares, 0);
-    assert_eq!(vault.total_shares, 100000000);
+    assert_eq!(vault_version.user_shares(), 0);
+    assert_eq!(vault_version.total_shares(), 100000000);
     assert_eq!(withdraw_amount, 20000000); // getting back 20% of deposit
     assert_eq!(vd.cumulative_profit_share_amount, 0); // $0
   }
@@ -1157,7 +1157,7 @@ mod vault_v1_tests {
   use drift::math::insurance::if_shares_to_vault_amount;
 
   use crate::{VaultDepositor, WithdrawUnit};
-  use crate::state::{Vault, VaultTrait, VaultV1, VaultVersion};
+  use crate::state::{VaultTrait, VaultV1, VaultVersion};
 
   #[test]
   fn base_init() {
@@ -1170,14 +1170,14 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_withdraw() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
-    let vault = vault_version.v1_mut().unwrap();
+    let mut _vault = VaultV1::default();
+    let mut vault_version = VaultVersion::V1(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let vault_equity: u64 = 100 * QUOTE_PRECISION_U64; // $100 in total equity
     let amount: u64 = 100 * QUOTE_PRECISION_U64; // $100 of new deposits to add to total equity, for new total of $200
-    vd.deposit(amount, vault_equity, vault_version, now + 20).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now + 20).unwrap();
 
     let vault_equity: u64 = 200 * QUOTE_PRECISION_U64;
 
@@ -1185,11 +1185,11 @@ mod vault_v1_tests {
       amount.cast().unwrap(),
       WithdrawUnit::Token,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
 
-    let (withdraw_amount, _) = vd.withdraw(vault_equity, vault_version, now + 20).unwrap();
+    let (withdraw_amount, _) = vd.withdraw(vault_equity, &mut vault_version, now + 20).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
     assert_eq!(withdraw_amount, amount);
   }
@@ -1197,21 +1197,21 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_partial_withdraw_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
-    let vault = vault_version.v1_mut().unwrap();
+    let mut _vault = VaultV1::default();
+    let mut vault_version = VaultVersion::V1(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64; // $100 in total equity for depositor
     let amount: u64 = 100 * QUOTE_PRECISION_U64; // $100 in total equity for vault
-    vd.deposit(amount, vault_equity, vault_version, now + 20).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now + 20).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100_000_000); // 100_000_000 shares or $200 in equity
-    assert_eq!(vault.user_shares, 100_000_000);
-    assert_eq!(vault.total_shares, 200_000_000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100_000_000); // 100_000_000 shares or $200 in equity
+    assert_eq!(vault_version.user_shares(), 100_000_000);
+    assert_eq!(vault_version.total_shares(), 200_000_000);
 
-    vault.manager_profit_share = 100_000; // 10% profit share
-    vault.protocol_profit_share = 50_000; // 5% profit share
+    vault_version.v1_mut().unwrap().manager_profit_share = 100_000; // 10% profit share
+    vault_version.v1_mut().unwrap().protocol_profit_share = 50_000; // 5% profit share
     vault_equity = 400 * QUOTE_PRECISION_U64; // vault gains 100% in value ($200 -> $400)
 
     // withdraw principal
@@ -1219,42 +1219,42 @@ mod vault_v1_tests {
       amount.cast().unwrap(), // only withdraw profit ($100)
       WithdrawUnit::Token,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
     // 100M shares, 50M of which are profit. 15% profit share on 50M shares is 7.5M shares. 100M - 7.5M = 92.5M shares
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 92_500_000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 92_500_000);
 
     assert_eq!(vd.last_withdraw_request.shares, 50_000_000);
     assert_eq!(vd.last_withdraw_request.value, 100_000_000);
     assert_eq!(vd.last_withdraw_request.ts, now + 20);
 
-    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, vault_version, now + 20).unwrap();
+    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, &mut vault_version, now + 20).unwrap();
     // 100M shares minus 50M shares of profit and 15% or 7.5M profit share = 42.5M shares
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 42_500_000);
-    assert_eq!(vault.user_shares, 42_500_000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 42_500_000);
+    assert_eq!(vault_version.user_shares(), 42_500_000);
     // manager is 200M total shares - 100M user shares + 5M or 10% profit share from user withdrawal.
-    assert_eq!(vault.get_manager_shares().unwrap(), 105_000_000);
+    assert_eq!(vault_version.get_manager_shares().unwrap(), 105_000_000);
     // protocol received 5% profit share on 50M shares, or 2.5M shares.
-    assert_eq!(vault.get_protocol_shares().unwrap(), 2_500_000);
+    assert_eq!(vault_version.get_protocol_shares().unwrap(), 2_500_000);
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vault.total_shares, 150_000_000);
+    assert_eq!(vault_version.total_shares(), 150_000_000);
     assert_eq!(withdraw_amount, amount);
 
     vault_equity -= withdraw_amount;
 
-    let manager_owned_shares = vault.get_manager_shares().unwrap();
-    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault.total_shares, vault_equity).unwrap();
+    let manager_owned_shares = vault_version.get_manager_shares().unwrap();
+    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
     // 100M shares or $200 in equity plus 10% of 50M shares or $100 profit which is $10, for a total of $210.
     assert_eq!(manager_owned_amount, 210_000_000);
 
-    let user_owned_shares = vault.user_shares;
-    let user_owned_amount = if_shares_to_vault_amount(user_owned_shares, vault.total_shares, vault_equity).unwrap();
+    let user_owned_shares = vault_version.user_shares();
+    let user_owned_amount = if_shares_to_vault_amount(user_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
     // $200 in equity - $100 in realized profit - 15% profit share on $100 = $85
     assert_eq!(user_owned_amount, 85_000_000);
 
-    let protocol_owned_shares = vault.get_protocol_shares().unwrap();
-    let protocol_owned_amount = if_shares_to_vault_amount(protocol_owned_shares, vault.total_shares, vault_equity).unwrap();
+    let protocol_owned_shares = vault_version.get_protocol_shares().unwrap();
+    let protocol_owned_amount = if_shares_to_vault_amount(protocol_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
     // 5% profit share on $100 = $5
     assert_eq!(protocol_owned_amount, 5_000_000);
   }
@@ -1262,20 +1262,20 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_partial_withdraw_profit_share_no_protocol() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
-    let vault = vault_version.v1_mut().unwrap();
+    let mut _vault = VaultV1::default();
+    let mut vault_version = VaultVersion::V1(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64; // $100 in total equity for depositor
     let amount: u64 = 100 * QUOTE_PRECISION_U64; // $100 in total equity for vault
-    vd.deposit(amount, vault_equity, vault_version, now + 20).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now + 20).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100_000_000); // 100_000_000 shares or $200 in equity
-    assert_eq!(vault.user_shares, 100_000_000);
-    assert_eq!(vault.total_shares, 200_000_000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100_000_000); // 100_000_000 shares or $200 in equity
+    assert_eq!(vault_version.user_shares(), 100_000_000);
+    assert_eq!(vault_version.total_shares(), 200_000_000);
 
-    vault.manager_profit_share = 100_000; // 10% profit share
+    vault_version.v1_mut().unwrap().manager_profit_share = 100_000; // 10% profit share
     vault_equity = 400 * QUOTE_PRECISION_U64; // vault gains 100% in value ($200 -> $400)
 
     // withdraw principal
@@ -1283,34 +1283,34 @@ mod vault_v1_tests {
       amount.cast().unwrap(), // only withdraw profit ($100)
       WithdrawUnit::Token,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 95_000_000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 95_000_000);
 
     assert_eq!(vd.last_withdraw_request.shares, 50_000_000);
     assert_eq!(vd.last_withdraw_request.value, 100_000_000);
     assert_eq!(vd.last_withdraw_request.ts, now + 20);
 
-    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, vault_version, now + 20).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 45_000_000);
+    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, &mut vault_version, now + 20).unwrap();
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 45_000_000);
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vault.user_shares, 45_000_000);
-    assert_eq!(vault.total_shares, 150_000_000);
+    assert_eq!(vault_version.user_shares(), 45_000_000);
+    assert_eq!(vault_version.total_shares(), 150_000_000);
     assert_eq!(withdraw_amount, amount);
 
     vault_equity -= withdraw_amount;
 
-    let manager_owned_shares = vault.get_manager_shares().unwrap();
-    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault.total_shares, vault_equity).unwrap();
+    let manager_owned_shares = vault_version.get_manager_shares().unwrap();
+    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
     assert_eq!(manager_owned_amount, 210_000_000); // $210
 
-    let user_owned_shares = vault.user_shares;
-    let user_owned_amount = if_shares_to_vault_amount(user_owned_shares, vault.total_shares, vault_equity).unwrap();
+    let user_owned_shares = vault_version.user_shares();
+    let user_owned_amount = if_shares_to_vault_amount(user_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
     assert_eq!(user_owned_amount, 90_000_000); // $90
 
-    let protocol_owned_shares = vault.get_protocol_shares().unwrap();
-    let protocol_owned_amount = if_shares_to_vault_amount(protocol_owned_shares, vault.total_shares, vault_equity).unwrap();
+    let protocol_owned_shares = vault_version.get_protocol_shares().unwrap();
+    let protocol_owned_amount = if_shares_to_vault_amount(protocol_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
     println!("protocol amount: {}", protocol_owned_amount);
     assert_eq!(protocol_owned_amount, 0); // $100
   }
@@ -1318,21 +1318,21 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_full_withdraw_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
-    let vault = vault_version.v1_mut().unwrap();
+    let mut _vault = VaultV1::default();
+    let mut vault_version = VaultVersion::V1(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64;
     let amount: u64 = 100 * QUOTE_PRECISION_U64;
-    vd.deposit(amount, vault_equity, vault_version, now + 20).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now + 20).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100_000_000);
-    assert_eq!(vault.user_shares, 100_000_000);
-    assert_eq!(vault.total_shares, 200_000_000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100_000_000);
+    assert_eq!(vault_version.user_shares(), 100_000_000);
+    assert_eq!(vault_version.total_shares(), 200_000_000);
 
-    vault.manager_profit_share = 100_000; // 10% profit share
-    vault.protocol_profit_share = 50_000; // 5% profit share
+    vault_version.v1_mut().unwrap().manager_profit_share = 100_000; // 10% profit share
+    vault_version.v1_mut().unwrap().protocol_profit_share = 50_000; // 5% profit share
     vault_equity = 400 * QUOTE_PRECISION_U64; // up 100%
 
     // withdraw all
@@ -1340,42 +1340,42 @@ mod vault_v1_tests {
       185 * QUOTE_PRECISION_U64, // vault_equity * (100% - 15% profit share)
       WithdrawUnit::Token,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
     // user has 100M shares, with 100% profit, so 50M shares are profit.
     // profit share of 15% of 50M shares is 7.5M shares, and 100M - 7.5M = 92.5M shares
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 92_500_000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 92_500_000);
     assert_eq!(vd.last_withdraw_request.shares, 92_500_000);
     // user has 200M worth of value, with 15% profit share on 100M in profit, or 200M - 15M = 185M
     assert_eq!(vd.last_withdraw_request.value, 185_000_000);
     assert_eq!(vd.last_withdraw_request.ts, now + 20);
 
-    let (withdraw_amount, _) = vd.withdraw(vault_equity, vault_version, now + 20).unwrap();
+    let (withdraw_amount, _) = vd.withdraw(vault_equity, &mut vault_version, now + 20).unwrap();
     let profit = amount;
     let equity_minus_fee = amount + profit - (profit as f64 * 0.15).round() as u64;
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 0);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 0);
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vault.user_shares, 0);
+    assert_eq!(vault_version.user_shares(), 0);
     // user had 100M shares, vault had 200M total
     // user paid 15% profit share on 50M shares, or 7.5M shares
     // total shares outside of user is now 100M + 7.5M = 107.5M
-    assert_eq!(vault.total_shares, 107_500_000);
+    assert_eq!(vault_version.total_shares(), 107_500_000);
     assert_eq!(withdraw_amount, equity_minus_fee);
     // $100 worth of profit that has been realized (this is not total fees paid)
     assert_eq!(vd.cumulative_profit_share_amount, 100_000_000);
-    println!("vault shares: {}", vd.checked_vault_shares(vault_version).unwrap());
+    println!("vault shares: {}", vd.checked_vault_shares(&vault_version).unwrap());
     println!("shares base: {}", vd.vault_shares_base);
-    println!("user shares: {}", vault.user_shares);
-    println!("total shares: {}", vault.total_shares);
+    println!("user shares: {}", vault_version.user_shares());
+    println!("total shares: {}", vault_version.total_shares());
     println!("withdraw amount: {}, actual: {}", withdraw_amount, equity_minus_fee);
     println!("cum profit share amount: {}", vd.cumulative_profit_share_amount);
 
     vault_equity -= withdraw_amount;
 
-    let manager_owned_shares = vault.get_manager_shares().unwrap();
-    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault.total_shares, vault_equity).unwrap();
-    println!("manager total profit share: {}", vault.manager_total_profit_share);
+    let manager_owned_shares = vault_version.get_manager_shares().unwrap();
+    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
+    println!("manager total profit share: {}", vault_version.v1().unwrap().manager_total_profit_share);
     println!("manager shares: {}", manager_owned_shares);
     println!("manager owned amount: {}", manager_owned_amount);
     // 10% of 50M shares of profit on top of 100M owned shares
@@ -1384,9 +1384,9 @@ mod vault_v1_tests {
     // totals $210 in equity
     assert_eq!(manager_owned_amount, 210_000_000);
 
-    let protocol_owned_shares = vault.get_protocol_shares().unwrap();
-    let protocol_owned_amount = if_shares_to_vault_amount(protocol_owned_shares, vault.total_shares, vault_equity).unwrap();
-    println!("protocol total profit share: {}", vault.protocol_total_profit_share);
+    let protocol_owned_shares = vault_version.get_protocol_shares().unwrap();
+    let protocol_owned_amount = if_shares_to_vault_amount(protocol_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
+    println!("protocol total profit share: {}", vault_version.v1().unwrap().protocol_total_profit_share);
     println!("protocol shares: {}", protocol_owned_shares);
     println!("protocol amount: {}", protocol_owned_amount);
     // 5% of 50M shares of profit
@@ -1398,20 +1398,20 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_full_withdraw_profit_share_no_protocol() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
-    let vault = vault_version.v1_mut().unwrap();
+    let mut _vault = VaultV1::default();
+    let mut vault_version = VaultVersion::V1(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64;
     let amount: u64 = 100 * QUOTE_PRECISION_U64;
-    vd.deposit(amount, vault_equity, vault_version, now + 20).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now + 20).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100_000_000);
-    assert_eq!(vault.user_shares, 100_000_000);
-    assert_eq!(vault.total_shares, 200_000_000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100_000_000);
+    assert_eq!(vault_version.user_shares(), 100_000_000);
+    assert_eq!(vault_version.total_shares(), 200_000_000);
 
-    vault.manager_profit_share = 100_000; // 10% profit share
+    vault_version.v1_mut().unwrap().manager_profit_share = 100_000; // 10% profit share
     vault_equity = 400 * QUOTE_PRECISION_U64; // up 100%
 
     // withdraw all
@@ -1419,42 +1419,42 @@ mod vault_v1_tests {
       190 * QUOTE_PRECISION_U64, // vault_equity * (100% - 10% profit share)
       WithdrawUnit::Token,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
     // user has 100M shares, with 100% profit, so 50M shares are profit.
     // profit share of 15% of 50M shares is 7.5M shares, and 100M - 5M = 95M shares
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 95_000_000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 95_000_000);
     assert_eq!(vd.last_withdraw_request.shares, 95_000_000);
     // user has 200M worth of value, with 10% profit share on 100M in profit, or 200M - 10M = 190M
     assert_eq!(vd.last_withdraw_request.value, 190_000_000);
     assert_eq!(vd.last_withdraw_request.ts, now + 20);
 
-    let (withdraw_amount, _) = vd.withdraw(vault_equity, vault_version, now + 20).unwrap();
+    let (withdraw_amount, _) = vd.withdraw(vault_equity, &mut vault_version, now + 20).unwrap();
     let profit = amount;
     let equity_minus_fee = amount + profit - (profit as f64 * 0.10).round() as u64;
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 0);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 0);
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vault.user_shares, 0);
+    assert_eq!(vault_version.user_shares(), 0);
     // user had 100M shares, vault had 200M total
     // user paid 15% profit share on 50M shares, or 5M shares
     // total shares outside of user is now 100M + 5M = 105M
-    assert_eq!(vault.total_shares, 105_000_000);
+    assert_eq!(vault_version.total_shares(), 105_000_000);
     assert_eq!(withdraw_amount, equity_minus_fee);
     // $100 worth of profit that has been realized (this is not total fees paid)
     assert_eq!(vd.cumulative_profit_share_amount, 100_000_000);
-    println!("vault shares: {}", vd.checked_vault_shares(vault_version).unwrap());
+    println!("vault shares: {}", vd.checked_vault_shares(&vault_version).unwrap());
     println!("shares base: {}", vd.vault_shares_base);
-    println!("user shares: {}", vault.user_shares);
-    println!("total shares: {}", vault.total_shares);
+    println!("user shares: {}", vault_version.user_shares());
+    println!("total shares: {}", vault_version.total_shares());
     println!("withdraw amount: {}, actual: {}", withdraw_amount, equity_minus_fee);
     println!("cum profit share amount: {}", vd.cumulative_profit_share_amount);
 
     vault_equity -= withdraw_amount;
 
-    let manager_owned_shares = vault.get_manager_shares().unwrap();
-    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault.total_shares, vault_equity).unwrap();
-    println!("manager total profit share: {}", vault.manager_total_profit_share);
+    let manager_owned_shares = vault_version.get_manager_shares().unwrap();
+    let manager_owned_amount = if_shares_to_vault_amount(manager_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
+    println!("manager total profit share: {}", vault_version.v1().unwrap().manager_total_profit_share);
     println!("manager shares: {}", manager_owned_shares);
     println!("manager owned amount: {}", manager_owned_amount);
     // 10% of 50M shares of profit on top of 100M owned shares
@@ -1463,9 +1463,9 @@ mod vault_v1_tests {
     // totals $210 in equity
     assert_eq!(manager_owned_amount, 210_000_000);
 
-    let protocol_owned_shares = vault.get_protocol_shares().unwrap();
-    let protocol_owned_amount = if_shares_to_vault_amount(protocol_owned_shares, vault.total_shares, vault_equity).unwrap();
-    println!("protocol total profit share: {}", vault.protocol_total_profit_share);
+    let protocol_owned_shares = vault_version.get_protocol_shares().unwrap();
+    let protocol_owned_amount = if_shares_to_vault_amount(protocol_owned_shares, vault_version.total_shares(), vault_equity).unwrap();
+    println!("protocol total profit share: {}", vault_version.v1().unwrap().protocol_total_profit_share);
     println!("protocol shares: {}", protocol_owned_shares);
     println!("protocol amount: {}", protocol_owned_amount);
     // 0% of 50M shares of profit is 0 shares
@@ -1477,29 +1477,29 @@ mod vault_v1_tests {
   #[test]
   fn test_force_realize_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
-    let vault = vault_version.v1_mut().unwrap();
+    let mut _vault = VaultV1::default();
+    let mut vault_version = VaultVersion::V1(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64; // $100 in equity
     let amount: u64 = 100 * QUOTE_PRECISION_U64;
-    vd.deposit(amount, vault_equity, vault_version, now).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
-    assert_eq!(vault.user_shares, 100000000);
-    assert_eq!(vault.total_shares, 200000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
+    assert_eq!(vault_version.user_shares(), 100000000);
+    assert_eq!(vault_version.total_shares(), 200000000);
 
-    vault.manager_profit_share = 100_000; // 10% profit share
+    vault_version.v1_mut().unwrap().manager_profit_share = 100_000; // 10% profit share
     // vault.protocol_profit_share = 50_000; // 5% profit share
     vault_equity = 400 * QUOTE_PRECISION_U64; // up 100%
 
-    vd.realize_profits(vault_equity, vault_version, now).unwrap();
+    vd.realize_profits(vault_equity, &mut vault_version, now).unwrap();
 
-    println!("vault shares: {}", vd.checked_vault_shares(vault_version).unwrap());
+    println!("vault shares: {}", vd.checked_vault_shares(&vault_version).unwrap());
     println!("cum profit share amount: {}", vd.cumulative_profit_share_amount);
-    println!("user shares: {}", vault.user_shares);
-    println!("total shares: {}", vault.total_shares);
+    println!("user shares: {}", vault_version.user_shares());
+    println!("total shares: {}", vault_version.total_shares());
     // assert_eq!(vd.checked_vault_shares(vault).unwrap(), 95000000);
     // assert_eq!(vd.cumulative_profit_share_amount, 100000000); // $100
     // assert_eq!(vault.user_shares, 95000000); // $95
@@ -1510,26 +1510,26 @@ mod vault_v1_tests {
       190 * QUOTE_PRECISION_U64,
       WithdrawUnit::Token,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 95000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 95000000);
 
     assert_eq!(vd.last_withdraw_request.value, 190000000);
     assert_eq!(vd.last_withdraw_request.ts, now + 20);
     // assert_eq!(vd.last_withdraw_request.shares, 100000000);
 
-    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, vault_version, now + 20).unwrap();
+    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, &mut vault_version, now + 20).unwrap();
     // assert_eq!(vd.checked_vault_shares(vault).unwrap(), 0);
     // assert_eq!(vd.vault_shares_base, 0);
     // assert_eq!(vault.user_shares, 0);
     // assert_eq!(vault.total_shares, 105000000);
     assert_eq!(withdraw_amount, amount * 2 - amount * 2 / 20);
     // assert_eq!(vd.cumulative_profit_share_amount, 100000000); // $100
-    println!("vault shares: {}", vd.checked_vault_shares(vault_version).unwrap());
+    println!("vault shares: {}", vd.checked_vault_shares(&vault_version).unwrap());
     println!("shares base: {}", vd.vault_shares_base);
-    println!("user shares: {}", vault.user_shares);
-    println!("total shares: {}", vault.total_shares);
+    println!("user shares: {}", vault_version.user_shares());
+    println!("total shares: {}", vault_version.total_shares());
     println!("cum profit share amount: {}", vd.cumulative_profit_share_amount);
   }
 
@@ -1541,42 +1541,42 @@ mod vault_v1_tests {
     // should get request withdraw valuation and not break invariants
 
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
-    let vault = vault_version.v1_mut().unwrap();
+    let mut _vault = VaultV1::default();
+    let mut vault_version = VaultVersion::V1(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64;
     let amount: u64 = 100 * QUOTE_PRECISION_U64;
-    vd.deposit(amount, vault_equity, vault_version, now).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
-    assert_eq!(vault.user_shares, 100000000);
-    assert_eq!(vault.total_shares, 200000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
+    assert_eq!(vault_version.user_shares(), 100000000);
+    assert_eq!(vault_version.total_shares(), 200000000);
 
-    vault.manager_profit_share = 100_000; // 10% profit share
-    vault.protocol_profit_share = 50_000; // 5% profit share
-    vault.redeem_period = 3600; // 1 hour
+    vault_version.v1_mut().unwrap().manager_profit_share = 100_000; // 10% profit share
+    vault_version.v1_mut().unwrap().protocol_profit_share = 50_000; // 5% profit share
+    vault_version.v1_mut().unwrap().redeem_period = 3600; // 1 hour
     vault_equity = 100 * QUOTE_PRECISION_U64; // down 50%
 
     // assert_eq!(vd.checked_vault_shares(vault).unwrap(), 100000000);
     // assert_eq!(vd.cumulative_profit_share_amount, 0); // $0
     // assert_eq!(vault.user_shares, 100000000);
     // assert_eq!(vault.total_shares, 200000000);
-    println!("vault shares: {}", vd.checked_vault_shares(vault_version).unwrap());
+    println!("vault shares: {}", vd.checked_vault_shares(&vault_version).unwrap());
     println!("cum profit share amount: {}", vd.cumulative_profit_share_amount);
-    println!("user shares: {}", vault.user_shares);
-    println!("total shares: {}", vault.total_shares);
+    println!("user shares: {}", vault_version.user_shares());
+    println!("total shares: {}", vault_version.total_shares());
 
     // let vault_before = vault;
-    vd.realize_profits(vault_equity, vault_version, now).unwrap(); // should be noop
+    vd.realize_profits(vault_equity, &mut vault_version, now).unwrap(); // should be noop
 
     // request withdraw all
     vd.request_withdraw(
       PERCENTAGE_PRECISION_U64,
       WithdrawUnit::SharesPercent,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
     // assert_eq!(vd.checked_vault_shares(vault).unwrap(), 100000000);
@@ -1588,17 +1588,17 @@ mod vault_v1_tests {
 
     vault_equity *= 5; // up 400%
 
-    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, vault_version, now + 20 + 3600).unwrap();
+    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, &mut vault_version, now + 20 + 3600).unwrap();
     // assert_eq!(vd.checked_vault_shares(vault).unwrap(), 0);
     // assert_eq!(vd.vault_shares_base, 0);
     // assert_eq!(vault.user_shares, 0);
     // assert_eq!(vault.total_shares, 100000000);
     assert_eq!(withdraw_amount, 50000000);
     // assert_eq!(vd.cumulative_profit_share_amount, 0); // $0
-    println!("vault shares: {}", vd.checked_vault_shares(vault_version).unwrap());
+    println!("vault shares: {}", vd.checked_vault_shares(&vault_version).unwrap());
     println!("shares base: {}", vd.vault_shares_base);
-    println!("user shares: {}", vault.user_shares);
-    println!("total shares: {}", vault.total_shares);
+    println!("user shares: {}", vault_version.user_shares());
+    println!("total shares: {}", vault_version.total_shares());
     println!("cum profit share amount: {}", vd.cumulative_profit_share_amount);
   }
 
@@ -1610,42 +1610,42 @@ mod vault_v1_tests {
     // should get withdraw valuation and not break invariants
 
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
-    let vault = vault_version.v1_mut().unwrap();
+    let mut _vault = VaultV1::default();
+    let mut vault_version = VaultVersion::V1(&mut _vault);
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64;
     let amount: u64 = 100 * QUOTE_PRECISION_U64;
-    vd.deposit(amount, vault_equity, vault_version, now).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
-    assert_eq!(vault.user_shares, 100000000);
-    assert_eq!(vault.total_shares, 200000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
+    assert_eq!(vault_version.user_shares(), 100000000);
+    assert_eq!(vault_version.total_shares(), 200000000);
 
-    vault.manager_profit_share = 100_000; // 10% profit share
-    vault.protocol_profit_share = 50_000; // 5% profit share
-    vault.redeem_period = 3600; // 1 hour
+    vault_version.v1_mut().unwrap().manager_profit_share = 100_000; // 10% profit share
+    vault_version.v1_mut().unwrap().protocol_profit_share = 50_000; // 5% profit share
+    vault_version.v1_mut().unwrap().redeem_period = 3600; // 1 hour
     vault_equity = 200 * QUOTE_PRECISION_U64;
 
     // assert_eq!(vd.checked_vault_shares(vault).unwrap(), 100000000);
     // assert_eq!(vd.cumulative_profit_share_amount, 0); // $0
     // assert_eq!(vault.user_shares, 100000000);
     // assert_eq!(vault.total_shares, 200000000);
-    println!("vault shares: {}", vd.checked_vault_shares(vault_version).unwrap());
+    println!("vault shares: {}", vd.checked_vault_shares(&vault_version).unwrap());
     println!("cum profit share amount: {}", vd.cumulative_profit_share_amount);
-    println!("user shares: {}", vault.user_shares);
-    println!("total shares: {}", vault.total_shares);
+    println!("user shares: {}", vault_version.user_shares());
+    println!("total shares: {}", vault_version.total_shares());
 
     // let vault_before = vault;
-    vd.realize_profits(vault_equity, vault_version, now).unwrap(); // should be noop
+    vd.realize_profits(vault_equity, &mut vault_version, now).unwrap(); // should be noop
 
     // request withdraw all
     vd.request_withdraw(
       PERCENTAGE_PRECISION_U64,
       WithdrawUnit::SharesPercent,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
     // assert_eq!(vd.checked_vault_shares(vault).unwrap(), 100000000);
@@ -1656,17 +1656,17 @@ mod vault_v1_tests {
 
     vault_equity /= 5; // down 80%
 
-    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, vault_version, now + 20 + 3600).unwrap();
+    let (withdraw_amount, _ll) = vd.withdraw(vault_equity, &mut vault_version, now + 20 + 3600).unwrap();
     // assert_eq!(vd.checked_vault_shares(vault).unwrap(), 0);
     // assert_eq!(vd.vault_shares_base, 0);
     // assert_eq!(vault.user_shares, 0);
     // assert_eq!(vault.total_shares, 100000000);
     assert_eq!(withdraw_amount, 20000000); // getting back 20% of deposit
     // assert_eq!(vd.cumulative_profit_share_amount, 0); // $0
-    println!("vault shares: {}", vd.checked_vault_shares(vault_version).unwrap());
+    println!("vault shares: {}", vd.checked_vault_shares(&vault_version).unwrap());
     println!("shares base: {}", vd.vault_shares_base);
-    println!("user shares: {}", vault.user_shares);
-    println!("total shares: {}", vault.total_shares);
+    println!("user shares: {}", vault_version.user_shares());
+    println!("total shares: {}", vault_version.total_shares());
     println!("cum profit share amount: {}", vd.cumulative_profit_share_amount);
   }
 }

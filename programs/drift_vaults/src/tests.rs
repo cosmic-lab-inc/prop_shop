@@ -481,6 +481,7 @@ mod vault_v1_fcn {
     let mut _vault = VaultV1::default();
     let mut vault_version = VaultVersion::V1(&mut _vault);
     vault_version.v1_mut().unwrap().management_fee = 1000; // 10 bps
+    vault_version.v1_mut().unwrap().protocol_fee = 500; // 5 bps
     vault_version.v1_mut().unwrap().redeem_period = 60;
 
     let mut vault_equity = 0;
