@@ -124,7 +124,7 @@ impl VaultTrait for Vault {
 
   fn spot_market_index(&self) -> u16 { self.spot_market_index }
 
-  fn get_vault_signer_seeds<'a>(name: &'a [u8], bump: &'a u8) -> [&'a [u8]; 3] {
+  fn get_vault_signer_seeds<'a>(&self, name: &'a [u8], bump: &'a u8) -> [&'a [u8]; 3] {
     [b"vault".as_ref(), name, bytemuck::bytes_of(bump)]
   }
 

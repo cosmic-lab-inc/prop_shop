@@ -1,11 +1,12 @@
 use anchor_lang::prelude::*;
 
-use crate::{error::ErrorCode, validate, Vault};
-use crate::constraints::is_manager_for_vault;
+use crate::{error::ErrorCode, validate};
+use crate::state::{VaultTrait, VaultV1};
+use crate::v1_constraints::is_manager_for_vault;
 
-pub fn update_vault<'info>(
-  ctx: Context<'_, '_, '_, 'info, UpdateVault<'info>>,
-  params: UpdateVaultParams,
+pub fn update_vault_v1<'info>(
+  ctx: Context<'_, '_, '_, 'info, UpdateVaultV1<'info>>,
+  params: UpdateVaultV1Params,
 ) -> Result<()> {
   let mut vault = ctx.accounts.vault.load_mut()?;
 
@@ -83,7 +84,7 @@ pub fn update_vault<'info>(
 }
 
 #[derive(Debug, Clone, Copy, AnchorSerialize, AnchorDeserialize, PartialEq, Eq)]
-pub struct UpdateVaultParams {
+pub struct UpdateVaultV1Params {
   pub redeem_period: Option<i64>,
   pub max_tokens: Option<u64>,
   pub management_fee: Option<i64>,
@@ -96,9 +97,9 @@ pub struct UpdateVaultParams {
 }
 
 #[derive(Accounts)]
-pub struct UpdateVault<'info> {
+pub struct UpdateVaultV1<'info> {
   #[account(mut,
   constraint = is_manager_for_vault(& vault, & manager) ?,)]
-  pub vault: AccountLoader<'info, Vault>,
+  pub vault: AccountLoader<'info, VaultV1>,
   pub manager: Signer<'info>,
 }

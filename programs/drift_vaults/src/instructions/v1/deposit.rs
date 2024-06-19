@@ -5,18 +5,24 @@ use drift::instructions::optional_accounts::AccountMaps;
 use drift::program::Drift;
 use drift::state::user::User;
 
-use crate::{AccountMapProvider, declare_vault_seeds};
-use crate::constraints::{is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault};
+use crate::{AccountMapProvider, declare_vault_seeds, implement_deposit, validate};
 use crate::drift_cpi::{DepositCPI, TokenTransferCPI};
-use crate::Vault;
+use crate::error::ErrorCode;
+use crate::state::{VaultDepositor, VaultTrait, VaultV1, VaultVersion};
+use crate::v1_constraints::{
+  is_authority_for_vault_depositor, is_user_for_vault, is_user_stats_for_vault,
+};
 
-pub fn manager_deposit<'c: 'info, 'info>(
-  ctx: Context<'_, '_, 'c, 'info, ManagerDeposit<'info>>,
+pub fn deposit_v1<'c: 'info, 'info>(
+  ctx: Context<'_, '_, 'c, 'info, DepositV1<'info>>,
   amount: u64,
 ) -> Result<()> {
   let clock = &Clock::get()?;
 
   let mut vault = ctx.accounts.vault.load_mut()?;
+  validate!(!vault.in_liquidation(), ErrorCode::OngoingLiquidation)?;
+
+  let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
@@ -29,7 +35,8 @@ pub fn manager_deposit<'c: 'info, 'info>(
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  vault.manager_deposit(amount, vault_equity, clock.unix_timestamp)?;
+  let vault_version = &mut VaultVersion::V1(&mut vault);
+  vault_depositor.deposit(amount, vault_equity, vault_version, clock.unix_timestamp)?;
 
   drop(vault);
   drop(user);
@@ -42,11 +49,15 @@ pub fn manager_deposit<'c: 'info, 'info>(
 }
 
 #[derive(Accounts)]
-pub struct ManagerDeposit<'info> {
+pub struct DepositV1<'info> {
+  #[account(mut)]
+  pub vault: AccountLoader<'info, VaultV1>,
   #[account(mut,
-  constraint = is_manager_for_vault(& vault, & manager) ?)]
-  pub vault: AccountLoader<'info, Vault>,
-  pub manager: Signer<'info>,
+  seeds = [b"vault_depositor", vault.key().as_ref(), authority.key().as_ref()],
+  bump,
+  constraint = is_authority_for_vault_depositor(& vault_depositor, & authority) ?,)]
+  pub vault_depositor: AccountLoader<'info, VaultDepositor>,
+  pub authority: Signer<'info>,
   #[account(mut,
   seeds = [b"vault_token_account".as_ref(), vault.key().as_ref()],
   bump,)]
@@ -65,19 +76,19 @@ pub struct ManagerDeposit<'info> {
   token::mint = vault_token_account.mint)]
   pub drift_spot_market_vault: Box<Account<'info, TokenAccount>>,
   #[account(mut,
-  token::authority = manager,
+  token::authority = authority,
   token::mint = vault_token_account.mint)]
   pub user_token_account: Box<Account<'info, TokenAccount>>,
   pub drift_program: Program<'info, Drift>,
   pub token_program: Program<'info, Token>,
 }
 
-impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, ManagerDeposit<'info>> {
+impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, DepositV1<'info>> {
   fn token_transfer(&self, amount: u64) -> Result<()> {
     let cpi_accounts = Transfer {
       from: self.accounts.user_token_account.to_account_info().clone(),
       to: self.accounts.vault_token_account.to_account_info().clone(),
-      authority: self.accounts.manager.to_account_info().clone(),
+      authority: self.accounts.authority.to_account_info().clone(),
     };
     let token_program = self.accounts.token_program.to_account_info().clone();
     let cpi_context = CpiContext::new(token_program, cpi_accounts);
@@ -88,24 +99,9 @@ impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, ManagerDeposit<'info
   }
 }
 
-impl<'info> DepositCPI for Context<'_, '_, '_, 'info, ManagerDeposit<'info>> {
+impl<'info> DepositCPI for Context<'_, '_, '_, 'info, DepositV1<'info>> {
   fn drift_deposit(&self, amount: u64) -> Result<()> {
-    declare_vault_seeds!(self.accounts.vault, seeds);
-    let spot_market_index = self.accounts.vault.load()?.spot_market_index;
-
-    let cpi_program = self.accounts.drift_program.to_account_info().clone();
-    let cpi_accounts = DriftDeposit {
-      state: self.accounts.drift_state.clone(),
-      user: self.accounts.drift_user.to_account_info().clone(),
-      user_stats: self.accounts.drift_user_stats.clone(),
-      authority: self.accounts.vault.to_account_info().clone(),
-      spot_market_vault: self.accounts.drift_spot_market_vault.to_account_info().clone(),
-      user_token_account: self.accounts.vault_token_account.to_account_info().clone(),
-      token_program: self.accounts.token_program.to_account_info().clone(),
-    };
-    let cpi_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, seeds).with_remaining_accounts(self.remaining_accounts.into());
-    drift::cpi::deposit(cpi_context, spot_market_index, amount, false)?;
-
+    implement_deposit!(self, amount);
     Ok(())
   }
 }

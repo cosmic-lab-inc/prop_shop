@@ -7,12 +7,17 @@ use drift::state::user::User;
 use crate::error::{ErrorCode, VaultResult};
 use crate::state::{Vault, VaultDepositor, VaultV1, WithdrawUnit};
 
-pub enum VaultVersion {
-  Legacy(Vault),
-  V1(VaultV1),
+// pub enum VaultVersion {
+//   Legacy(Vault),
+//   V1(VaultV1),
+// }
+
+pub enum VaultVersion<'a> {
+  Legacy(&'a mut Vault),
+  V1(&'a mut VaultV1),
 }
 
-impl VaultVersion {
+impl<'a> VaultVersion<'a> {
   pub fn legacy(&self) -> VaultResult<&Vault> {
     match self {
       VaultVersion::Legacy(vault) => Ok(vault),
@@ -61,7 +66,7 @@ pub trait VaultTrait {
   fn liquidation_delegate(&self) -> Pubkey;
   fn spot_market_index(&self) -> u16;
 
-  fn get_vault_signer_seeds<'a>(name: &'a [u8], bump: &'a u8) -> [&'a [u8]; 3];
+  fn get_vault_signer_seeds<'b>(&self, name: &'b [u8], bump: &'b u8) -> [&'b [u8]; 3];
 
   fn apply_fee(&mut self, vault_equity: u64, now: i64) -> Result<VaultFee>;
 
@@ -132,7 +137,7 @@ pub trait VaultTrait {
   fn profit_share(&self) -> u32;
 }
 
-impl VaultTrait for VaultVersion {
+impl<'a> VaultTrait for VaultVersion<'a> {
   fn shares_base(&self) -> u32 {
     match self {
       VaultVersion::Legacy(vault) => vault.shares_base,
@@ -203,9 +208,11 @@ impl VaultTrait for VaultVersion {
     }
   }
 
-  fn get_vault_signer_seeds<'a>(name: &'a [u8], bump: &'a u8) -> [&'a [u8]; 3] {
-    // Legacy and V1 are the same seeds, so either can be used.
-    Vault::get_vault_signer_seeds(name, bump)
+  fn get_vault_signer_seeds<'b>(&self, name: &'b [u8], bump: &'b u8) -> [&'b [u8]; 3] {
+    match self {
+      VaultVersion::Legacy(vault) => self.get_vault_signer_seeds(name, bump),
+      VaultVersion::V1(vault) => self.get_vault_signer_seeds(name, bump)
+    }
   }
 
   fn apply_fee(&mut self, vault_equity: u64, now: i64) -> Result<VaultFee> {

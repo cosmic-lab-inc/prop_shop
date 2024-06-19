@@ -3,10 +3,10 @@ use drift::cpi::accounts::InitializeInsuranceFundStake as DriftInitializeInsuran
 use drift::program::Drift;
 use drift::state::spot_market::SpotMarket;
 
-use crate::constraints::{is_manager_for_vault, is_spot_market_for_vault, is_user_stats_for_vault};
+use crate::{Vault, VaultTrait};
 use crate::declare_vault_seeds;
 use crate::drift_cpi::InitializeInsuranceFundStakeCPI;
-use crate::Vault;
+use crate::legacy_constraints::{is_manager_for_vault, is_spot_market_for_vault, is_user_stats_for_vault};
 
 pub fn initialize_insurance_fund_stake<'info>(
   ctx: Context<'_, '_, '_, 'info, InitializeInsuranceFundStake<'info>>,

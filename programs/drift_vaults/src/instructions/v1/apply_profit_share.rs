@@ -3,16 +3,16 @@ use drift::instructions::optional_accounts::AccountMaps;
 use drift::program::Drift;
 use drift::state::user::User;
 
-use crate::{Vault, VaultDepositor};
 use crate::AccountMapProvider;
-use crate::constraints::{
+use crate::state::{VaultTrait, VaultV1, VaultVersion};
+use crate::v1_constraints::{
   is_delegate_for_vault, is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault,
   is_vault_for_vault_depositor,
 };
-use crate::state::VaultTrait;
+use crate::VaultDepositor;
 
-pub fn apply_profit_share<'c: 'info, 'info>(
-  ctx: Context<'_, '_, 'c, 'info, ApplyProfitShare<'info>>,
+pub fn apply_profit_share_v1<'c: 'info, 'info>(
+  ctx: Context<'_, '_, 'c, 'info, ApplyProfitShareV1<'info>>,
 ) -> Result<()> {
   let clock = &Clock::get()?;
 
@@ -30,16 +30,17 @@ pub fn apply_profit_share<'c: 'info, 'info>(
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  vault_depositor.apply_profit_share(vault_equity, &mut vault)?;
+  let vault_version = &mut VaultVersion::V1(&mut vault);
+  vault_depositor.apply_profit_share(vault_equity, vault_version)?;
 
   Ok(())
 }
 
 #[derive(Accounts)]
-pub struct ApplyProfitShare<'info> {
+pub struct ApplyProfitShareV1<'info> {
   #[account(mut,
   constraint = is_manager_for_vault(& vault, & manager) ? || is_delegate_for_vault(& vault, & manager) ?)]
-  pub vault: AccountLoader<'info, Vault>,
+  pub vault: AccountLoader<'info, VaultV1>,
   #[account(mut,
   constraint = is_vault_for_vault_depositor(& vault_depositor, & vault) ?)]
   pub vault_depositor: AccountLoader<'info, VaultDepositor>,

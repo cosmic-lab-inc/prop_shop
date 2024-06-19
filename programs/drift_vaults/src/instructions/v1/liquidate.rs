@@ -6,14 +6,14 @@ use drift::state::user::User;
 
 use crate::{declare_vault_seeds, implement_update_user_delegate_cpi};
 use crate::{AccountMapProvider, implement_update_user_reduce_only_cpi};
-use crate::{Vault, VaultDepositor};
-use crate::constraints::{
-    is_authority_for_vault_depositor, is_user_for_vault, is_user_stats_for_vault,
-};
 use crate::drift_cpi::{UpdateUserDelegateCPI, UpdateUserReduceOnlyCPI};
+use crate::state::{VaultDepositor, VaultTrait, VaultV1, VaultVersion};
+use crate::v1_constraints::{
+  is_authority_for_vault_depositor, is_user_for_vault, is_user_stats_for_vault,
+};
 
-pub fn liquidate<'c: 'info, 'info>(
-  ctx: Context<'_, '_, 'c, 'info, Liquidate<'info>>,
+pub fn liquidate_v1<'c: 'info, 'info>(
+  ctx: Context<'_, '_, 'c, 'info, LiquidateV1<'info>>,
 ) -> Result<()> {
   let clock = &Clock::get()?;
   let now = Clock::get()?.unix_timestamp;
@@ -29,17 +29,20 @@ pub fn liquidate<'c: 'info, 'info>(
   } = ctx.load_maps(clock.slot, Some(vault.spot_market_index))?;
 
   // 1. Check the vault depositor has waited the redeem period
-  vault_depositor.last_withdraw_request.check_redeem_period_finished(&vault, now)?;
+  let vault_version = &mut VaultVersion::V1(&mut vault);
+  vault_depositor.last_withdraw_request.check_redeem_period_finished(vault_version, now)?;
   // 2. Check that the depositor is unable to withdraw
-  let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
+  let _vault = vault_version.v1()?;
+  let vault_equity = _vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
   vault_depositor.check_cant_withdraw(
-    &vault,
+    vault_version,
     vault_equity,
     &mut user,
     &perp_market_map,
     &spot_market_map,
     &mut oracle_map,
   )?;
+  let vault = vault_version.v1_mut()?;
   // 3. Check that the vault is not already in liquidation for another depositor
   vault.check_delegate_available_for_liquidation(&vault_depositor, now)?;
 
@@ -55,9 +58,9 @@ pub fn liquidate<'c: 'info, 'info>(
 }
 
 #[derive(Accounts)]
-pub struct Liquidate<'info> {
+pub struct LiquidateV1<'info> {
   #[account(mut)]
-  pub vault: AccountLoader<'info, Vault>,
+  pub vault: AccountLoader<'info, VaultV1>,
   #[account(mut,
   seeds = [b"vault_depositor", vault.key().as_ref(), authority.key().as_ref()],
   bump,
@@ -77,14 +80,14 @@ pub struct Liquidate<'info> {
   pub drift_program: Program<'info, Drift>,
 }
 
-impl<'info> UpdateUserDelegateCPI for Context<'_, '_, '_, 'info, Liquidate<'info>> {
+impl<'info> UpdateUserDelegateCPI for Context<'_, '_, '_, 'info, LiquidateV1<'info>> {
   fn drift_update_user_delegate(&self, delegate: Pubkey) -> Result<()> {
     implement_update_user_delegate_cpi!(self, delegate);
     Ok(())
   }
 }
 
-impl<'info> UpdateUserReduceOnlyCPI for Context<'_, '_, '_, 'info, Liquidate<'info>> {
+impl<'info> UpdateUserReduceOnlyCPI for Context<'_, '_, '_, 'info, LiquidateV1<'info>> {
   fn drift_update_user_reduce_only(&self, reduce_only: bool) -> Result<()> {
     implement_update_user_reduce_only_cpi!(self, reduce_only);
     Ok(())

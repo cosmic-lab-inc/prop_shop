@@ -4,13 +4,13 @@ use drift::program::Drift;
 use drift::state::user::User;
 
 use crate::{declare_vault_seeds, validate};
-use crate::constraints::{is_manager_for_vault, is_user_for_vault};
+use crate::{VaultTrait, VaultV1};
 use crate::drift_cpi::UpdateUserMarginTradingEnabledCPI;
 use crate::error::ErrorCode;
-use crate::Vault;
+use crate::v1_constraints::{is_manager_for_vault, is_user_for_vault};
 
-pub fn update_margin_trading_enabled<'info>(
-  ctx: Context<'_, '_, '_, 'info, UpdateMarginTradingEnabled<'info>>,
+pub fn update_margin_trading_enabled_v1<'info>(
+  ctx: Context<'_, '_, '_, 'info, UpdateMarginTradingEnabledV1<'info>>,
   enabled: bool,
 ) -> Result<()> {
   validate!(
@@ -24,10 +24,10 @@ pub fn update_margin_trading_enabled<'info>(
 }
 
 #[derive(Accounts)]
-pub struct UpdateMarginTradingEnabled<'info> {
+pub struct UpdateMarginTradingEnabledV1<'info> {
   #[account(mut,
   constraint = is_manager_for_vault(& vault, & manager) ?,)]
-  pub vault: AccountLoader<'info, Vault>,
+  pub vault: AccountLoader<'info, VaultV1>,
   pub manager: Signer<'info>,
   #[account(mut,
   constraint = is_user_for_vault(& vault, & drift_user.key()) ?)]
@@ -36,7 +36,7 @@ pub struct UpdateMarginTradingEnabled<'info> {
   pub drift_program: Program<'info, Drift>,
 }
 
-impl<'info> UpdateUserMarginTradingEnabledCPI for Context<'_, '_, '_, 'info, UpdateMarginTradingEnabled<'info>> {
+impl<'info> UpdateUserMarginTradingEnabledCPI for Context<'_, '_, '_, 'info, UpdateMarginTradingEnabledV1<'info>> {
   fn drift_update_user_margin_trading_enabled(&self, enabled: bool) -> Result<()> {
     declare_vault_seeds!(self.accounts.vault, seeds);
 

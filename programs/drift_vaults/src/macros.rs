@@ -20,14 +20,13 @@ macro_rules! validate {
         }
     }};
 }
-
 #[macro_export]
 macro_rules! declare_vault_seeds {
     ( $vault_loader:expr, $name: ident ) => {
         let vault = $vault_loader.load()?;
         let name = vault.name;
         let bump = vault.bump;
-        let $name = &[&Vault::get_vault_signer_seeds(&name, &bump)[..]];
+        let $name = &[&vault.get_vault_signer_seeds(&name, &bump)[..]];
         drop(vault);
     };
 }

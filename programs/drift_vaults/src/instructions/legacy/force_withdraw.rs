@@ -7,16 +7,17 @@ use drift::program::Drift;
 use drift::state::user::User;
 
 use crate::{AccountMapProvider, declare_vault_seeds};
-use crate::constraints::{is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault};
+use crate::{Vault, VaultDepositor};
 use crate::drift_cpi::{TokenTransferCPI, WithdrawCPI};
-use crate::Vault;
+use crate::legacy_constraints::*;
+use crate::state::{VaultTrait, VaultVersion};
 
-pub fn manager_withdraw<'c: 'info, 'info>(
-  ctx: Context<'_, '_, 'c, 'info, ManagerWithdraw<'info>>,
+pub fn force_withdraw<'c: 'info, 'info>(
+  ctx: Context<'_, '_, 'c, 'info, ForceWithdraw<'info>>,
 ) -> Result<()> {
   let clock = &Clock::get()?;
-  let mut vault = ctx.accounts.vault.load_mut()?;
-  let now = clock.unix_timestamp;
+  let vault = ctx.accounts.vault.load()?;
+  let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
@@ -29,24 +30,31 @@ pub fn manager_withdraw<'c: 'info, 'info>(
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  let manager_withdraw_amount = vault.manager_withdraw(vault_equity, now)?;
+  let mut vault = ctx.accounts.vault.load_mut()?;
+  let vault_version = &mut VaultVersion::Legacy(&mut vault);
+  let (withdraw_amount, _) = vault_depositor.withdraw(vault_equity, vault_version, clock.unix_timestamp)?;
+
+  msg!("force_withdraw_amount: {}", withdraw_amount);
 
   drop(vault);
   drop(user);
 
-  ctx.drift_withdraw(manager_withdraw_amount)?;
+  ctx.drift_withdraw(withdraw_amount)?;
 
-  ctx.token_transfer(manager_withdraw_amount)?;
+  ctx.token_transfer(withdraw_amount)?;
 
   Ok(())
 }
 
 #[derive(Accounts)]
-pub struct ManagerWithdraw<'info> {
+pub struct ForceWithdraw<'info> {
   #[account(mut,
-  constraint = is_manager_for_vault(& vault, & manager) ?)]
+  constraint = is_manager_for_vault(& vault, & manager) ? || is_delegate_for_vault(& vault, & manager) ?)]
   pub vault: AccountLoader<'info, Vault>,
   pub manager: Signer<'info>,
+  #[account(mut,
+  constraint = is_vault_for_vault_depositor(& vault_depositor, & vault) ?,)]
+  pub vault_depositor: AccountLoader<'info, VaultDepositor>,
   #[account(mut,
   seeds = [b"vault_token_account".as_ref(), vault.key().as_ref()],
   bump,)]
@@ -67,14 +75,14 @@ pub struct ManagerWithdraw<'info> {
   /// CHECK: checked in drift cpi
   pub drift_signer: AccountInfo<'info>,
   #[account(mut,
-  token::authority = manager,
+  token::authority = vault_depositor.load() ?.authority,
   token::mint = vault_token_account.mint)]
   pub user_token_account: Box<Account<'info, TokenAccount>>,
   pub drift_program: Program<'info, Drift>,
   pub token_program: Program<'info, Token>,
 }
 
-impl<'info> WithdrawCPI for Context<'_, '_, '_, 'info, ManagerWithdraw<'info>> {
+impl<'info> WithdrawCPI for Context<'_, '_, '_, 'info, ForceWithdraw<'info>> {
   fn drift_withdraw(&self, amount: u64) -> Result<()> {
     declare_vault_seeds!(self.accounts.vault, seeds);
     let spot_market_index = self.accounts.vault.load()?.spot_market_index;
@@ -98,7 +106,7 @@ impl<'info> WithdrawCPI for Context<'_, '_, '_, 'info, ManagerWithdraw<'info>> {
   }
 }
 
-impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, ManagerWithdraw<'info>> {
+impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, ForceWithdraw<'info>> {
   fn token_transfer(&self, amount: u64) -> Result<()> {
     declare_vault_seeds!(self.accounts.vault, seeds);
 

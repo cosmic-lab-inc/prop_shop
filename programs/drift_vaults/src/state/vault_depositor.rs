@@ -88,13 +88,12 @@ impl VaultDepositor {
   }
 
   fn validate_base(&self, vault_version: &VaultVersion) -> Result<()> {
-    let vault = vault_version.legacy()?;
     validate!(
-        self.vault_shares_base == vault.shares_base,
+        self.vault_shares_base == vault_version.shares_base(),
         ErrorCode::InvalidVaultRebase,
         "vault depositor bases mismatch. user base: {} vault base {}",
         self.vault_shares_base,
-        vault.shares_base
+        vault_version.shares_base()
     )?;
 
     Ok(())
@@ -208,7 +207,7 @@ impl VaultDepositor {
     Ok((0, 0))
   }
 
-  fn deposit(
+  pub fn deposit(
     &mut self,
     amount: u64,
     vault_equity: u64,
@@ -264,12 +263,12 @@ impl VaultDepositor {
 
     match vault_version {
       VaultVersion::Legacy(vault) => {
-        vault.total_deposits = vault_version.total_deposits().saturating_add(amount);
-        vault.net_deposits = vault_version.net_deposits().safe_add(amount.cast()?)?;
+        vault.total_deposits = vault.total_deposits.saturating_add(amount);
+        vault.net_deposits = vault.net_deposits.safe_add(amount.cast()?)?;
       }
       VaultVersion::V1(vault) => {
-        vault.total_deposits = vault_version.total_deposits().saturating_add(amount);
-        vault.net_deposits = vault_version.net_deposits().safe_add(amount.cast()?)?;
+        vault.total_deposits = vault.total_deposits.saturating_add(amount);
+        vault.net_deposits = vault.net_deposits.safe_add(amount.cast()?)?;
       }
     };
 
@@ -278,12 +277,12 @@ impl VaultDepositor {
 
     match vault_version {
       VaultVersion::Legacy(vault) => {
-        vault.total_shares = vault_version.total_shares().safe_add(n_shares)?;
-        vault.user_shares = vault_version.user_shares().safe_add(n_shares)?;
+        vault.total_shares = vault.total_shares.safe_add(n_shares)?;
+        vault.user_shares = vault.user_shares.safe_add(n_shares)?;
       }
       VaultVersion::V1(vault) => {
-        vault.total_shares = vault_version.total_shares().safe_add(n_shares)?;
-        vault.user_shares = vault_version.user_shares().safe_add(n_shares)?;
+        vault.total_shares = vault.total_shares.safe_add(n_shares)?;
+        vault.user_shares = vault.user_shares.safe_add(n_shares)?;
       }
     };
 
@@ -338,7 +337,7 @@ impl VaultDepositor {
     Ok(())
   }
 
-  fn request_withdraw(
+  pub fn request_withdraw(
     &mut self,
     withdraw_amount: u64,
     withdraw_unit: WithdrawUnit,
@@ -346,21 +345,20 @@ impl VaultDepositor {
     vault_version: &mut VaultVersion,
     now: i64,
   ) -> Result<()> {
-    let vault = vault_version.legacy_mut()?;
     self.apply_rebase(vault_version, vault_equity)?;
     let VaultFee {
       management_fee_payment,
       management_fee_shares,
       protocol_fee_payment,
       protocol_fee_shares
-    } = vault.apply_fee(vault_equity, now)?;
+    } = vault_version.apply_fee(vault_equity, now)?;
     let (manager_profit_share, protocol_profit_share) = self.apply_profit_share(vault_equity, vault_version)?;
 
     let (withdraw_value, n_shares) = withdraw_unit.get_withdraw_value_and_shares(
       withdraw_amount,
       vault_equity,
       self.vault_shares,
-      vault.total_shares,
+      vault_version.total_shares(),
     )?;
 
     validate!(
@@ -370,8 +368,8 @@ impl VaultDepositor {
     )?;
 
     let vault_shares_before: u128 = self.checked_vault_shares(vault_version)?;
-    let total_vault_shares_before = vault.total_shares;
-    let user_vault_shares_before = vault.user_shares;
+    let total_vault_shares_before = vault_version.total_shares();
+    let user_vault_shares_before = vault_version.user_shares();
 
     self.last_withdraw_request.set(
       vault_shares_before,
@@ -380,12 +378,19 @@ impl VaultDepositor {
       vault_equity,
       now,
     )?;
-    vault.total_withdraw_requested = vault.total_withdraw_requested.safe_add(withdraw_value)?;
+    match vault_version {
+      VaultVersion::Legacy(vault) => {
+        vault.total_withdraw_requested = vault.total_withdraw_requested.safe_add(withdraw_value)?;
+      }
+      VaultVersion::V1(vault) => {
+        vault.total_withdraw_requested = vault.total_withdraw_requested.safe_add(withdraw_value)?;
+      }
+    }
 
     let vault_shares_after = self.checked_vault_shares(vault_version)?;
 
     match vault_version {
-      VaultVersion::Legacy(_) => {
+      VaultVersion::Legacy(vault) => {
         emit!(VaultDepositorRecord {
             ts: now,
             vault: vault.pubkey,
@@ -405,7 +410,7 @@ impl VaultDepositor {
             management_fee_shares,
         });
       }
-      VaultVersion::V1(_) => {
+      VaultVersion::V1(vault) => {
         emit!(VaultDepositorV1Record {
           ts: now,
           vault: vault.pubkey,
@@ -433,7 +438,7 @@ impl VaultDepositor {
     Ok(())
   }
 
-  fn cancel_withdraw_request(
+  pub fn cancel_withdraw_request(
     &mut self,
     vault_equity: u64,
     vault_version: &mut VaultVersion,
@@ -523,7 +528,7 @@ impl VaultDepositor {
     Ok(())
   }
 
-  fn withdraw(
+  pub fn withdraw(
     &mut self,
     vault_equity: u64,
     vault_version: &mut VaultVersion,
@@ -650,36 +655,41 @@ impl VaultDepositor {
     Ok((withdraw_amount, finishing_liquidation))
   }
 
-  fn apply_profit_share(
+  pub fn apply_profit_share(
     &mut self,
     vault_equity: u64,
     vault_version: &mut VaultVersion,
   ) -> Result<(u64, u64)> {
-    let vault = vault_version.legacy_mut()?;
     validate!(
         !self.last_withdraw_request.pending(),
         ErrorCode::InvalidVaultDeposit,
         "Cannot apply profit share to depositor with pending withdraw request"
     )?;
 
-    let total_amount = depositor_shares_to_vault_amount(self.vault_shares, vault.total_shares, vault_equity)?;
+    let total_amount = depositor_shares_to_vault_amount(self.vault_shares, vault_version.total_shares(), vault_equity)?;
 
     let (manager_profit_share, protocol_profit_share) = self.calculate_profit_share_and_update(total_amount, vault_version)?;
     let manager_profit_share: u64 = manager_profit_share.cast()?;
     let protocol_profit_share: u64 = protocol_profit_share.cast()?;
     let profit_share = manager_profit_share.saturating_add(protocol_profit_share).cast()?;
 
-    let profit_share_shares: u128 = vault_amount_to_depositor_shares(profit_share, vault.total_shares, vault_equity)?;
+    let profit_share_shares: u128 = vault_amount_to_depositor_shares(profit_share, vault_version.total_shares(), vault_equity)?;
 
     self.decrease_vault_shares(profit_share_shares, vault_version)?;
 
-    vault.user_shares = vault.user_shares.safe_sub(profit_share_shares)?;
+    match vault_version {
+      VaultVersion::Legacy(vault) => {
+        vault.user_shares = vault.user_shares.safe_sub(profit_share_shares)?;
+        vault.manager_total_profit_share = vault.manager_total_profit_share.saturating_add(manager_profit_share);
+      }
+      VaultVersion::V1(vault) => {
+        vault.user_shares = vault.user_shares.safe_sub(profit_share_shares)?;
+        vault.manager_total_profit_share = vault.manager_total_profit_share.saturating_add(manager_profit_share);
 
-    vault.manager_total_profit_share = vault.manager_total_profit_share.saturating_add(manager_profit_share);
-    if let VaultVersion::V1(vault) = vault_version {
-      vault.protocol_total_profit_share = vault.protocol_total_profit_share.saturating_add(protocol_profit_share.cast()?);
-      let protocol_profit_share_shares: u128 = vault_amount_to_depositor_shares(protocol_profit_share.cast()?, vault.total_shares, vault_equity)?;
-      vault.protocol_profit_and_fee_shares = vault.protocol_profit_and_fee_shares.saturating_add(protocol_profit_share_shares);
+        vault.protocol_total_profit_share = vault.protocol_total_profit_share.saturating_add(protocol_profit_share.cast()?);
+        let protocol_profit_share_shares: u128 = vault_amount_to_depositor_shares(protocol_profit_share.cast()?, vault.total_shares, vault_equity)?;
+        vault.protocol_profit_and_fee_shares = vault.protocol_profit_and_fee_shares.saturating_add(protocol_profit_share_shares);
+      }
     }
 
     Ok((manager_profit_share, protocol_profit_share))
@@ -691,17 +701,16 @@ impl VaultDepositor {
     vault_version: &mut VaultVersion,
     now: i64,
   ) -> Result<u64> {
-    let vault = vault_version.legacy_mut()?;
     let VaultFee {
       management_fee_payment,
       management_fee_shares,
       protocol_fee_payment,
       protocol_fee_shares
-    } = vault.apply_fee(vault_equity, now)?;
+    } = vault_version.apply_fee(vault_equity, now)?;
 
     let vault_shares_before = self.checked_vault_shares(vault_version)?;
-    let total_vault_shares_before = vault.total_shares;
-    let user_vault_shares_before = vault.user_shares;
+    let total_vault_shares_before = vault_version.total_shares();
+    let user_vault_shares_before = vault_version.user_shares();
 
     let (manager_profit_share, protocol_profit_share) = self.apply_profit_share(vault_equity, vault_version)?;
     let profit_share = manager_profit_share.saturating_add(protocol_profit_share);
@@ -755,7 +764,7 @@ impl VaultDepositor {
     Ok(profit_share)
   }
 
-  fn check_cant_withdraw(
+  pub fn check_cant_withdraw(
     &self,
     vault_version: &VaultVersion,
     vault_equity: u64,
@@ -852,7 +861,7 @@ mod legacy_vault_tests {
   #[test]
   fn test_deposit_withdraw() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(Vault::default());
+    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
     let vault = vault_version.legacy_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -879,7 +888,7 @@ mod legacy_vault_tests {
   #[test]
   fn test_deposit_partial_withdraw_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(Vault::default());
+    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
     let vault = vault_version.legacy_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -930,7 +939,7 @@ mod legacy_vault_tests {
   #[test]
   fn test_deposit_full_withdraw_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(Vault::default());
+    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
     let vault = vault_version.legacy_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -978,7 +987,7 @@ mod legacy_vault_tests {
   #[test]
   fn test_force_realize_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(Vault::default());
+    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
     let vault = vault_version.legacy_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -1032,7 +1041,7 @@ mod legacy_vault_tests {
     // should get request withdraw valuation and not break invariants
 
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(Vault::default());
+    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
     let vault = vault_version.legacy_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -1089,7 +1098,7 @@ mod legacy_vault_tests {
     // should get withdraw valuation and not break invariants
 
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(Vault::default());
+    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
     let vault = vault_version.legacy_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -1161,7 +1170,7 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_withdraw() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(VaultV1::default());
+    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
     let vault = vault_version.v1_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -1188,7 +1197,7 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_partial_withdraw_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(VaultV1::default());
+    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
     let vault = vault_version.v1_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -1253,7 +1262,7 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_partial_withdraw_profit_share_no_protocol() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(VaultV1::default());
+    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
     let vault = vault_version.v1_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -1309,7 +1318,7 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_full_withdraw_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(VaultV1::default());
+    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
     let vault = vault_version.v1_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -1389,7 +1398,7 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_full_withdraw_profit_share_no_protocol() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(VaultV1::default());
+    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
     let vault = vault_version.v1_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -1468,7 +1477,7 @@ mod vault_v1_tests {
   #[test]
   fn test_force_realize_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(VaultV1::default());
+    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
     let vault = vault_version.v1_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -1532,7 +1541,7 @@ mod vault_v1_tests {
     // should get request withdraw valuation and not break invariants
 
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(VaultV1::default());
+    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
     let vault = vault_version.v1_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -1601,7 +1610,7 @@ mod vault_v1_tests {
     // should get withdraw valuation and not break invariants
 
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(VaultV1::default());
+    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
     let vault = vault_version.v1_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);

@@ -9,6 +9,7 @@ use drift::state::spot_market::SpotMarket;
 use crate::{error::ErrorCode, Size, validate, Vault};
 use crate::constants::ONE_DAY;
 use crate::drift_cpi::InitializeUserCPI;
+use crate::state::VaultTrait;
 
 pub fn initialize_vault<'info>(
   ctx: Context<'_, '_, '_, 'info, InitializeVault<'info>>,
@@ -37,20 +38,18 @@ pub fn initialize_vault<'info>(
   vault.min_deposit_amount = params.min_deposit_amount;
 
   validate!(
-      params.management_fee + params.protocol_fee < PERCENTAGE_PRECISION_U64.cast()?,
+      params.management_fee < PERCENTAGE_PRECISION_U64.cast()?,
       ErrorCode::InvalidVaultInitialization,
       "management fee plus protocol fee must be < 100%"
   )?;
   vault.management_fee = params.management_fee;
-  vault.protocol_fee = params.protocol_fee;
 
   validate!(
-      params.manager_profit_share + params.protocol_profit_share < PERCENTAGE_PRECISION_U64.cast()?,
+      params.profit_share < PERCENTAGE_PRECISION_U64.cast()?,
       ErrorCode::InvalidVaultInitialization,
       "manager profit share protocol profit share must be < 100%"
   )?;
-  vault.manager_profit_share = params.manager_profit_share;
-  vault.protocol_profit_share = params.protocol_profit_share;
+  vault.profit_share = params.profit_share;
 
   validate!(
         params.hurdle_rate == 0,
@@ -75,10 +74,8 @@ pub struct VaultParams {
   pub redeem_period: i64,
   pub max_tokens: u64,
   pub management_fee: i64,
-  pub protocol_fee: i64,
   pub min_deposit_amount: u64,
-  pub manager_profit_share: u32,
-  pub protocol_profit_share: u32,
+  pub profit_share: u32,
   pub hurdle_rate: u32,
   pub spot_market_index: u16,
   pub permissioned: bool,
@@ -125,7 +122,9 @@ pub struct InitializeVault<'info> {
 
 impl<'info> InitializeUserCPI for Context<'_, '_, '_, 'info, InitializeVault<'info>> {
   fn drift_initialize_user(&self, name: [u8; 32], bump: u8) -> Result<()> {
-    let signature_seeds = Vault::get_vault_signer_seeds(&name, &bump);
+    let vault = self.accounts.vault.load()?;
+    let signature_seeds = vault.get_vault_signer_seeds(&name, &bump);
+    drop(vault);
     let signers = &[&signature_seeds[..]];
 
     let cpi_program = self.accounts.drift_program.to_account_info().clone();
@@ -144,7 +143,9 @@ impl<'info> InitializeUserCPI for Context<'_, '_, '_, 'info, InitializeVault<'in
   }
 
   fn drift_initialize_user_stats(&self, name: [u8; 32], bump: u8) -> Result<()> {
-    let signature_seeds = Vault::get_vault_signer_seeds(&name, &bump);
+    let vault = self.accounts.vault.load()?;
+    let signature_seeds = vault.get_vault_signer_seeds(&name, &bump);
+    drop(vault);
     let signers = &[&signature_seeds[..]];
 
     let cpi_program = self.accounts.drift_program.to_account_info().clone();
