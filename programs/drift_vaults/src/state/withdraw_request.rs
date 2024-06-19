@@ -10,10 +10,10 @@ use drift_macros::assert_no_slop;
 use solana_program::msg;
 use static_assertions::const_assert_eq;
 
-use crate::{validate, Vault};
 use crate::error::ErrorCode;
 use crate::error::VaultResult;
 use crate::state::VaultTrait;
+use crate::validate;
 
 #[assert_no_slop]
 #[derive(Default, AnchorSerialize, AnchorDeserialize, Copy, Clone, Eq, PartialEq, Debug, Zeroable,

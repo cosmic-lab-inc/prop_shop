@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{Size, validate, Vault, VaultDepositor};
+use crate::{Size, validate, VaultDepositor};
 use crate::error::ErrorCode;
 use crate::state::VaultV1;
 

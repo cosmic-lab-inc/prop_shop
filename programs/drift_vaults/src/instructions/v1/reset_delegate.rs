@@ -6,11 +6,11 @@ use drift::state::user::User;
 use crate::{
   declare_vault_seeds, implement_update_user_delegate_cpi, implement_update_user_reduce_only_cpi,
 };
-use crate::{validate, Vault};
 use crate::drift_cpi::{UpdateUserDelegateCPI, UpdateUserReduceOnlyCPI};
 use crate::error::ErrorCode;
 use crate::state::{VaultTrait, VaultV1};
 use crate::v1_constraints::is_user_for_vault;
+use crate::validate;
 
 pub fn reset_delegate_v1<'info>(ctx: Context<'_, '_, '_, 'info, ResetDelegateV1<'info>>) -> Result<()> {
   let mut vault = ctx.accounts.vault.load_mut()?;

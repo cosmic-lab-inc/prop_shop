@@ -124,6 +124,18 @@ impl VaultTrait for Vault {
 
   fn spot_market_index(&self) -> u16 { self.spot_market_index }
 
+  fn last_fee_update_ts(&self) -> i64 {
+    self.last_fee_update_ts
+  }
+  
+  fn manager_total_deposits(&self) -> u64 {
+    self.manager_total_deposits
+  }
+
+  fn manager_total_withdraws(&self) -> u64 {
+    self.manager_total_withdraws
+  }
+
   fn get_vault_signer_seeds<'a>(&self, name: &'a [u8], bump: &'a u8) -> [&'a [u8]; 3] {
     [b"vault".as_ref(), name, bytemuck::bytes_of(bump)]
   }

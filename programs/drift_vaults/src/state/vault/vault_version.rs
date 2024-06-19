@@ -7,11 +7,6 @@ use drift::state::user::User;
 use crate::error::{ErrorCode, VaultResult};
 use crate::state::{Vault, VaultDepositor, VaultV1, WithdrawUnit};
 
-// pub enum VaultVersion {
-//   Legacy(Vault),
-//   V1(VaultV1),
-// }
-
 pub enum VaultVersion<'a> {
   Legacy(&'a mut Vault),
   V1(&'a mut VaultV1),
@@ -21,7 +16,7 @@ impl<'a> VaultVersion<'a> {
   pub fn legacy(&self) -> VaultResult<&Vault> {
     match self {
       VaultVersion::Legacy(vault) => Ok(vault),
-      VaultVersion::V1(vault) => Err(ErrorCode::InvalidVaultVersion),
+      VaultVersion::V1(_) => Err(ErrorCode::InvalidVaultVersion),
     }
   }
 
@@ -65,6 +60,9 @@ pub trait VaultTrait {
   fn net_deposits(&self) -> i64;
   fn liquidation_delegate(&self) -> Pubkey;
   fn spot_market_index(&self) -> u16;
+  fn last_fee_update_ts(&self) -> i64;
+  fn manager_total_deposits(&self) -> u64;
+  fn manager_total_withdraws(&self) -> u64;
 
   fn get_vault_signer_seeds<'b>(&self, name: &'b [u8], bump: &'b u8) -> [&'b [u8]; 3];
 
@@ -208,10 +206,31 @@ impl<'a> VaultTrait for VaultVersion<'a> {
     }
   }
 
+  fn last_fee_update_ts(&self) -> i64 {
+    match self {
+      VaultVersion::Legacy(vault) => vault.last_fee_update_ts,
+      VaultVersion::V1(vault) => vault.last_fee_update_ts,
+    }
+  }
+
+  fn manager_total_deposits(&self) -> u64 {
+    match self {
+      VaultVersion::Legacy(vault) => vault.manager_total_deposits,
+      VaultVersion::V1(vault) => vault.manager_total_deposits,
+    }
+  }
+
+  fn manager_total_withdraws(&self) -> u64 {
+    match self {
+      VaultVersion::Legacy(vault) => vault.manager_total_withdraws,
+      VaultVersion::V1(vault) => vault.manager_total_withdraws,
+    }
+  }
+
   fn get_vault_signer_seeds<'b>(&self, name: &'b [u8], bump: &'b u8) -> [&'b [u8]; 3] {
     match self {
-      VaultVersion::Legacy(vault) => self.get_vault_signer_seeds(name, bump),
-      VaultVersion::V1(vault) => self.get_vault_signer_seeds(name, bump)
+      VaultVersion::Legacy(_) => self.get_vault_signer_seeds(name, bump),
+      VaultVersion::V1(_) => self.get_vault_signer_seeds(name, bump)
     }
   }
 

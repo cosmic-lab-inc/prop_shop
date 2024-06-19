@@ -50,8 +50,6 @@ pub enum ErrorCode {
   InvalidVaultDeposit,
   #[msg("OngoingLiquidation")]
   OngoingLiquidation,
-  #[msg("InvalidVaultDepositorVersion")]
-  InvalidVaultDepositorVersion,
   #[msg("InvalidVaultVersion")]
   InvalidVaultVersion,
 }

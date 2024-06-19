@@ -12,7 +12,7 @@ use crate::error::ErrorCode;
 use crate::legacy_constraints::{
   is_authority_for_vault_depositor, is_user_for_vault, is_user_stats_for_vault,
 };
-use crate::state::{VaultTrait, VaultV1, VaultVersion};
+use crate::state::{VaultTrait, VaultVersion};
 
 pub fn deposit<'c: 'info, 'info>(
   ctx: Context<'_, '_, 'c, 'info, Deposit<'info>>,

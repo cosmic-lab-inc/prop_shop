@@ -68,7 +68,7 @@ const_assert_eq!(
 );
 
 impl VaultDepositor {
-  fn new(vault: Pubkey, pubkey: Pubkey, authority: Pubkey, now: i64) -> Self {
+  pub fn new(vault: Pubkey, pubkey: Pubkey, authority: Pubkey, now: i64) -> Self {
     VaultDepositor {
       vault,
       pubkey,
@@ -87,7 +87,7 @@ impl VaultDepositor {
     }
   }
 
-  fn validate_base(&self, vault_version: &VaultVersion) -> Result<()> {
+  pub fn validate_base(&self, vault_version: &VaultVersion) -> Result<()> {
     validate!(
         self.vault_shares_base == vault_version.shares_base(),
         ErrorCode::InvalidVaultRebase,
@@ -99,35 +99,35 @@ impl VaultDepositor {
     Ok(())
   }
 
-  fn checked_vault_shares(&self, vault_version: &VaultVersion) -> Result<u128> {
+  pub fn checked_vault_shares(&self, vault_version: &VaultVersion) -> Result<u128> {
     self.validate_base(vault_version)?;
     Ok(self.vault_shares)
   }
 
-  fn unchecked_vault_shares(&self) -> u128 {
+  pub fn unchecked_vault_shares(&self) -> u128 {
     self.vault_shares
   }
 
-  fn increase_vault_shares(&mut self, delta: u128, vault_version: &VaultVersion) -> Result<()> {
+  pub fn increase_vault_shares(&mut self, delta: u128, vault_version: &VaultVersion) -> Result<()> {
     self.validate_base(vault_version)?;
     self.vault_shares = self.vault_shares.safe_add(delta)?;
     Ok(())
   }
 
-  fn decrease_vault_shares(&mut self, delta: u128, vault_version: &VaultVersion) -> Result<()> {
+  pub fn decrease_vault_shares(&mut self, delta: u128, vault_version: &VaultVersion) -> Result<()> {
     self.validate_base(vault_version)?;
     self.vault_shares = self.vault_shares.safe_sub(delta)?;
     Ok(())
   }
 
-  fn update_vault_shares(&mut self, new_shares: u128, vault_version: &VaultVersion) -> Result<()> {
+  pub fn update_vault_shares(&mut self, new_shares: u128, vault_version: &VaultVersion) -> Result<()> {
     self.validate_base(vault_version)?;
     self.vault_shares = new_shares;
 
     Ok(())
   }
 
-  fn apply_rebase(
+  pub fn apply_rebase(
     &mut self,
     vault_version: &mut VaultVersion,
     vault_equity: u64,
@@ -172,7 +172,7 @@ impl VaultDepositor {
     Ok(())
   }
 
-  fn calculate_profit_share_and_update(
+  pub fn calculate_profit_share_and_update(
     &mut self,
     total_amount: u64,
     vault_version: &VaultVersion,
@@ -695,7 +695,7 @@ impl VaultDepositor {
     Ok((manager_profit_share, protocol_profit_share))
   }
 
-  fn realize_profits(
+  pub fn realize_profits(
     &mut self,
     vault_equity: u64,
     vault_version: &mut VaultVersion,
@@ -939,16 +939,16 @@ mod legacy_vault_tests {
   #[test]
   fn test_deposit_full_withdraw_profit_share() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
+    let mut vault_version = VaultVersion::Legacy(&mut Vault::default());
     let vault = vault_version.legacy_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
 
     let mut vault_equity: u64 = 100 * QUOTE_PRECISION_U64;
     let amount: u64 = 100 * QUOTE_PRECISION_U64;
-    vd.deposit(amount, vault_equity, vault_version, now + 20).unwrap();
+    vd.deposit(amount, vault_equity, &mut vault_version, now + 20).unwrap();
     assert_eq!(vd.vault_shares_base, 0);
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 100000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 100000000);
     assert_eq!(vault.user_shares, 100000000);
     assert_eq!(vault.total_shares, 200000000);
 
@@ -960,17 +960,17 @@ mod legacy_vault_tests {
       190 * QUOTE_PRECISION_U64, // 200 - 10% share
       WithdrawUnit::Token,
       vault_equity,
-      vault_version,
+      &mut vault_version,
       now + 20,
     ).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 95000000);
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 95000000);
 
     assert_eq!(vd.last_withdraw_request.shares, 95000000);
     assert_eq!(vd.last_withdraw_request.value, 190000000);
     assert_eq!(vd.last_withdraw_request.ts, now + 20);
 
-    let (withdraw_amount, _) = vd.withdraw(vault_equity, vault_version, now + 20).unwrap();
-    assert_eq!(vd.checked_vault_shares(vault_version).unwrap(), 0);
+    let (withdraw_amount, _) = vd.withdraw(vault_equity, &mut vault_version, now + 20).unwrap();
+    assert_eq!(vd.checked_vault_shares(&vault_version).unwrap(), 0);
     assert_eq!(vd.vault_shares_base, 0);
     assert_eq!(vault.user_shares, 0);
     assert_eq!(vault.total_shares, 105000000);
@@ -1157,7 +1157,7 @@ mod vault_v1_tests {
   use drift::math::insurance::if_shares_to_vault_amount;
 
   use crate::{VaultDepositor, WithdrawUnit};
-  use crate::state::{VaultTrait, VaultV1, VaultVersion};
+  use crate::state::{Vault, VaultTrait, VaultV1, VaultVersion};
 
   #[test]
   fn base_init() {
@@ -1262,7 +1262,7 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_partial_withdraw_profit_share_no_protocol() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
+    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
     let vault = vault_version.v1_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -1398,7 +1398,7 @@ mod vault_v1_tests {
   #[test]
   fn test_deposit_full_withdraw_profit_share_no_protocol() {
     let now = 1000;
-    let vault_version = &mut VaultVersion::V1(&mut VaultV1::default());
+    let vault_version = &mut VaultVersion::Legacy(&mut Vault::default());
     let vault = vault_version.v1_mut().unwrap();
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);

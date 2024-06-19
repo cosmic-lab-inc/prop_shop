@@ -42,11 +42,10 @@ pub fn liquidate_v1<'c: 'info, 'info>(
     &spot_market_map,
     &mut oracle_map,
   )?;
-  let vault = vault_version.v1_mut()?;
   // 3. Check that the vault is not already in liquidation for another depositor
-  vault.check_delegate_available_for_liquidation(&vault_depositor, now)?;
+  vault_version.v1_mut()?.check_delegate_available_for_liquidation(&vault_depositor, now)?;
 
-  vault.set_liquidation_delegate(vault_depositor.authority, now);
+  vault_version.v1_mut()?.set_liquidation_delegate(vault_depositor.authority, now);
 
   drop(user);
   drop(vault);
