@@ -522,6 +522,7 @@ mod vault_v1_fcn {
     let mut _vault = VaultV1::default();
     let mut vault_version = VaultVersion::V1(&mut _vault);
     vault_version.v1_mut().unwrap().management_fee = 1000; // 10 bps
+    vault_version.v1_mut().unwrap().protocol_fee = 500; // 5 bps
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
     assert_eq!(vault_version.total_shares(), 0);
@@ -540,10 +541,13 @@ mod vault_v1_fcn {
 
     vault_version.apply_fee(vault_equity, now + ONE_YEAR as i64).unwrap();
     assert_eq!(vault_version.user_shares(), 100000000);
-    assert_eq!(vault_version.total_shares(), 200200200);
+    assert_eq!(vault_version.total_shares(), 200300400);
+    println!("total shares: {}", vault_version.total_shares());
+    println!("manager shares: {}", vault_version.get_manager_shares().unwrap());
+    println!("protocol shares: {}", vault_version.get_protocol_shares().unwrap());
 
     let oo = depositor_shares_to_vault_amount(vault_version.user_shares(), vault_version.total_shares(), vault_equity).unwrap();
-    assert_eq!(oo, 99900000);
+    assert_eq!(oo, 99850025);
 
     assert_eq!(vault_version.last_fee_update_ts(), now + ONE_YEAR as i64);
   }
@@ -553,7 +557,9 @@ mod vault_v1_fcn {
     let now = 1000;
     let mut _vault = VaultV1::default();
     let mut vault_version = VaultVersion::V1(&mut _vault);
-    vault_version.v1_mut().unwrap().management_fee = 1000000;
+    // vault_version.v1_mut().unwrap().management_fee = 600_000;
+    // vault_version.v1_mut().unwrap().protocol_fee = 400_000;
+    vault_version.v1_mut().unwrap().management_fee = 1_000_000;
     vault_version.v1_mut().unwrap().last_fee_update_ts = 0;
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
