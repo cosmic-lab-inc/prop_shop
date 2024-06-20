@@ -241,6 +241,7 @@ impl VaultTrait for VaultV1 {
       }
 
       protocol_fee_shares = new_total_shares.cast::<i128>()?.safe_sub(self.total_shares.cast()?)?;
+      self.total_shares = new_total_shares;
       self.protocol_total_fee = self.protocol_total_fee.saturating_add(protocol_fee_payment.cast()?);
       self.protocol_profit_and_fee_shares = self.protocol_profit_and_fee_shares.safe_add(protocol_fee_shares.cast()?)?;
 

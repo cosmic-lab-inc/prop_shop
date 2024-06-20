@@ -872,14 +872,14 @@ mod vault_v1_fcn {
     vault_equity += amount;
 
     assert_eq!(vault_version.user_shares(), 0);
-    assert_eq!(vault_version.total_shares(), 100000000);
+    assert_eq!(vault_version.total_shares(), 100_000_000);
     now += 60 * 60;
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
     vd.deposit(amount * 20, vault_equity, &mut vault_version, now).unwrap(); // new user deposits $2000
     now += 60 * 60;
-    assert_eq!(vault_version.user_shares(), 2000000000);
-    assert_eq!(vault_version.total_shares(), 2000000000 + 100000000);
+    assert_eq!(vault_version.user_shares(), 2_000_000_000);
+    assert_eq!(vault_version.total_shares(), 2_000_000_000 + 100_000_000);
     vault_equity += amount * 20;
 
     // up 50%
@@ -889,12 +889,11 @@ mod vault_v1_fcn {
     assert_eq!(vault_equity, 3_150_000_000);
 
     let mut cnt = 0;
-    while (vault_version.total_shares() == 2000000000 + 100000000) && cnt < 400 {
+    while (vault_version.total_shares() == 2_000_000_000 + 100_000_000) && cnt < 400 {
       now += 60 * 60 * 24; // 1 day later
 
       vd.apply_profit_share(vault_equity, &mut vault_version).unwrap();
       vault_version.apply_fee(vault_equity, now).unwrap();
-      // crate::msg!("vault last ts: {} vs {}", vault.last_fee_update_ts, now);
       cnt += 1;
     }
 
@@ -938,5 +937,93 @@ mod vault_v1_fcn {
     assert_eq!(vd_amount, 2_849_997_150); // gainz
 
     assert_eq!(vd_amount + vault_manager_amount_after, vault_equity - 1);
+  }
+
+  #[test]
+  fn test_protocol_withdraw_with_user_gain_v1() {
+    let mut now = 123456789;
+    let mut _vault = VaultV1::default();
+    let mut vault_version = VaultVersion::V1(&mut _vault);
+    vault_version.v1_mut().unwrap().protocol_fee = 100; // .01%
+    vault_version.v1_mut().unwrap().protocol_profit_share = 150_000; // 15%
+
+    vault_version.v1_mut().unwrap().last_fee_update_ts = now;
+    let mut vault_equity: u64 = 0;
+    let amount: u64 = 100 * QUOTE_PRECISION_U64;
+    vault_version.manager_deposit(amount, vault_equity, now).unwrap();
+    vault_equity += amount;
+
+    assert_eq!(vault_version.user_shares(), 0);
+    assert_eq!(vault_version.total_shares(), 100_000_000);
+    now += 60 * 60;
+
+    let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
+    vd.deposit(amount * 20, vault_equity, &mut vault_version, now).unwrap(); // new user deposits $2000
+    now += 60 * 60;
+    assert_eq!(vault_version.user_shares(), 2_000_000_000);
+    assert_eq!(vault_version.total_shares(), 2_000_000_000 + 100_000_000);
+    vault_equity += amount * 20;
+
+    // up 50%
+    vault_equity *= 3;
+    vault_equity /= 2;
+
+    assert_eq!(vault_equity, 3_150_000_000);
+
+    let mut cnt = 0;
+    while (vault_version.total_shares() == 2_000_000_000 + 100_000_000) && cnt < 400 {
+      now += 60 * 60 * 24; // 1 day later
+
+      vd.apply_profit_share(vault_equity, &mut vault_version).unwrap();
+      vault_version.apply_fee(vault_equity, now).unwrap();
+      cnt += 1;
+    }
+
+    assert_eq!(cnt, 4); // 4 days
+    assert_eq!(
+      vd.cumulative_profit_share_amount,
+      (1000 * QUOTE_PRECISION_U64) as i64
+    );
+    assert_eq!(vd.net_deposits, (2000 * QUOTE_PRECISION_U64) as i64);
+
+    let protocol_amount = depositor_shares_to_vault_amount(
+      vault_version.v1().unwrap().get_protocol_shares().unwrap(),
+      vault_version.total_shares(),
+      vault_equity,
+    ).unwrap();
+
+    assert_eq!(protocol_amount, 150002999);
+
+    vault_version.protocol_request_withdraw(amount, WithdrawUnit::Token, vault_equity, now).unwrap();
+    assert_eq!(amount, vault_version.v1_mut().unwrap().last_protocol_withdraw_request.value);
+
+    let withdrew = vault_version.protocol_withdraw(vault_equity, now).unwrap();
+    assert_eq!(amount - 1, withdrew); // todo: slight round out of favor
+    assert_eq!(vault_version.user_shares(), 1900000000);
+    assert_eq!(vault_version.total_shares(), 2033335367);
+    vault_equity -= withdrew;
+
+    let protocol_amount_after = depositor_shares_to_vault_amount(
+      vault_version.get_protocol_shares().unwrap(),
+      vault_version.total_shares(),
+      vault_equity,
+    ).unwrap();
+    let manager_amount = depositor_shares_to_vault_amount(
+      vault_version.get_manager_shares().unwrap(),
+      vault_version.total_shares(),
+      vault_equity,
+    ).unwrap();
+
+    assert_eq!(protocol_amount_after, 50_003_000);
+    assert_eq!(manager_amount, 149999850);
+
+    let vd_amount = depositor_shares_to_vault_amount(
+      vd.checked_vault_shares(&vault_version).unwrap(),
+      vault_version.total_shares(),
+      vault_equity,
+    ).unwrap();
+    assert_eq!(vd_amount, 2_849_997_150);
+
+    assert_eq!(vd_amount + protocol_amount_after + manager_amount, vault_equity - 1);
   }
 }

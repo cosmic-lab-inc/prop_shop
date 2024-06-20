@@ -38,7 +38,7 @@ pub fn initialize_vault_v1<'info>(
   vault.min_deposit_amount = params.min_deposit_amount;
 
   validate!(
-      params.management_fee + params.protocol_fee < PERCENTAGE_PRECISION_U64.cast()?,
+      params.management_fee + params.protocol_fee.cast::<i64>()? < PERCENTAGE_PRECISION_U64.cast()?,
       ErrorCode::InvalidVaultInitialization,
       "management fee plus protocol fee must be < 100%"
   )?;
@@ -76,7 +76,7 @@ pub struct VaultV1Params {
   pub redeem_period: i64,
   pub max_tokens: u64,
   pub management_fee: i64,
-  pub protocol_fee: i64,
+  pub protocol_fee: u64,
   pub min_deposit_amount: u64,
   pub manager_profit_share: u32,
   pub protocol_profit_share: u32,

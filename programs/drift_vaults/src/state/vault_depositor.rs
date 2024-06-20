@@ -671,7 +671,7 @@ impl VaultDepositor {
     let (manager_profit_share, protocol_profit_share) = self.calculate_profit_share_and_update(total_amount, vault_version)?;
     let manager_profit_share: u64 = manager_profit_share.cast()?;
     let protocol_profit_share: u64 = protocol_profit_share.cast()?;
-    let profit_share = manager_profit_share.saturating_add(protocol_profit_share).cast()?;
+    let profit_share = manager_profit_share.safe_add(protocol_profit_share)?.cast()?;
 
     let profit_share_shares: u128 = vault_amount_to_depositor_shares(profit_share, vault_version.total_shares(), vault_equity)?;
 

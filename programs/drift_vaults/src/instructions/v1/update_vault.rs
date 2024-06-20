@@ -88,7 +88,7 @@ pub struct UpdateVaultV1Params {
   pub redeem_period: Option<i64>,
   pub max_tokens: Option<u64>,
   pub management_fee: Option<i64>,
-  pub protocol_fee: Option<i64>,
+  pub protocol_fee: Option<u64>,
   pub min_deposit_amount: Option<u64>,
   pub manager_profit_share: Option<u32>,
   pub protocol_profit_share: Option<u32>,
