@@ -5,5 +5,4 @@ export * from "./Drawer";
 export * from "./Toolbar";
 export * from "./Typing";
 export * from "./CodeSnippet";
-export * from "./LoginDialog";
 export * from "./HttpDisplay";
