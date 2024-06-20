@@ -3,7 +3,7 @@ default_to_workspace = false
 
 [tasks.solana]
 command = "solana-install"
-args = ["init", "1.16.27"]
+args = ["init", "1.18.8"]
 
 [tasks.avm]
 command = "avm"

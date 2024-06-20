@@ -22,7 +22,7 @@ use crate::events::{VaultDepositorAction, VaultDepositorRecord};
 use crate::state::{VaultFee, VaultTrait};
 use crate::state::withdraw_request::WithdrawRequest;
 
-// #[assert_no_slop]
+#[assert_no_slop]
 #[account(zero_copy(unsafe))]
 #[derive(Default, Eq, PartialEq, Debug)]
 #[repr(C)]
