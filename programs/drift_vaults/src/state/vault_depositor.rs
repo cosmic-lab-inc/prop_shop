@@ -62,10 +62,10 @@ impl Size for VaultDepositor {
   const SIZE: usize = 272 + 8; // 264 + 8;
 }
 
-// const_assert_eq!(
-//     VaultDepositor::SIZE,
-//     std::mem::size_of::<VaultDepositor>() + 8
-// );
+const_assert_eq!(
+    VaultDepositor::SIZE,
+    std::mem::size_of::<VaultDepositor>() + 8
+);
 
 impl VaultDepositor {
   pub fn new(vault: Pubkey, pubkey: Pubkey, authority: Pubkey, now: i64) -> Self {
