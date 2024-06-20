@@ -163,29 +163,44 @@ impl VaultTrait for VaultV1 {
   fn apply_fee(&mut self, vault_equity: u64, now: i64) -> Result<VaultFee> {
     // calculate management fee
     let depositor_equity = depositor_shares_to_vault_amount(self.user_shares, self.total_shares, vault_equity)?.cast::<i128>()?;
-    let mut management_fee_payment: i128 = 0;
+    let management_fee_payment: i128 = 0;
     let mut management_fee_shares: i128 = 0;
-    let mut protocol_fee_payment: i128 = 0;
+    let protocol_fee_payment: i128 = 0;
     let mut protocol_fee_shares: i128 = 0;
     let mut skip_ts_update = false;
 
-    if self.management_fee != 0 && depositor_equity > 0 {
+    if self.management_fee != 0 && self.protocol_fee == 0 && depositor_equity > 0 {
+      let since_last = now.safe_sub(self.last_fee_update_ts)?;
+
+      // default behavior in legacy [`Vault`], manager taxes equity - 1
+      let management_fee_payment = depositor_equity.safe_mul(self.management_fee.cast()?)?.safe_div(PERCENTAGE_PRECISION_I128)?.safe_mul(since_last.cast()?)?.safe_div(ONE_YEAR.cast()?)?.min(depositor_equity.saturating_sub(1));
+
+      let new_total_shares_factor: u128 = depositor_equity.safe_mul(PERCENTAGE_PRECISION_I128)?.safe_div(
+        depositor_equity.safe_sub(management_fee_payment)?.safe_sub(protocol_fee_payment)?
+      )?.cast()?;
+
+      let new_total_shares = self.total_shares.safe_mul(new_total_shares_factor.cast()?)?.safe_div(PERCENTAGE_PRECISION)?.max(self.user_shares);
+
+      if management_fee_payment == 0 || self.total_shares == new_total_shares {
+        // time delta wasn't large enough to pay any management/protocol fee
+        skip_ts_update = true;
+      }
+
+      management_fee_shares = new_total_shares.cast::<i128>()?.safe_sub(self.total_shares.cast()?)?;
+      self.total_shares = new_total_shares;
+      self.manager_total_fee = self.manager_total_fee.saturating_add(management_fee_payment.cast()?);
+
+      // in case total_shares is pushed to level that warrants a rebase
+      self.apply_rebase(vault_equity)?;
+    } else if self.management_fee != 0 && self.protocol_fee != 0 && depositor_equity > 0 {
       let since_last = now.safe_sub(self.last_fee_update_ts)?;
       let total_fee = self.management_fee.safe_add(self.protocol_fee)?.cast::<i128>()?;
 
-      let (management_fee_payment, protocol_fee_payment) = if self.protocol_fee != 0 {
-        // if protocol fee is non-zero and total fee would lead to zero equity remaining, 
-        // then tax equity - 1 but only for the protocol, so that the user is left with 1 and the manager retains their full fee.
-        let total_fee_payment = depositor_equity.safe_mul(total_fee)?.safe_div(PERCENTAGE_PRECISION_I128)?.safe_mul(since_last.cast()?)?.safe_div(ONE_YEAR.cast()?)?;
-        management_fee_payment = total_fee_payment.safe_mul(self.management_fee.cast()?)?.safe_div(total_fee)?;
-        protocol_fee_payment = total_fee_payment.min(depositor_equity.saturating_sub(1)).safe_mul(self.protocol_fee.min(0).cast()?)?.safe_div(total_fee)?;
-        (management_fee_payment, protocol_fee_payment)
-      } else {
-        // default behavior in legacy [`Vault`], manager taxes equity - 1
-        management_fee_payment = depositor_equity.safe_mul(self.management_fee.cast()?)?.safe_div(PERCENTAGE_PRECISION_I128)?.safe_mul(since_last.cast()?)?.safe_div(ONE_YEAR.cast()?)?.min(depositor_equity.saturating_sub(1));
-        protocol_fee_payment = 0;
-        (management_fee_payment, protocol_fee_payment)
-      };
+      // if protocol fee is non-zero and total fee would lead to zero equity remaining,
+      // then tax equity - 1 but only for the protocol, so that the user is left with 1 and the manager retains their full fee.
+      let total_fee_payment = depositor_equity.safe_mul(total_fee)?.safe_div(PERCENTAGE_PRECISION_I128)?.safe_mul(since_last.cast()?)?.safe_div(ONE_YEAR.cast()?)?;
+      let management_fee_payment = total_fee_payment.safe_mul(self.management_fee.cast()?)?.safe_div(total_fee)?;
+      let protocol_fee_payment = total_fee_payment.min(depositor_equity.saturating_sub(1)).safe_mul(self.protocol_fee.cast()?)?.safe_div(total_fee)?;
 
       let new_total_shares_factor: u128 = depositor_equity.safe_mul(PERCENTAGE_PRECISION_I128)?.safe_div(
         depositor_equity.safe_sub(management_fee_payment)?.safe_sub(protocol_fee_payment)?
@@ -201,6 +216,29 @@ impl VaultTrait for VaultV1 {
       management_fee_shares = new_total_shares.cast::<i128>()?.safe_sub(self.total_shares.cast()?)?;
       self.total_shares = new_total_shares;
       self.manager_total_fee = self.manager_total_fee.saturating_add(management_fee_payment.cast()?);
+
+      protocol_fee_shares = new_total_shares.cast::<i128>()?.safe_sub(self.total_shares.cast()?)?;
+      self.protocol_total_fee = self.protocol_total_fee.saturating_add(protocol_fee_payment.cast()?);
+      self.protocol_profit_and_fee_shares = self.protocol_profit_and_fee_shares.cast::<i128>()?.safe_add(protocol_fee_shares)?.cast::<u128>()?;
+
+      // in case total_shares is pushed to level that warrants a rebase
+      self.apply_rebase(vault_equity)?;
+    } else if self.management_fee == 0 && self.protocol_fee != 0 && depositor_equity != 0 {
+      let since_last = now.safe_sub(self.last_fee_update_ts)?;
+
+      // default behavior in legacy [`Vault`], manager taxes equity - 1
+      let protocol_fee_payment = depositor_equity.safe_mul(self.protocol_fee.cast()?)?.safe_div(PERCENTAGE_PRECISION_I128)?.safe_mul(since_last.cast()?)?.safe_div(ONE_YEAR.cast()?)?.min(depositor_equity.saturating_sub(1));
+
+      let new_total_shares_factor: u128 = depositor_equity.safe_mul(PERCENTAGE_PRECISION_I128)?.safe_div(
+        depositor_equity.safe_sub(management_fee_payment)?.safe_sub(protocol_fee_payment)?
+      )?.cast()?;
+
+      let new_total_shares = self.total_shares.safe_mul(new_total_shares_factor.cast()?)?.safe_div(PERCENTAGE_PRECISION)?.max(self.user_shares);
+
+      if protocol_fee_payment == 0 || self.total_shares == new_total_shares {
+        // time delta wasn't large enough to pay any management/protocol fee
+        skip_ts_update = true;
+      }
 
       protocol_fee_shares = new_total_shares.cast::<i128>()?.safe_sub(self.total_shares.cast()?)?;
       self.protocol_total_fee = self.protocol_total_fee.saturating_add(protocol_fee_payment.cast()?);

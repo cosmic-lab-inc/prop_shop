@@ -553,13 +553,12 @@ mod vault_v1_fcn {
   }
 
   #[test]
-  fn test_excessive_management_fee_v1() {
+  fn test_excessive_fee_v1() {
     let now = 1000;
     let mut _vault = VaultV1::default();
     let mut vault_version = VaultVersion::V1(&mut _vault);
-    // vault_version.v1_mut().unwrap().management_fee = 600_000;
-    // vault_version.v1_mut().unwrap().protocol_fee = 400_000;
-    vault_version.v1_mut().unwrap().management_fee = 1_000_000;
+    vault_version.v1_mut().unwrap().management_fee = 600_000;
+    vault_version.v1_mut().unwrap().protocol_fee = 400_000;
     vault_version.v1_mut().unwrap().last_fee_update_ts = 0;
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -586,12 +585,14 @@ mod vault_v1_fcn {
   }
 
   #[test]
-  fn test_management_fee_high_frequency_v1() {
+  fn test_fee_high_frequency_v1() {
     // asymptotic nature of calling -100% annualized on shorter time scale
     let mut now = 0;
     let mut _vault = VaultV1::default();
     let mut vault_version = VaultVersion::V1(&mut _vault);
-    vault_version.v1_mut().unwrap().management_fee = 1000000; // 100%
+    vault_version.v1_mut().unwrap().management_fee = 600_000; // 60%
+    vault_version.v1_mut().unwrap().protocol_fee = 400_000; // 40%
+    // vault_version.v1_mut().unwrap().management_fee = 1_000_000; // 100%
     vault_version.v1_mut().unwrap().last_fee_update_ts = 0;
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
@@ -614,7 +615,7 @@ mod vault_v1_fcn {
     vault_version.apply_fee(vault_equity, now).unwrap();
 
     let vd_amount_left = depositor_shares_to_vault_amount(vault_version.user_shares(), vault_version.total_shares(), vault_equity).unwrap();
-    assert_eq!(vd_amount_left, 35832760); // ~$35
+    assert_eq!(vd_amount_left, 35832760); // ~$35 // 54152987
     assert_eq!(vault_version.last_fee_update_ts(), now);
   }
 
