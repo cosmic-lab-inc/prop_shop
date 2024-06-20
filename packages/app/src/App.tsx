@@ -1,7 +1,7 @@
 import "./styles/globals.css";
 import React from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { Chatbot, Covest, Error, Home, PageWrapper } from "./pages";
+import { Covest, Error, Home, PageWrapper } from "./pages";
 import { observer } from "mobx-react";
 
 export const App = observer(() => {
@@ -14,15 +14,6 @@ export const App = observer(() => {
             element={
               <PageWrapper>
                 <Home />
-              </PageWrapper>
-            }
-            errorElement={<Error />}
-          />
-          <Route
-            path="chat"
-            element={
-              <PageWrapper>
-                <Chatbot />
               </PageWrapper>
             }
             errorElement={<Error />}

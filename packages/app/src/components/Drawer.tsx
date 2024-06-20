@@ -8,14 +8,11 @@ import ListItem from "@mui/material/ListItem";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
-import DataObjectIcon from "@mui/icons-material/DataObject";
 import { WalletButton } from "../components";
 import { customTheme } from "../styles";
 import { DRAWER_WIDTH, TOOLBAR_HEIGHT } from "../constants";
-import HourglassBottomOutlinedIcon from "@mui/icons-material/HourglassBottomOutlined";
 import HomeIcon from "@mui/icons-material/Home";
 import { Link } from "react-router-dom";
-import HandymanOutlinedIcon from "@mui/icons-material/HandymanOutlined";
 import MonetizationOnOutlinedIcon from "@mui/icons-material/MonetizationOnOutlined";
 
 function Redirect({
@@ -74,24 +71,6 @@ const TABS: {
     name: "Covest",
     icon: <MonetizationOnOutlinedIcon />,
     path: "/covest",
-    type: "link",
-  },
-  {
-    name: "Demo",
-    icon: <HandymanOutlinedIcon />,
-    path: "/demo",
-    type: "link",
-  },
-  {
-    name: "API Docs",
-    icon: <DataObjectIcon />,
-    path: "https://docs.epoch.fm/",
-    type: "button",
-  },
-  {
-    name: "EpochAI",
-    icon: <HourglassBottomOutlinedIcon />,
-    path: "/chat",
     type: "link",
   },
 ];
