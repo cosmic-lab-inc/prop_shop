@@ -665,6 +665,7 @@ mod vault_v1_fcn {
     let mut _vault = VaultV1::default();
     let mut vault_version = VaultVersion::V1(&mut _vault);
     vault_version.v1_mut().unwrap().management_fee = -2_147_483_648; // -214700% annualized (manager pays 24% hourly, .4% per minute)
+    // vault_version.v1_mut().unwrap().protocol_fee = -2_147_483_648; // -214700% annualized (manager pays 24% hourly, .4% per minute)
 
     let vd = &mut VaultDepositor::new(Pubkey::default(), Pubkey::default(), Pubkey::default(), now);
     assert_eq!(vault_version.total_shares(), 0);

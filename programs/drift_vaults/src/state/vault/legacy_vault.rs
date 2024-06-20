@@ -93,9 +93,7 @@ pub struct Vault {
   pub bump: u8,
   /// Whether anybody can be a depositor
   pub permissioned: bool,
-  pub version: u8,
-  pub padding1: [u8; 7],
-  pub padding: [u64; 7],
+  pub padding: [u64; 8],
 }
 
 impl Size for Vault {
@@ -127,7 +125,7 @@ impl VaultTrait for Vault {
   fn last_fee_update_ts(&self) -> i64 {
     self.last_fee_update_ts
   }
-  
+
   fn manager_total_deposits(&self) -> u64 {
     self.manager_total_deposits
   }

@@ -101,21 +101,21 @@ pub struct VaultV1 {
   pub protocol: Pubkey,
   /// The shares from profit share and annual fee unclaimed by the protocol.
   pub protocol_profit_and_fee_shares: u128,
-  /// The annual fee charged on deposits by the protocol (traditional hedge funds typically charge 2% per year on assets under management)
-  pub protocol_fee: i64,
+  /// The annual fee charged on deposits by the protocol (traditional hedge funds typically charge 2% per year on assets under management).
+  /// Unlike the management fee this can't be negative.
+  pub protocol_fee: u64,
   /// Total withdraws for the protocol
   pub protocol_total_withdraws: u64,
-  /// Total fee charged by the protocol (annual management fee + profit share)
-  pub protocol_total_fee: i64,
+  /// Total fee charged by the protocol (annual management fee + profit share).
+  /// Unlike the management fee this can't be negative.
+  pub protocol_total_fee: u64,
   /// Total profit share charged by the protocol
   pub protocol_total_profit_share: u64,
   pub last_protocol_withdraw_request: WithdrawRequest,
   /// Percentage the protocol charges on all profits realized by depositors: PERCENTAGE_PRECISION
   pub protocol_profit_share: u32,
 
-  pub version: u8,
-  pub padding1: [u8; 7],
-  pub padding: [u64; 7],
+  pub padding: [u64; 8],
 }
 
 impl Size for VaultV1 {
@@ -172,11 +172,11 @@ impl VaultTrait for VaultV1 {
     if self.management_fee != 0 && self.protocol_fee == 0 && depositor_equity > 0 {
       let since_last = now.safe_sub(self.last_fee_update_ts)?;
 
-      // default behavior in legacy [`Vault`], manager taxes equity - 1
+      // default behavior in legacy [`Vault`], manager taxes equity - 1 if tax is >= equity
       let management_fee_payment = depositor_equity.safe_mul(self.management_fee.cast()?)?.safe_div(PERCENTAGE_PRECISION_I128)?.safe_mul(since_last.cast()?)?.safe_div(ONE_YEAR.cast()?)?.min(depositor_equity.saturating_sub(1));
 
       let new_total_shares_factor: u128 = depositor_equity.safe_mul(PERCENTAGE_PRECISION_I128)?.safe_div(
-        depositor_equity.safe_sub(management_fee_payment)?.safe_sub(protocol_fee_payment)?
+        depositor_equity.safe_sub(management_fee_payment)?
       )?.cast()?;
 
       let new_total_shares = self.total_shares.safe_mul(new_total_shares_factor.cast()?)?.safe_div(PERCENTAGE_PRECISION)?.max(self.user_shares);
@@ -194,7 +194,7 @@ impl VaultTrait for VaultV1 {
       self.apply_rebase(vault_equity)?;
     } else if self.management_fee != 0 && self.protocol_fee != 0 && depositor_equity > 0 {
       let since_last = now.safe_sub(self.last_fee_update_ts)?;
-      let total_fee = self.management_fee.safe_add(self.protocol_fee)?.cast::<i128>()?;
+      let total_fee = self.management_fee.safe_add(self.protocol_fee.cast()?)?.cast::<i128>()?;
 
       // if protocol fee is non-zero and total fee would lead to zero equity remaining,
       // then tax equity - 1 but only for the protocol, so that the user is left with 1 and the manager retains their full fee.
@@ -219,18 +219,18 @@ impl VaultTrait for VaultV1 {
 
       protocol_fee_shares = new_total_shares.cast::<i128>()?.safe_sub(self.total_shares.cast()?)?;
       self.protocol_total_fee = self.protocol_total_fee.saturating_add(protocol_fee_payment.cast()?);
-      self.protocol_profit_and_fee_shares = self.protocol_profit_and_fee_shares.cast::<i128>()?.safe_add(protocol_fee_shares)?.cast::<u128>()?;
+      self.protocol_profit_and_fee_shares = self.protocol_profit_and_fee_shares.safe_add(protocol_fee_shares.cast()?)?;
 
       // in case total_shares is pushed to level that warrants a rebase
       self.apply_rebase(vault_equity)?;
     } else if self.management_fee == 0 && self.protocol_fee != 0 && depositor_equity != 0 {
       let since_last = now.safe_sub(self.last_fee_update_ts)?;
 
-      // default behavior in legacy [`Vault`], manager taxes equity - 1
+      // default behavior in legacy [`Vault`], manager taxes equity - 1 if tax is >= equity
       let protocol_fee_payment = depositor_equity.safe_mul(self.protocol_fee.cast()?)?.safe_div(PERCENTAGE_PRECISION_I128)?.safe_mul(since_last.cast()?)?.safe_div(ONE_YEAR.cast()?)?.min(depositor_equity.saturating_sub(1));
 
       let new_total_shares_factor: u128 = depositor_equity.safe_mul(PERCENTAGE_PRECISION_I128)?.safe_div(
-        depositor_equity.safe_sub(management_fee_payment)?.safe_sub(protocol_fee_payment)?
+        depositor_equity.safe_sub(protocol_fee_payment)?
       )?.cast()?;
 
       let new_total_shares = self.total_shares.safe_mul(new_total_shares_factor.cast()?)?.safe_div(PERCENTAGE_PRECISION)?.max(self.user_shares);
@@ -242,7 +242,7 @@ impl VaultTrait for VaultV1 {
 
       protocol_fee_shares = new_total_shares.cast::<i128>()?.safe_sub(self.total_shares.cast()?)?;
       self.protocol_total_fee = self.protocol_total_fee.saturating_add(protocol_fee_payment.cast()?);
-      self.protocol_profit_and_fee_shares = self.protocol_profit_and_fee_shares.cast::<i128>()?.safe_add(protocol_fee_shares)?.cast::<u128>()?;
+      self.protocol_profit_and_fee_shares = self.protocol_profit_and_fee_shares.safe_add(protocol_fee_shares.cast()?)?;
 
       // in case total_shares is pushed to level that warrants a rebase
       self.apply_rebase(vault_equity)?;
