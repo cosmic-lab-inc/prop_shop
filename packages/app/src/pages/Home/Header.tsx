@@ -20,7 +20,7 @@ export function Header() {
     >
       <Box
         sx={{
-          width: "60%",
+          width: "70%",
           display: "flex",
           flexDirection: "column",
           gap: 3,

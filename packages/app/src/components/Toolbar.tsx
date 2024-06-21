@@ -27,11 +27,6 @@ export function Toolbar() {
           <WalletButton />
         </Box>
       </MuiToolbar>
-      {/*<Divider*/}
-      {/*  sx={{*/}
-      {/*    bgcolor: customTheme.dark,*/}
-      {/*  }}*/}
-      {/*/>*/}
     </AppBar>
   );
 }

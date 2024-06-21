@@ -7,8 +7,6 @@ export const customTheme = {
   // grey: "#413534FF",
   grey: "#0a1a16",
 
-  red: "#af5050",
-  // secondary: "#441e1a",
   secondary: "#348771",
 
   success: "#79B77AFF",
@@ -17,7 +15,6 @@ export const customTheme = {
   font: {
     titillium: "titilliumLight",
     titilliumBold: "titilliumBold",
-    researcher: "researcherBold",
   },
 };
 

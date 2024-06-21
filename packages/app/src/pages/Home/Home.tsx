@@ -7,10 +7,10 @@ export function Home() {
     <Box
       sx={{
         width: "100%",
-        minHeight: "800px",
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
+        gap: 2,
       }}
     >
       <Header />
