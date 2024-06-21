@@ -13,7 +13,6 @@ import { customTheme } from "../styles";
 import { DRAWER_WIDTH, TOOLBAR_HEIGHT } from "../constants";
 import HomeIcon from "@mui/icons-material/Home";
 import { Link } from "react-router-dom";
-import MonetizationOnOutlinedIcon from "@mui/icons-material/MonetizationOnOutlined";
 
 function Redirect({
   path,
@@ -65,12 +64,6 @@ const TABS: {
     name: "Home",
     icon: <HomeIcon />,
     path: "/",
-    type: "link",
-  },
-  {
-    name: "Covest",
-    icon: <MonetizationOnOutlinedIcon />,
-    path: "/covest",
     type: "link",
   },
 ];

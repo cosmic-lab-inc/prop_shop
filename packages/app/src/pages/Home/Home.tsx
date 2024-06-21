@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Box } from "@mui/material";
-import { ApiDemo, Header, Pricing } from ".";
+import { Header, TopFunds } from ".";
 
 export function Home() {
   return (
@@ -14,9 +14,7 @@ export function Home() {
       }}
     >
       <Header />
-      <ApiDemo />
-      {/*<AiDemo />*/}
-      <Pricing />
+      <TopFunds />
     </Box>
   );
 }

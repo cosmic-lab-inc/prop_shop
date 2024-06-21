@@ -8,17 +8,14 @@ import {
   TimelessIcon,
 } from "../../components";
 
-export function Pricing() {
+export function TopFunds() {
   return (
     <Box
       sx={{
-        width: "90%",
+        width: "100%",
         bgcolor: customTheme.light,
         display: "flex",
         p: 3,
-        mt: 10,
-        mb: 10,
-        borderRadius: "3px",
         alignItems: "center",
         flexDirection: "column",
       }}
