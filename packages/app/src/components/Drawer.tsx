@@ -124,7 +124,7 @@ export function Drawer() {
                     },
                   }}
                   onMouseEnter={() => {
-                    setColor(customTheme.rust);
+                    setColor(customTheme.secondary);
                   }}
                   onMouseLeave={() => {
                     setColor(customTheme.light);

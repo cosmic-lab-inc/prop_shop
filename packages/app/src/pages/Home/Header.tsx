@@ -1,22 +1,15 @@
 import { Box, Typography } from "@mui/material";
 import { customTheme } from "../../styles";
-import { ActionButton, HttpDisplay } from "../../components";
+import { ActionButton, ArrowsIcon } from "../../components";
 import * as React from "react";
 import { Link } from "react-router-dom";
 
 export function Header() {
-  const reqDemo: Record<string, any> = {
-    key: "BM5Kvgpz2XLez2XhfNNeZaXWtHH6NASYw1P74NwEB4sL",
-    owner: "dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH",
-    discriminant: "User",
-    slot: 219546079,
-    limit: 1,
-  };
-
   return (
     <Box
       sx={{
-        p: 2,
+        pt: 2,
+        pb: 2,
         gap: 2,
         width: "100%",
         bgcolor: customTheme.grey,
@@ -27,55 +20,59 @@ export function Header() {
     >
       <Box
         sx={{
-          width: "100%",
+          width: "60%",
           display: "flex",
           flexDirection: "column",
+          gap: 3,
         }}
       >
-        <HttpDisplay src={reqDemo} />
-      </Box>
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          width: "30%",
-        }}
-      >
+        <Box>
+          <Typography variant="h1">Prop Shop</Typography>
+          <Typography variant="h3">Crypto Trading Strategies</Typography>
+        </Box>
+
         <Box
           sx={{
             display: "flex",
             flexDirection: "column",
-            flexGrow: 1,
-            width: "100%",
-            gap: 1,
+            width: "30%",
           }}
         >
-          <Typography variant="h3">Every program.</Typography>
-          <Typography variant="h3">Every account.</Typography>
-          <Typography variant="h3">Every point in time.</Typography>
-          <Typography variant="h3">Everything decoded.</Typography>
-        </Box>
-        <Link
-          to="/demo"
-          style={{
-            display: "flex",
-            width: "100%",
-            textDecoration: "none",
-          }}
-        >
-          <Box
-            sx={{
+          <Link
+            to="/demo"
+            style={{
               display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              pt: 2,
               width: "100%",
-              height: "80px",
+              textDecoration: "none",
             }}
           >
-            <ActionButton>Start for free</ActionButton>
-          </Box>
-        </Link>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                justifyContent: "center",
+                pt: 2,
+                width: "100%",
+                height: "80px",
+              }}
+            >
+              <ActionButton>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: 2,
+                  }}
+                >
+                  <Typography variant="h3">Join as a Trader</Typography>
+                  <ArrowsIcon color={customTheme.light} />
+                </Box>
+              </ActionButton>
+            </Box>
+          </Link>
+        </Box>
       </Box>
     </Box>
   );

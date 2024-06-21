@@ -15,7 +15,7 @@ export function SendButton(props: IconButtonProps) {
 
   useEffect(() => {
     if (disabled) {
-      setIconColor(alpha(customTheme.dark, 0.6));
+      setIconColor(alpha(customTheme.dark, 0.7));
     } else {
       setIconColor(customTheme.light);
     }
@@ -33,18 +33,18 @@ export function SendButton(props: IconButtonProps) {
         minWidth: "40px",
         minHeight: "40px",
 
-        bgcolor: disabled ? customTheme.grey : customTheme.rust,
+        bgcolor: disabled ? customTheme.grey : customTheme.secondary,
         color: disabled ? customTheme.dark : customTheme.light,
         "&:hover": {
           bgcolor: disabled ? customTheme.grey : customTheme.light,
-          color: disabled ? customTheme.light : customTheme.rust,
+          color: disabled ? customTheme.light : customTheme.secondary,
         },
       }}
       type="submit"
       aria-label="directions"
       onMouseEnter={() => {
         if (!disabled) {
-          setIconColor(customTheme.rust);
+          setIconColor(customTheme.secondary);
         }
       }}
       onMouseLeave={() => {

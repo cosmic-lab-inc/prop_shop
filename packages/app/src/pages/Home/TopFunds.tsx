@@ -12,10 +12,10 @@ export function TopFunds() {
   return (
     <Box
       sx={{
-        width: "100%",
+        width: "60%",
         bgcolor: customTheme.light,
         display: "flex",
-        p: 3,
+        // p: 3,
         alignItems: "center",
         flexDirection: "column",
       }}
@@ -166,7 +166,7 @@ function HistorianTier() {
   return (
     <Container>
       <Header
-        icon={<HistorianIcon size={35} color={customTheme.red} />}
+        icon={<HistorianIcon size={35} color={customTheme.secondary} />}
         title={"Historian"}
         price={0}
       />
@@ -242,7 +242,7 @@ const TableRow = styled("tr")<{ hover?: boolean; header?: boolean }>(
     padding: "20px",
     borderRadius: "3px",
     "&:hover": {
-      backgroundColor: `${hover ? customTheme.rust : "transparent"}`,
+      backgroundColor: `${hover ? customTheme.secondary : "transparent"}`,
     },
 
     ...(header && {

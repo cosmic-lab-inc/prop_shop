@@ -20,13 +20,13 @@ export function TimelessIcon({ color, size }: IconProps) {
             id="Path_42"
             data-name="Path 42"
             d="M282,475c0,3-3.134,7-7,7s-7-4-7-7Z"
-            fill={customTheme.red}
+            fill={customTheme.secondary}
           />
           <path
             id="Path_43"
             data-name="Path 43"
             d="M282,501a7,7,0,0,0-14,0Z"
-            fill={customTheme.red}
+            fill={customTheme.secondary}
           />
         </g>
         <path

@@ -4,11 +4,12 @@ import { createTheme, Theme } from "@mui/material";
 export const customTheme = {
   light: "#EBE0D7FF",
   dark: "#0e0907",
-  grey: "#413534FF",
+  // grey: "#413534FF",
+  grey: "#0a1a16",
 
   red: "#af5050",
-  rust: "#441e1a",
-  midnight: "#0f0c11",
+  // secondary: "#441e1a",
+  secondary: "#348771",
 
   success: "#79B77AFF",
   error: "#d27272",
@@ -23,12 +24,12 @@ export const customTheme = {
 export const theme: Theme = createTheme({
   palette: {
     background: {
-      default: customTheme.dark,
-      paper: customTheme.dark,
+      default: customTheme.light,
+      paper: customTheme.light,
     },
     primary: {
       light: customTheme.light,
-      main: customTheme.dark,
+      main: customTheme.light,
       contrastText: customTheme.light,
       dark: customTheme.dark,
     },
@@ -52,12 +53,11 @@ export const theme: Theme = createTheme({
     fontFamily: customTheme.font.titillium,
     fontSize: 16,
     h1: {
-      paddingTop: "15px",
-      paddingLeft: "10px",
-      fontFamily: customTheme.font.researcher,
+      paddingBottom: "20px",
+      fontFamily: customTheme.font.titilliumBold,
       fontSize: 50,
-      lineHeight: "3rem",
-      letterSpacing: "10px",
+      fontWeight: 800,
+      lineHeight: "2rem",
     },
     h2: {
       fontSize: 40,
@@ -97,49 +97,49 @@ export const theme: Theme = createTheme({
     MuiMenu: {
       styleOverrides: {
         list: {
-          backgroundColor: customTheme.dark,
+          backgroundColor: customTheme.light,
         },
       },
     },
     MuiDialog: {
       styleOverrides: {
         root: {
-          backgroundColor: customTheme.dark,
+          backgroundColor: customTheme.light,
         },
       },
     },
     MuiDialogContent: {
       styleOverrides: {
         root: {
-          backgroundColor: customTheme.dark,
+          backgroundColor: customTheme.light,
         },
       },
     },
     MuiDialogTitle: {
       styleOverrides: {
         root: {
-          backgroundColor: customTheme.dark,
+          backgroundColor: customTheme.light,
         },
       },
     },
     MuiDialogActions: {
       styleOverrides: {
         root: {
-          backgroundColor: customTheme.dark,
+          backgroundColor: customTheme.light,
         },
       },
     },
     MuiDialogContentText: {
       styleOverrides: {
         root: {
-          backgroundColor: customTheme.dark,
+          backgroundColor: customTheme.light,
         },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          backgroundColor: customTheme.dark,
+          backgroundColor: customTheme.light,
         },
       },
     },

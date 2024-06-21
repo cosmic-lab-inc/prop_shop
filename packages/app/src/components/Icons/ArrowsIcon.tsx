@@ -41,21 +41,21 @@ export function ArrowsIcon({
       <svg
         width={width ?? 20}
         height={height ?? 18}
-        viewBox="0 0 14 12"
+        viewBox="0 0 14 10"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
         <path
           opacity="0.6"
           d="M8 1L13 6L8 11"
-          stroke={color ?? customTheme.rust}
+          stroke={color ?? customTheme.secondary}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
         <path
           d="M1 1L6 6L1 11"
-          stroke={color ?? customTheme.rust}
+          stroke={color ?? customTheme.secondary}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"

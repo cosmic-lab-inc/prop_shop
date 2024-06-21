@@ -6,10 +6,22 @@ import { Box } from "@mui/material";
 
 // Keyframes for the dot animation
 const blink = keyframes`
-  0% { opacity: 0.2; color: ${customTheme.light}; }
-  20% { opacity: 0.7; color: ${customTheme.light}; }
-  40% { opacity: 1; color: ${customTheme.red}; }
-  100% { opacity: 0.2; color: ${customTheme.light}; }
+    0% {
+        opacity: 0.2;
+        color: ${customTheme.light};
+    }
+    20% {
+        opacity: 0.7;
+        color: ${customTheme.light};
+    }
+    40% {
+        opacity: 1;
+        color: ${customTheme.secondary};
+    }
+    100% {
+        opacity: 0.2;
+        color: ${customTheme.light};
+    }
 `;
 
 // Styled component for the animated dot

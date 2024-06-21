@@ -5,12 +5,12 @@ import { customTheme } from "../../styles";
 export function ActionButton(props: ButtonProps) {
   const { children, disabled } = props;
 
-  const [color, setColor] = React.useState(customTheme.red);
+  const [color, setColor] = React.useState(customTheme.secondary);
   useEffect(() => {
     if (disabled) {
-      setColor(alpha(customTheme.rust, 0.6));
+      setColor(alpha(customTheme.secondary, 0.7));
     } else {
-      setColor(customTheme.rust);
+      setColor(customTheme.secondary);
     }
   }, [disabled]);
 
@@ -23,13 +23,9 @@ export function ActionButton(props: ButtonProps) {
         justifyContent: "center",
         alignItems: "center",
         borderRadius: "3px",
-        color: customTheme.light,
         bgcolor: color,
-        border: `1px solid ${color}`,
         "&:hover": {
-          bgcolor: customTheme.light,
-          color: customTheme.rust,
-          border: `1px solid ${customTheme.rust}`,
+          bgcolor: alpha(color, 0.7),
         },
       }}
       {...props}

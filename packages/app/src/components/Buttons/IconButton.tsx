@@ -22,7 +22,7 @@ export const IconButton: React.FC<IconButtonProps<React.FC<ChildProps>>> = ({
 
   useEffect(() => {
     if (disabled) {
-      setIconColor(alpha(customTheme.dark, 0.6));
+      setIconColor(alpha(customTheme.dark, 0.7));
     } else {
       setIconColor(customTheme.light);
     }
@@ -41,16 +41,16 @@ export const IconButton: React.FC<IconButtonProps<React.FC<ChildProps>>> = ({
         height: "100%",
         fontFamily: customTheme.font.titilliumBold,
 
-        bgcolor: disabled ? customTheme.grey : customTheme.rust,
+        bgcolor: disabled ? customTheme.grey : customTheme.secondary,
         color: disabled ? customTheme.dark : customTheme.light,
         "&:hover": {
           bgcolor: disabled ? customTheme.grey : customTheme.light,
-          color: disabled ? customTheme.light : customTheme.rust,
+          color: disabled ? customTheme.light : customTheme.secondary,
         },
       }}
       onMouseEnter={() => {
         if (!disabled) {
-          setIconColor(customTheme.rust);
+          setIconColor(customTheme.secondary);
         }
       }}
       onMouseLeave={() => {
