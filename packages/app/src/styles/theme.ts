@@ -9,8 +9,8 @@ export const customTheme = {
 
   secondary: "#348771",
 
-  success: "#79B77AFF",
-  error: "#d27272",
+  success: "#38aa28",
+  error: "#b62b2b",
 
   font: {
     titillium: "titilliumLight",
@@ -71,7 +71,7 @@ export const theme: Theme = createTheme({
       fontFamily: customTheme.font.titillium,
     },
     body1: {
-      fontSize: 18,
+      fontSize: 20,
       lineHeight: "2rem",
       letterSpacing: "2px",
       fontWeight: 500,

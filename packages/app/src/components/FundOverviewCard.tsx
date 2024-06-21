@@ -2,29 +2,26 @@ import React, { ReactNode } from "react";
 import { Box, styled, Typography } from "@mui/material";
 import { customTheme } from "../styles";
 import { Line, LineChart, XAxis, YAxis } from "recharts";
+import { formatNumber, trunc } from "@cosmic-lab/epoch-sdk";
 
 export type FundOverviewProps = {
   title: string;
   investors: number;
-  roi: number;
-  drawdown: number;
   aum: number;
   data: number[];
-};
-
-type Data = {
-  uv: number;
 };
 
 export function FundOverviewCard({
   title,
   investors,
-  roi,
-  drawdown,
   aum,
   data,
 }: FundOverviewProps) {
-  const _data = data.map((d) => ({ uv: d }));
+  const _data = data.map((d) => ({ y: d }));
+  const roi = ((_data[_data.length - 1].y - _data[0].y) / _data[0].y) * 100;
+  const drawdown = Math.min(
+    ..._data.map((d) => (d.y - _data[0].y) / _data[0].y),
+  );
   return (
     <Container>
       <Header title={title} investors={investors} />
@@ -33,14 +30,16 @@ export function FundOverviewCard({
           width: "100%",
           display: "flex",
           alignItems: "center",
+          justifyContent: "center",
           p: 1,
         }}
       >
-        <LineChart width={400} height={200} data={_data} compact>
+        <LineChart width={350} height={200} data={_data} compact>
           <Line
             type="monotone"
-            dataKey="uv"
-            stroke={customTheme.secondary}
+            dataKey="y"
+            stroke={roi > 0 ? customTheme.success : customTheme.error}
+            strokeWidth={5}
             dot={{
               r: 0,
             }}
@@ -55,7 +54,12 @@ export function FundOverviewCard({
             <Typography variant="body1">ROI</Typography>
           </TH>
           <TH>
-            <Typography variant="body1">{roi}%</Typography>
+            <Typography
+              variant="h2"
+              sx={{ color: roi > 0 ? customTheme.success : customTheme.error }}
+            >
+              {formatNumber(trunc(roi, 2))}%
+            </Typography>
           </TH>
         </TableRow>
         <TableRow hover>
@@ -63,7 +67,7 @@ export function FundOverviewCard({
             <Typography variant="body1">Drawdown</Typography>
           </TH>
           <TH>
-            <Typography variant="body1">{drawdown}%</Typography>
+            <Typography variant="body1">{trunc(drawdown, 2)}%</Typography>
           </TH>
         </TableRow>
         <TableRow hover>
@@ -71,7 +75,9 @@ export function FundOverviewCard({
             <Typography variant="body1">AUM</Typography>
           </TH>
           <TH>
-            <Typography variant="body1">${aum}</Typography>
+            <Typography variant="body1">
+              ${formatNumber(trunc(aum, 2))}
+            </Typography>
           </TH>
         </TableRow>
       </tbody>
@@ -111,7 +117,9 @@ function Header({ title, investors }: { title: string; investors: number }) {
           <Typography variant="h2">{title}</Typography>
         </TH>
         <TH>
-          <Typography variant="body1">{investors} investors</Typography>
+          <Typography variant="body1">
+            {formatNumber(investors)} investors
+          </Typography>
         </TH>
       </TableRow>
     </thead>

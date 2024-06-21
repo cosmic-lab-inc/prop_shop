@@ -1,4 +1,9 @@
-import { adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator';
+import {
+  adjectives,
+  animals,
+  colors,
+  uniqueNamesGenerator,
+} from "unique-names-generator";
 
 // shorten the input address to have 4 characters at start and end
 export function shortenAddress(address: string, chars = 4): string {
@@ -15,5 +20,5 @@ export function randomId(): string {
     length: 2,
   });
   // replace _ with -
-  return id.replace('_', '-');
+  return id.replace("_", "-");
 }

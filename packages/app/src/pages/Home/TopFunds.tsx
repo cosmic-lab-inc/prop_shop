@@ -2,6 +2,7 @@ import React from "react";
 import { customTheme } from "../../styles";
 import { Box, Typography } from "@mui/material";
 import { FundOverviewCard } from "../../components";
+import { mockData } from "@cosmic-lab/epoch-sdk";
 
 export function TopFunds() {
   return (
@@ -43,35 +44,20 @@ export function TopFunds() {
         <FundOverviewCard
           title={"W.D. Gann"}
           investors={109}
-          roi={180.3}
-          drawdown={9.2}
-          aum={1045783}
-          data={[
-            1.3, 14.5, 34.9, 56.3, 79.3, 99.8, 107.2, 125.4, 141.7, 160.6,
-            180.3,
-          ]}
+          aum={Math.random() * 1000000}
+          data={mockData(100, 350)}
         />
         <FundOverviewCard
           title={"W.D. Gann"}
           investors={109}
-          roi={180.3}
-          drawdown={9.2}
-          aum={1045783}
-          data={[
-            1.3, 14.5, 34.9, 56.3, 79.3, 99.8, 107.2, 125.4, 141.7, 160.6,
-            180.3,
-          ]}
+          aum={Math.random() * 300000}
+          data={mockData(200, 230)}
         />
         <FundOverviewCard
           title={"W.D. Gann"}
           investors={109}
-          roi={180.3}
-          drawdown={9.2}
-          aum={1045783}
-          data={[
-            1.3, 14.5, 34.9, 56.3, 79.3, 99.8, 107.2, 125.4, 141.7, 160.6,
-            180.3,
-          ]}
+          aum={Math.random() * 50000}
+          data={mockData(90, 198)}
         />
       </Box>
     </Box>
