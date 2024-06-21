@@ -132,7 +132,7 @@ export function Drawer() {
                 >
                   <ListItemIcon sx={{ color }}>{icon}</ListItemIcon>
                   <ListItemText>
-                    <Typography variant="h4" sx={{ color }}>
+                    <Typography variant="h3" sx={{ color }}>
                       {name}
                     </Typography>
                   </ListItemText>

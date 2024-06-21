@@ -1,4 +1,3 @@
-export * from "./EpochIcon";
 export * from "./HistorianIcon";
 export * from "./DataMinerIcon";
 export * from "./TimelessIcon";

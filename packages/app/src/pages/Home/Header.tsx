@@ -12,7 +12,7 @@ export function Header() {
         pb: 2,
         gap: 2,
         width: "100%",
-        bgcolor: customTheme.grey,
+        bgcolor: customTheme.dark,
         display: "flex",
         justifyContent: "space-around",
         flexDirection: "row",
@@ -28,7 +28,7 @@ export function Header() {
       >
         <Box>
           <Typography variant="h1">Prop Shop</Typography>
-          <Typography variant="h3">Crypto Trading Strategies</Typography>
+          <Typography variant="h2">Crypto Trading Strategies</Typography>
         </Box>
 
         <Box
@@ -51,9 +51,8 @@ export function Header() {
                 display: "flex",
                 flexDirection: "row",
                 justifyContent: "center",
-                pt: 2,
-                width: "100%",
-                height: "80px",
+                width: "80%",
+                height: "60px",
               }}
             >
               <ActionButton>
@@ -63,7 +62,7 @@ export function Header() {
                     flexDirection: "row",
                     justifyContent: "center",
                     alignItems: "center",
-                    gap: 2,
+                    gap: 1,
                   }}
                 >
                   <Typography variant="h3">Join as a Trader</Typography>

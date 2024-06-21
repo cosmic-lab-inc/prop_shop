@@ -27,6 +27,7 @@
     "start": "vite"
   },
   "dependencies": {
+    "@cosmic-lab/data-source": "^0.7.4",
     "@cosmic-lab/epoch-sdk": "0.2.8",
     "@cosmic-lab/player-profile": "0.9.1",
     "@cosmic-lab/profile-vault": "0.9.1",
@@ -46,7 +47,6 @@
     "@solana/wallet-adapter-react-ui": "0.9.34",
     "@solana/wallet-adapter-wallets": "0.18.1",
     "@solana/web3.js": "^1.77.3",
-    "@cosmic-lab/data-source": "^0.7.4",
     "@types/react-router-dom": "^5.3.3",
     "axios": "^1.5.1",
     "bip32": "^4.0.0",
@@ -73,6 +73,7 @@
     "react-json-view": "^1.21.3",
     "react-markdown": "^9.0.1",
     "react-router-dom": "^6.16.0",
+    "recharts": "^2.12.7",
     "reflect-metadata": "^0.2.1",
     "set-interval-async": "^2.0.3",
     "shx": "^0.3.4",
