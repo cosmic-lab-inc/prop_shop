@@ -17,11 +17,9 @@ export function FundOverviewCard({
   aum,
   data,
 }: FundOverviewProps) {
+  const roi = ((data[data.length - 1] - data[0]) / data[0]) * 100;
+  const drawdown = Math.min(...data.map((d) => (d - data[0]) / data[0]));
   const _data = data.map((d) => ({ y: d }));
-  const roi = ((_data[_data.length - 1].y - _data[0].y) / _data[0].y) * 100;
-  const drawdown = Math.min(
-    ..._data.map((d) => (d.y - _data[0].y) / _data[0].y),
-  );
   return (
     <Container>
       <Header title={title} investors={investors} />

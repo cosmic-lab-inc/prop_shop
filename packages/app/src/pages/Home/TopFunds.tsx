@@ -43,21 +43,21 @@ export function TopFunds() {
       >
         <FundOverviewCard
           title={"W.D. Gann"}
-          investors={randomNumber(100, 200)}
-          aum={Math.random() * 1000000}
-          data={mockData(100, 350)}
+          investors={randomNumber(1000, 2000)}
+          aum={randomNumber(1_500_000, 2_000_000)}
+          data={mockData(1_000, 350)}
         />
         <FundOverviewCard
           title={"W.D. Gann"}
           investors={randomNumber(10, 30)}
-          aum={Math.random() * 300000}
-          data={mockData(200, 230)}
+          aum={randomNumber(300_000, 400_000)}
+          data={mockData(100, 230)}
         />
         <FundOverviewCard
           title={"W.D. Gann"}
           investors={randomNumber(500, 600)}
-          aum={Math.random() * 50000}
-          data={mockData(90, 198)}
+          aum={randomNumber(100_000, 150_000)}
+          data={mockData(1_000, 198)}
         />
       </Box>
     </Box>
