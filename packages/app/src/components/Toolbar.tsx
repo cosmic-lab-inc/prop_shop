@@ -1,50 +1,37 @@
 import * as React from "react";
-import AppBar from "@mui/material/AppBar";
-import { Toolbar as MuiToolbar } from "@mui/material";
-import Typography from "@mui/material/Typography";
-import Divider from "@mui/material/Divider";
-import { customTheme } from "../styles";
-import { DRAWER_WIDTH, TOOLBAR_HEIGHT } from "../constants";
+import { AppBar, Box, Toolbar as MuiToolbar } from "@mui/material";
+import { TOOLBAR_HEIGHT } from "../constants";
+import { WalletButton } from "./Buttons";
 
 export function Toolbar() {
   return (
-    <AppBar
-      position="fixed"
-      sx={{
-        width: `calc(100% - ${DRAWER_WIDTH}px)`,
-      }}
-    >
+    <AppBar position="fixed">
       <MuiToolbar
         sx={{
           display: "flex",
-          justifyContent: "center",
+          justifyContent: "right",
           alignItems: "center",
           flexDirection: "row",
           height: TOOLBAR_HEIGHT,
           width: "100%",
+          p: 1,
         }}
       >
-        <Typography
-          variant="h1"
-          noWrap
+        <Box
           sx={{
             display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            "&:hover": {
-              color: customTheme.dark,
-              textShadow: `0 0 10px ${customTheme.light}`,
-            },
+            width: "10%",
+            height: "100%",
           }}
         >
-          EPOCH
-        </Typography>
+          <WalletButton />
+        </Box>
       </MuiToolbar>
-      <Divider
-        sx={{
-          bgcolor: customTheme.dark,
-        }}
-      />
+      {/*<Divider*/}
+      {/*  sx={{*/}
+      {/*    bgcolor: customTheme.dark,*/}
+      {/*  }}*/}
+      {/*/>*/}
     </AppBar>
   );
 }

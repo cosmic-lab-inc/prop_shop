@@ -11,7 +11,7 @@ import { ThemeWrapper } from "../styles";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-wallets";
 import { CssBaseline } from "@mui/material";
 import Box from "@mui/material/Box";
-import { Drawer, Toolbar } from "../components";
+import { Toolbar } from "../components";
 import { TOOLBAR_HEIGHT } from "../constants";
 
 export function PageWrapper({ children }: { children: ReactNode }) {
@@ -63,12 +63,11 @@ function Content({ children }: { children: ReactNode }) {
     <Box sx={{ display: "flex" }}>
       <CssBaseline />
       <Toolbar />
-      <Drawer />
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          width: "100%",
           marginTop: `${TOOLBAR_HEIGHT}px`,
           display: "flex",
           justifyContent: "center",

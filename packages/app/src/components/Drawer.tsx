@@ -58,13 +58,13 @@ const TABS: {
   name: string;
   icon: ReactNode;
   path: string;
-  type: "link" | "button";
+  tabType: "link" | "button";
 }[] = [
   {
     name: "Home",
     icon: <HomeIcon />,
     path: "/",
-    type: "link",
+    tabType: "link",
   },
 ];
 
@@ -109,11 +109,11 @@ export function Drawer() {
         }}
       />
       <List sx={{ p: 2 }}>
-        {TABS.map(({ name, icon, path, type }, index) => {
+        {TABS.map(({ name, icon, path, tabType }, index) => {
           const [color, setColor] = React.useState(customTheme.light);
           return (
             <ListItem key={name} disablePadding>
-              <Redirect path={path} type={type}>
+              <Redirect path={path} type={tabType}>
                 <ListItemButton
                   sx={{
                     ml: 1,

@@ -24,8 +24,6 @@ export function WalletButton() {
         justifyContent: "center",
         fontSize: 20,
         alignItems: "center",
-        ml: 3,
-        mr: 3,
         fontWeight: 600,
         bgcolor: customTheme.rust,
         borderRadius: "2px",
