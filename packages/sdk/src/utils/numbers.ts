@@ -55,3 +55,8 @@ export function trunc(number: number, decimals: number): number {
   const factor = Math.pow(10, decimals);
   return Math.round(number * factor) / factor;
 }
+
+// generate random number between min and max
+export function randomNumber(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
