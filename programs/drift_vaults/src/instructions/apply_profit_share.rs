@@ -36,7 +36,10 @@ pub fn apply_profit_share<'c: 'info, 'info>(
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  vault_depositor.apply_profit_share(vault_equity, &mut vault, &mut vp)?;
+  match vp {
+    None => vault_depositor.apply_profit_share(vault_equity, &mut vault, &mut None)?,
+    Some(vp) => vault_depositor.apply_profit_share(vault_equity, &mut vault, &mut Some(vp.load_mut()?))?
+  };
 
   Ok(())
 }

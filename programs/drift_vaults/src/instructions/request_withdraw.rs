@@ -23,7 +23,7 @@ pub fn request_withdraw<'c: 'info, 'info>(
 
   let user = ctx.accounts.drift_user.load()?;
 
-  let mut vp = ctx.vault_protocol().map(|vp| vp.load_mut()).transpose()?;
+  let mut vp = ctx.vault_protocol();
 
   let AccountMaps {
     perp_market_map,
@@ -33,14 +33,28 @@ pub fn request_withdraw<'c: 'info, 'info>(
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  vault_depositor.request_withdraw(
-    withdraw_amount.cast()?,
-    withdraw_unit,
-    vault_equity,
-    vault,
-    &mut vp,
-    clock.unix_timestamp,
-  )?;
+  match vp {
+    None => {
+      vault_depositor.request_withdraw(
+        withdraw_amount.cast()?,
+        withdraw_unit,
+        vault_equity,
+        vault,
+        &mut None,
+        clock.unix_timestamp,
+      )?;
+    }
+    Some(vp) => {
+      vault_depositor.request_withdraw(
+        withdraw_amount.cast()?,
+        withdraw_unit,
+        vault_equity,
+        vault,
+        &mut Some(vp.load_mut()?),
+        clock.unix_timestamp,
+      )?;
+    }
+  };
 
   Ok(())
 }

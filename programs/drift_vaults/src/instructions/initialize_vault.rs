@@ -31,12 +31,16 @@ pub fn initialize_vault<'c: 'info, 'info>(
   vault.init_ts = Clock::get()?.unix_timestamp;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let mut vp = ctx.vault_protocol().map(|vp| vp.load_mut()).transpose()?;
+  let mut vp = ctx.vault_protocol();
 
-  let vp_key = vp.as_ref().map(|vp| {
-    let seeds = vp.get_vault_protocol_seeds(ctx.accounts.vault.to_account_info().key.as_ref(), &vp.bump);
-    Pubkey::find_program_address(&seeds, ctx.program_id).0
-  });
+  let vp_key = match &vp {
+    None => None,
+    Some(vp) => {
+      let vp = vp.load()?;
+      let seeds = vp.get_vault_protocol_seeds(ctx.accounts.vault.to_account_info().key.as_ref(), &vp.bump);
+      Some(Pubkey::find_program_address(&seeds, ctx.program_id).0)
+    }
+  };
 
   validate!(
       params.redeem_period < ONE_DAY * 90,
@@ -55,14 +59,14 @@ pub fn initialize_vault<'c: 'info, 'info>(
     vault.vault_protocol = Pubkey::default();
   }
 
-  if let (Some(mut vp), Some(vp_params)) = (vp, params.vault_protocol) {
+  if let (Some(vp), Some(vp_params)) = (vp, params.vault_protocol) {
     validate!(
         params.management_fee + vp_params.protocol_fee.cast::<i64>()? < PERCENTAGE_PRECISION_U64.cast()?,
         ErrorCode::InvalidVaultInitialization,
         "management fee plus protocol fee must be < 100%"
     )?;
     vault.management_fee = params.management_fee;
-    vp.protocol_fee = vp_params.protocol_fee;
+    vp.load_mut()?.protocol_fee = vp_params.protocol_fee;
 
     validate!(
         params.manager_profit_share + vp_params.protocol_profit_share < PERCENTAGE_PRECISION_U64.cast()?,
@@ -70,9 +74,9 @@ pub fn initialize_vault<'c: 'info, 'info>(
         "manager profit share protocol profit share must be < 100%"
     )?;
     vault.manager_profit_share = params.manager_profit_share;
-    vp.protocol_profit_share = vp_params.protocol_profit_share;
+    vp.load_mut()?.protocol_profit_share = vp_params.protocol_profit_share;
 
-    vp.protocol = vp_params.protocol;
+    vp.load_mut()?.protocol = vp_params.protocol;
   } else {
     validate!(
         params.management_fee < PERCENTAGE_PRECISION_U64.cast()?,

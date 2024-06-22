@@ -24,7 +24,7 @@ pub fn protocol_withdraw<'c: 'info, 'info>(
   let spot_market_index = vault.spot_market_index;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let mut vp = ctx.vault_protocol().map(|vp| vp.load_mut()).transpose()?;
+  let mut vp = ctx.vault_protocol();
 
   let AccountMaps {
     perp_market_map,
@@ -34,7 +34,10 @@ pub fn protocol_withdraw<'c: 'info, 'info>(
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  let protocol_withdraw_amount = vault.protocol_withdraw(&mut vp, vault_equity, now)?;
+  let protocol_withdraw_amount = match vp {
+    None => vault.protocol_withdraw(&mut None, vault_equity, now)?,
+    Some(vp) => vault.protocol_withdraw(&mut Some(vp.load_mut()?), vault_equity, now)?
+  };
 
   drop(vault);
   drop(user);

@@ -25,7 +25,7 @@ pub fn liquidate<'c: 'info, 'info>(
   let vault_depositor = ctx.accounts.vault_depositor.load()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let mut vp = ctx.vault_protocol().map(|vp| vp.load_mut()).transpose()?;
+  let mut vp = ctx.vault_protocol();
 
   let AccountMaps {
     perp_market_map,
