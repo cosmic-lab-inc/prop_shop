@@ -19,7 +19,8 @@ pub fn withdraw<'c: 'info, 'info>(ctx: Context<'_, '_, 'c, 'info, Withdraw<'info
   let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let vp = ctx.vault_protocol();
+  let mut vp = ctx.vault_protocol();
+  let mut vp = vp.as_mut().map(|vp| vp.load_mut()).transpose()?;
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
@@ -32,10 +33,7 @@ pub fn withdraw<'c: 'info, 'info>(ctx: Context<'_, '_, 'c, 'info, Withdraw<'info
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  let (user_withdraw_amount, finishing_liquidation) = match vp {
-    None => vault_depositor.withdraw(vault_equity, &mut vault, &mut None, clock.unix_timestamp)?,
-    Some(vp) => vault_depositor.withdraw(vault_equity, &mut vault, &mut Some(vp.load_mut()?), clock.unix_timestamp)?
-  };
+  let (user_withdraw_amount, finishing_liquidation) = vault_depositor.withdraw(vault_equity, &mut vault, &mut vp, clock.unix_timestamp)?;
 
   msg!("user_withdraw_amount: {}", user_withdraw_amount);
 

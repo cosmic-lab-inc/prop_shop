@@ -17,7 +17,8 @@ pub fn manager_request_withdraw<'c: 'info, 'info>(
   let now = clock.unix_timestamp;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let vp = ctx.vault_protocol();
+  let mut vp = ctx.vault_protocol();
+  let mut vp = vp.as_mut().map(|vp| vp.load_mut()).transpose()?;
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
@@ -30,10 +31,7 @@ pub fn manager_request_withdraw<'c: 'info, 'info>(
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  match vp {
-    None => vault.manager_request_withdraw(&mut None, withdraw_amount, withdraw_unit, vault_equity, now)?,
-    Some(vp) => vault.manager_request_withdraw(&mut Some(vp.load_mut()?), withdraw_amount, withdraw_unit, vault_equity, now)?
-  };
+  vault.manager_request_withdraw(&mut vp, withdraw_amount, withdraw_unit, vault_equity, now)?;
 
   Ok(())
 }

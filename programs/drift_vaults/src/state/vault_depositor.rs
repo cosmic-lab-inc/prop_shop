@@ -61,7 +61,7 @@ pub struct VaultDepositor {
 }
 
 impl Size for VaultDepositor {
-  const SIZE: usize = 272 + 8; // 264 + 8;
+  const SIZE: usize = 264 + 8;
 }
 
 // const_assert_eq!(

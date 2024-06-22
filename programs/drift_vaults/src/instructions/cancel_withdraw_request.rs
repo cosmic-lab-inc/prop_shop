@@ -18,7 +18,8 @@ pub fn cancel_withdraw_request<'c: 'info, 'info>(
   let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let vp = ctx.vault_protocol();
+  let mut vp = ctx.vault_protocol();
+  let vp = vp.as_mut().map(|vp| vp.load_mut()).transpose()?;
 
   let user = ctx.accounts.drift_user.load()?;
 
@@ -32,7 +33,7 @@ pub fn cancel_withdraw_request<'c: 'info, 'info>(
 
   match vp {
     None => vault_depositor.cancel_withdraw_request(vault_equity.cast()?, &mut vault, &mut None, clock.unix_timestamp)?,
-    Some(vp) => vault_depositor.cancel_withdraw_request(vault_equity.cast()?, &mut vault, &mut Some(vp.load_mut()?), clock.unix_timestamp)?
+    Some(vp) => vault_depositor.cancel_withdraw_request(vault_equity.cast()?, &mut vault, &mut Some(vp), clock.unix_timestamp)?
   };
 
   Ok(())

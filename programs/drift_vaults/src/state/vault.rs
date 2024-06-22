@@ -25,7 +25,7 @@ use crate::state::{VaultFee, VaultProtocol};
 use crate::state::events::VaultDepositorRecord;
 use crate::state::withdraw_request::WithdrawRequest;
 
-// #[assert_no_slop]
+#[assert_no_slop]
 #[account(zero_copy(unsafe))]
 #[derive(Default, Eq, PartialEq, Debug)]
 #[repr(C)]
@@ -108,7 +108,7 @@ pub struct Vault {
 impl Size for Vault {
   const SIZE: usize = 528 + 8;
 }
-// const_assert_eq!(Vault::SIZE, std::mem::size_of::<Vault>() + 8);
+const_assert_eq!(Vault::SIZE, std::mem::size_of::<Vault>() + 8);
 
 impl Vault {
   pub fn get_vault_signer_seeds<'a>(&self, name: &'a [u8], bump: &'a u8) -> [&'a [u8]; 3] {

@@ -19,7 +19,8 @@ pub fn manager_deposit<'c: 'info, 'info>(
   let mut vault = ctx.accounts.vault.load_mut()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let vp = ctx.vault_protocol();
+  let mut vp = ctx.vault_protocol();
+  let mut vp = vp.as_mut().map(|vp| vp.load_mut()).transpose()?;
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
@@ -32,10 +33,7 @@ pub fn manager_deposit<'c: 'info, 'info>(
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  match vp {
-    None => vault.manager_deposit(&mut None, amount, vault_equity, clock.unix_timestamp)?,
-    Some(vp) => vault.manager_deposit(&mut Some(vp.load_mut()?), amount, vault_equity, clock.unix_timestamp)?
-  };
+  vault.manager_deposit(&mut vp, amount, vault_equity, clock.unix_timestamp)?;
 
   drop(vault);
   drop(user);

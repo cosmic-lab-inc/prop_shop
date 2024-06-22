@@ -14,7 +14,8 @@ pub fn manager_cancel_withdraw_request<'c: 'info, 'info>(
   let vault = &mut ctx.accounts.vault.load_mut()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let vp = ctx.vault_protocol();
+  let mut vp = ctx.vault_protocol();
+  let mut vp = vp.as_mut().map(|vp| vp.load_mut()).transpose()?;
 
   let user = ctx.accounts.drift_user.load()?;
 
@@ -26,10 +27,7 @@ pub fn manager_cancel_withdraw_request<'c: 'info, 'info>(
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  match vp {
-    None => vault.manager_cancel_withdraw_request(&mut None, vault_equity.cast()?, clock.unix_timestamp)?,
-    Some(vp) => vault.manager_cancel_withdraw_request(&mut Some(vp.load_mut()?), vault_equity.cast()?, clock.unix_timestamp)?
-  };
+  vault.manager_cancel_withdraw_request(&mut vp, vault_equity.cast()?, clock.unix_timestamp)?;
 
   Ok(())
 }

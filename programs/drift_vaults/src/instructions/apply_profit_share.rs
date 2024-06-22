@@ -21,7 +21,8 @@ pub fn apply_profit_share<'c: 'info, 'info>(
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
   // let mut vp = ctx.vault_protocol().map(|vp| vp.load_mut()).transpose()?;
-  let vp = ctx.vault_protocol();
+  let mut vp = ctx.vault_protocol();
+  let vp = vp.as_mut().map(|vp| vp.load_mut()).transpose()?;
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
@@ -36,7 +37,7 @@ pub fn apply_profit_share<'c: 'info, 'info>(
 
   match vp {
     None => vault_depositor.apply_profit_share(vault_equity, &mut vault, &mut None)?,
-    Some(vp) => vault_depositor.apply_profit_share(vault_equity, &mut vault, &mut Some(vp.load_mut()?))?
+    Some(vp) => vault_depositor.apply_profit_share(vault_equity, &mut vault, &mut Some(vp))?
   };
 
   Ok(())
