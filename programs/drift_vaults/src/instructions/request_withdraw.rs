@@ -1,5 +1,3 @@
-use std::ops::DerefMut;
-
 use anchor_lang::prelude::*;
 use drift::instructions::optional_accounts::AccountMaps;
 use drift::math::casting::Cast;
@@ -23,7 +21,7 @@ pub fn request_withdraw<'c: 'info, 'info>(
 
   let user = ctx.accounts.drift_user.load()?;
 
-  let mut vp = ctx.vault_protocol();
+  let vp = ctx.vault_protocol();
 
   let AccountMaps {
     perp_market_map,

@@ -1,5 +1,3 @@
-use std::ops::DerefMut;
-
 use anchor_lang::prelude::*;
 use drift::instructions::optional_accounts::AccountMaps;
 use drift::program::Drift;
@@ -23,7 +21,7 @@ pub fn apply_profit_share<'c: 'info, 'info>(
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
   // let mut vp = ctx.vault_protocol().map(|vp| vp.load_mut()).transpose()?;
-  let mut vp = ctx.vault_protocol();
+  let vp = ctx.vault_protocol();
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;

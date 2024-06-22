@@ -1,5 +1,3 @@
-use std::ops::DerefMut;
-
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Transfer};
 use anchor_spl::token::{Token, TokenAccount};
@@ -21,7 +19,7 @@ pub fn withdraw<'c: 'info, 'info>(ctx: Context<'_, '_, 'c, 'info, Withdraw<'info
   let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let mut vp = ctx.vault_protocol();
+  let vp = ctx.vault_protocol();
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;

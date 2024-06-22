@@ -1,5 +1,3 @@
-use std::ops::DerefMut;
-
 use anchor_lang::prelude::*;
 use drift::cpi::accounts::UpdateUser;
 use drift::instructions::optional_accounts::AccountMaps;
@@ -25,7 +23,7 @@ pub fn liquidate<'c: 'info, 'info>(
   let vault_depositor = ctx.accounts.vault_depositor.load()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let mut vp = ctx.vault_protocol();
+  let vp = ctx.vault_protocol();
 
   let AccountMaps {
     perp_market_map,

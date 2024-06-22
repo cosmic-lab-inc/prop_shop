@@ -1,9 +1,6 @@
-use std::cell::RefMut;
-
 use anchor_lang::prelude::*;
 use anchor_lang::prelude::{AccountLoader, Context};
 
-use crate::error::{ErrorCode, VaultResult};
 use crate::state::Size;
 use crate::state::withdraw_request::WithdrawRequest;
 

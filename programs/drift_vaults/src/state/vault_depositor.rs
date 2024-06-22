@@ -1,5 +1,4 @@
 use std::cell::RefMut;
-use std::ops::DerefMut;
 
 use anchor_lang::prelude::*;
 use drift::controller::spot_balance::update_spot_balances;

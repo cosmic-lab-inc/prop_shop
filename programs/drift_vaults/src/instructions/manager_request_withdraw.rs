@@ -1,5 +1,3 @@
-use std::ops::DerefMut;
-
 use anchor_lang::prelude::*;
 use drift::instructions::optional_accounts::AccountMaps;
 use drift::state::user::User;
@@ -19,7 +17,7 @@ pub fn manager_request_withdraw<'c: 'info, 'info>(
   let now = clock.unix_timestamp;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let mut vp = ctx.vault_protocol();
+  let vp = ctx.vault_protocol();
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;

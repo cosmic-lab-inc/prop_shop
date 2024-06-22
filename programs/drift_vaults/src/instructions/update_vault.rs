@@ -1,10 +1,8 @@
-use std::ops::DerefMut;
-
 use anchor_lang::prelude::*;
 
 use crate::{error::ErrorCode, validate};
 use crate::constraints::is_manager_for_vault;
-use crate::state::{AccountMapProvider, Vault, VaultProtocol, VaultProtocolProvider};
+use crate::state::{Vault, VaultProtocolProvider};
 
 pub fn update_vault<'c: 'info, 'info>(
   ctx: Context<'_, '_, 'c, 'info, UpdateVault<'info>>,
@@ -13,7 +11,7 @@ pub fn update_vault<'c: 'info, 'info>(
   let mut vault = ctx.accounts.vault.load_mut()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let mut vp = ctx.vault_protocol();
+  let vp = ctx.vault_protocol();
 
   validate!(!vault.in_liquidation(), ErrorCode::OngoingLiquidation)?;
 

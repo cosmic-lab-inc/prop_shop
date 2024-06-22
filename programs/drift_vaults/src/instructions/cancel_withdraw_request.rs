@@ -1,5 +1,3 @@
-use std::ops::DerefMut;
-
 use anchor_lang::prelude::*;
 use drift::instructions::optional_accounts::AccountMaps;
 use drift::math::casting::Cast;
@@ -20,7 +18,7 @@ pub fn cancel_withdraw_request<'c: 'info, 'info>(
   let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let mut vp = ctx.vault_protocol();
+  let vp = ctx.vault_protocol();
 
   let user = ctx.accounts.drift_user.load()?;
 

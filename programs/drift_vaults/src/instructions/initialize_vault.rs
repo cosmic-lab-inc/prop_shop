@@ -1,5 +1,3 @@
-use std::ops::DerefMut;
-
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use drift::cpi::accounts::{InitializeUser, InitializeUserStats};
@@ -11,7 +9,7 @@ use drift::state::spot_market::SpotMarket;
 use crate::{error::ErrorCode, Size, validate};
 use crate::constants::ONE_DAY;
 use crate::drift_cpi::InitializeUserCPI;
-use crate::state::{Vault, VaultProtocol, VaultProtocolProvider};
+use crate::state::{Vault, VaultProtocolProvider};
 
 // todo
 pub fn initialize_vault<'c: 'info, 'info>(
@@ -31,7 +29,7 @@ pub fn initialize_vault<'c: 'info, 'info>(
   vault.init_ts = Clock::get()?.unix_timestamp;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let mut vp = ctx.vault_protocol();
+  let vp = ctx.vault_protocol();
 
   let vp_key = match &vp {
     None => None,
