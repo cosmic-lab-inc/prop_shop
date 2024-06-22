@@ -39,7 +39,7 @@ pub struct VaultProtocol {
 }
 
 impl Size for VaultProtocol {
-  const SIZE: usize = 120 + 8;
+  const SIZE: usize = 128 + 8;
 }
 // const_assert_eq!(VaultProtocol::SIZE, std::mem::size_of::<VaultProtocol>() + 8);
 
