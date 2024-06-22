@@ -3,21 +3,29 @@ use drift::instructions::optional_accounts::AccountMaps;
 use drift::math::casting::Cast;
 use drift::state::user::User;
 
-use crate::{Vault, VaultDepositor};
 use crate::AccountMapProvider;
-use crate::legacy_constraints::{
+use crate::constraints::{
   is_authority_for_vault_depositor, is_user_for_vault, is_user_stats_for_vault,
 };
-use crate::state::{VaultTrait, VaultVersion};
+use crate::state::{Vault, VaultProtocol};
+use crate::VaultDepositor;
 
 pub fn cancel_withdraw_request<'c: 'info, 'info>(
   ctx: Context<'_, '_, 'c, 'info, CancelWithdrawRequest<'info>>,
 ) -> Result<()> {
   let clock = &Clock::get()?;
-  let vault = &mut ctx.accounts.vault.load_mut()?;
-  let vault_version = &mut VaultVersion::Legacy(vault);
-  let vault = vault_version.legacy()?;
+  let mut vault = ctx.accounts.vault.load_mut()?;
   let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
+  // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
+  let vault_protocol = match ctx.remaining_accounts.last() {
+    None => None,
+    Some(a) => {
+      match AccountLoader::<VaultProtocol>::try_from(a) {
+        Err(_) => None,
+        Ok(vp_loader) => Some(vp_loader.load_mut().as_deref_mut()?),
+      }
+    }
+  };
 
   let user = ctx.accounts.drift_user.load()?;
 
@@ -25,11 +33,11 @@ pub fn cancel_withdraw_request<'c: 'info, 'info>(
     perp_market_map,
     spot_market_map,
     mut oracle_map,
-  } = ctx.load_maps(clock.slot, None)?;
+  } = ctx.load_maps(clock.slot, None, vault_protocol.is_some())?;
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  vault_depositor.cancel_withdraw_request(vault_equity.cast()?, vault_version, clock.unix_timestamp)?;
+  vault_depositor.cancel_withdraw_request(vault_equity.cast()?, &mut vault, &vault_protocol, clock.unix_timestamp)?;
 
   Ok(())
 }

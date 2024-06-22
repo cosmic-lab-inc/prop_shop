@@ -7,54 +7,57 @@ use drift::program::Drift;
 use drift::state::user::User;
 
 use crate::{AccountMapProvider, declare_vault_seeds};
-use crate::{Vault, VaultDepositor};
+use crate::constraints::{is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault};
 use crate::drift_cpi::{TokenTransferCPI, WithdrawCPI};
-use crate::legacy_constraints::*;
-use crate::state::{VaultTrait, VaultVersion};
+use crate::state::{Vault, VaultProtocol};
 
-pub fn force_withdraw<'c: 'info, 'info>(
-  ctx: Context<'_, '_, 'c, 'info, ForceWithdraw<'info>>,
+pub fn manager_withdraw<'c: 'info, 'info>(
+  ctx: Context<'_, '_, 'c, 'info, ManagerWithdraw<'info>>,
 ) -> Result<()> {
   let clock = &Clock::get()?;
-  let vault = ctx.accounts.vault.load()?;
-  let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
+  let mut vault = ctx.accounts.vault.load_mut()?;
+  let now = clock.unix_timestamp;
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
+
+  // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
+  let vault_protocol = match ctx.remaining_accounts.last() {
+    None => None,
+    Some(a) => {
+      match AccountLoader::<VaultProtocol>::try_from(a) {
+        Err(_) => None,
+        Ok(vp_loader) => Some(vp_loader.load_mut().as_deref_mut()?),
+      }
+    }
+  };
 
   let AccountMaps {
     perp_market_map,
     spot_market_map,
     mut oracle_map,
-  } = ctx.load_maps(clock.slot, Some(spot_market_index))?;
+  } = ctx.load_maps(clock.slot, Some(spot_market_index), vault_protocol.is_some())?;
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  let mut vault = ctx.accounts.vault.load_mut()?;
-  let vault_version = &mut VaultVersion::Legacy(&mut vault);
-  let (withdraw_amount, _) = vault_depositor.withdraw(vault_equity, vault_version, clock.unix_timestamp)?;
-
-  msg!("force_withdraw_amount: {}", withdraw_amount);
+  let manager_withdraw_amount = vault.manager_withdraw(&vault_protocol, vault_equity, now)?;
 
   drop(vault);
   drop(user);
 
-  ctx.drift_withdraw(withdraw_amount)?;
+  ctx.drift_withdraw(manager_withdraw_amount)?;
 
-  ctx.token_transfer(withdraw_amount)?;
+  ctx.token_transfer(manager_withdraw_amount)?;
 
   Ok(())
 }
 
 #[derive(Accounts)]
-pub struct ForceWithdraw<'info> {
+pub struct ManagerWithdraw<'info> {
   #[account(mut,
-  constraint = is_manager_for_vault(& vault, & manager) ? || is_delegate_for_vault(& vault, & manager) ?)]
+  constraint = is_manager_for_vault(& vault, & manager) ?)]
   pub vault: AccountLoader<'info, Vault>,
   pub manager: Signer<'info>,
-  #[account(mut,
-  constraint = is_vault_for_vault_depositor(& vault_depositor, & vault) ?,)]
-  pub vault_depositor: AccountLoader<'info, VaultDepositor>,
   #[account(mut,
   seeds = [b"vault_token_account".as_ref(), vault.key().as_ref()],
   bump,)]
@@ -75,14 +78,14 @@ pub struct ForceWithdraw<'info> {
   /// CHECK: checked in drift cpi
   pub drift_signer: AccountInfo<'info>,
   #[account(mut,
-  token::authority = vault_depositor.load() ?.authority,
+  token::authority = manager,
   token::mint = vault_token_account.mint)]
   pub user_token_account: Box<Account<'info, TokenAccount>>,
   pub drift_program: Program<'info, Drift>,
   pub token_program: Program<'info, Token>,
 }
 
-impl<'info> WithdrawCPI for Context<'_, '_, '_, 'info, ForceWithdraw<'info>> {
+impl<'info> WithdrawCPI for Context<'_, '_, '_, 'info, ManagerWithdraw<'info>> {
   fn drift_withdraw(&self, amount: u64) -> Result<()> {
     declare_vault_seeds!(self.accounts.vault, seeds);
     let spot_market_index = self.accounts.vault.load()?.spot_market_index;
@@ -106,7 +109,7 @@ impl<'info> WithdrawCPI for Context<'_, '_, '_, 'info, ForceWithdraw<'info>> {
   }
 }
 
-impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, ForceWithdraw<'info>> {
+impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, ManagerWithdraw<'info>> {
   fn token_transfer(&self, amount: u64) -> Result<()> {
     declare_vault_seeds!(self.accounts.vault, seeds);
 

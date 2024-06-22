@@ -12,7 +12,7 @@ use static_assertions::const_assert_eq;
 
 use crate::error::ErrorCode;
 use crate::error::VaultResult;
-use crate::state::VaultTrait;
+use crate::state::Vault;
 use crate::validate;
 
 #[assert_no_slop]
@@ -37,15 +37,15 @@ impl WithdrawRequest {
     Ok(())
   }
 
-  pub fn calculate_shares_lost(&self, vault: &impl VaultTrait, vault_equity: u64) -> VaultResult<u128> {
+  pub fn calculate_shares_lost(&self, vault: &Vault, vault_equity: u64) -> VaultResult<u128> {
     let n_shares = self.shares;
 
-    let amount = depositor_shares_to_vault_amount(n_shares, vault.total_shares(), vault_equity)?;
+    let amount = depositor_shares_to_vault_amount(n_shares, vault.total_shares, vault_equity)?;
 
     let vault_shares_lost = if amount > self.value {
       let new_n_shares = vault_amount_to_depositor_shares(
         self.value,
-        vault.total_shares().safe_sub(n_shares)?,
+        vault.total_shares.safe_sub(n_shares)?,
         vault_equity.safe_sub(self.value)?,
       )?;
 
@@ -113,11 +113,11 @@ impl WithdrawRequest {
     Ok(())
   }
 
-  pub fn check_redeem_period_finished(&self, vault: &impl VaultTrait, now: i64) -> VaultResult {
+  pub fn check_redeem_period_finished(&self, vault: &Vault, now: i64) -> VaultResult {
     let time_since_withdraw_request = now.safe_sub(self.ts)?;
 
     validate!(
-        time_since_withdraw_request >= vault.redeem_period(),
+        time_since_withdraw_request >= vault.redeem_period,
         ErrorCode::CannotWithdrawBeforeRedeemPeriodEnd
     )?;
 

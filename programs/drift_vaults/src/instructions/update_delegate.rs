@@ -4,12 +4,12 @@ use drift::program::Drift;
 use drift::state::user::User;
 
 use crate::{declare_vault_seeds, implement_update_user_delegate_cpi};
-use crate::{VaultTrait, VaultV1};
+use crate::constraints::{is_manager_for_vault, is_user_for_vault};
 use crate::drift_cpi::UpdateUserDelegateCPI;
-use crate::v1_constraints::{is_manager_for_vault, is_user_for_vault};
+use crate::Vault;
 
-pub fn update_delegate_v1<'info>(
-  ctx: Context<'_, '_, '_, 'info, UpdateDelegateV1<'info>>,
+pub fn update_delegate<'info>(
+  ctx: Context<'_, '_, '_, 'info, UpdateDelegate<'info>>,
   delegate: Pubkey,
 ) -> Result<()> {
   let mut vault = ctx.accounts.vault.load_mut()?;
@@ -30,10 +30,10 @@ pub fn update_delegate_v1<'info>(
 }
 
 #[derive(Accounts)]
-pub struct UpdateDelegateV1<'info> {
+pub struct UpdateDelegate<'info> {
   #[account(mut,
   constraint = is_manager_for_vault(& vault, & manager) ?,)]
-  pub vault: AccountLoader<'info, VaultV1>,
+  pub vault: AccountLoader<'info, Vault>,
   pub manager: Signer<'info>,
   #[account(mut,
   constraint = is_user_for_vault(& vault, & drift_user.key()) ?)]
@@ -42,7 +42,7 @@ pub struct UpdateDelegateV1<'info> {
   pub drift_program: Program<'info, Drift>,
 }
 
-impl<'info> UpdateUserDelegateCPI for Context<'_, '_, '_, 'info, UpdateDelegateV1<'info>> {
+impl<'info> UpdateUserDelegateCPI for Context<'_, '_, '_, 'info, UpdateDelegate<'info>> {
   fn drift_update_user_delegate(&self, delegate: Pubkey) -> Result<()> {
     implement_update_user_delegate_cpi!(self, delegate);
     Ok(())

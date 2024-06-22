@@ -4,14 +4,25 @@ use drift::math::casting::Cast;
 use drift::state::user::User;
 
 use crate::AccountMapProvider;
-use crate::state::{VaultTrait, VaultV1};
-use crate::v1_constraints::{is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault};
+use crate::constraints::{is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault};
+use crate::state::{Vault, VaultProtocol};
 
-pub fn manager_cancel_withdraw_request_v1<'c: 'info, 'info>(
-  ctx: Context<'_, '_, 'c, 'info, ManagerCancelWithdrawRequestV1<'info>>,
+pub fn manager_cancel_withdraw_request<'c: 'info, 'info>(
+  ctx: Context<'_, '_, 'c, 'info, ManagerCancelWithdrawRequest<'info>>,
 ) -> Result<()> {
   let clock = &Clock::get()?;
   let vault = &mut ctx.accounts.vault.load_mut()?;
+
+  // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
+  let vault_protocol = match ctx.remaining_accounts.last() {
+    None => None,
+    Some(a) => {
+      match AccountLoader::<VaultProtocol>::try_from(a) {
+        Err(_) => None,
+        Ok(vp_loader) => Some(vp_loader.load_mut().as_deref_mut()?),
+      }
+    }
+  };
 
   let user = ctx.accounts.drift_user.load()?;
 
@@ -19,7 +30,7 @@ pub fn manager_cancel_withdraw_request_v1<'c: 'info, 'info>(
     perp_market_map,
     spot_market_map,
     mut oracle_map,
-  } = ctx.load_maps(clock.slot, None)?;
+  } = ctx.load_maps(clock.slot, None, vault_protocol.is_some())?;
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
@@ -29,10 +40,10 @@ pub fn manager_cancel_withdraw_request_v1<'c: 'info, 'info>(
 }
 
 #[derive(Accounts)]
-pub struct ManagerCancelWithdrawRequestV1<'info> {
+pub struct ManagerCancelWithdrawRequest<'info> {
   #[account(mut,
   constraint = is_manager_for_vault(& vault, & manager) ?)]
-  pub vault: AccountLoader<'info, VaultV1>,
+  pub vault: AccountLoader<'info, Vault>,
   pub manager: Signer<'info>,
   #[account(constraint = is_user_stats_for_vault(& vault, & drift_user_stats) ?)]
   /// CHECK: checked in drift cpi

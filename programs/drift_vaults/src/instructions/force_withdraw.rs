@@ -7,17 +7,27 @@ use drift::program::Drift;
 use drift::state::user::User;
 
 use crate::{AccountMapProvider, declare_vault_seeds};
+use crate::constraints::*;
 use crate::drift_cpi::{TokenTransferCPI, WithdrawCPI};
-use crate::state::{VaultTrait, VaultV1, VaultVersion};
-use crate::v1_constraints::*;
+use crate::state::{Vault, VaultProtocol};
 use crate::VaultDepositor;
 
 pub fn force_withdraw_v1<'c: 'info, 'info>(
-  ctx: Context<'_, '_, 'c, 'info, ForceWithdrawV1<'info>>,
+  ctx: Context<'_, '_, 'c, 'info, ForceWithdraw<'info>>,
 ) -> Result<()> {
   let clock = &Clock::get()?;
   let mut vault = ctx.accounts.vault.load_mut()?;
   let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
+  // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
+  let vault_protocol = match ctx.remaining_accounts.last() {
+    None => None,
+    Some(a) => {
+      match AccountLoader::<VaultProtocol>::try_from(a) {
+        Err(_) => None,
+        Ok(vp_loader) => Some(vp_loader.load_mut().as_deref_mut()?),
+      }
+    }
+  };
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
@@ -26,12 +36,11 @@ pub fn force_withdraw_v1<'c: 'info, 'info>(
     perp_market_map,
     spot_market_map,
     mut oracle_map,
-  } = ctx.load_maps(clock.slot, Some(spot_market_index))?;
+  } = ctx.load_maps(clock.slot, Some(spot_market_index), vault_protocol.is_some())?;
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  let vault_version = &mut VaultVersion::V1(&mut vault);
-  let (withdraw_amount, _) = vault_depositor.withdraw(vault_equity, vault_version, clock.unix_timestamp)?;
+  let (withdraw_amount, _) = vault_depositor.withdraw(vault_equity, &mut vault, &vault_protocol, clock.unix_timestamp)?;
 
   msg!("force_withdraw_amount: {}", withdraw_amount);
 
@@ -45,10 +54,10 @@ pub fn force_withdraw_v1<'c: 'info, 'info>(
 }
 
 #[derive(Accounts)]
-pub struct ForceWithdrawV1<'info> {
+pub struct ForceWithdraw<'info> {
   #[account(mut,
   constraint = is_manager_for_vault(& vault, & manager) ? || is_delegate_for_vault(& vault, & manager) ?)]
-  pub vault: AccountLoader<'info, VaultV1>,
+  pub vault: AccountLoader<'info, Vault>,
   pub manager: Signer<'info>,
   #[account(mut,
   constraint = is_vault_for_vault_depositor(& vault_depositor, & vault) ?,)]

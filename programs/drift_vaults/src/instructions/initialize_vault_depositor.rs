@@ -2,9 +2,9 @@ use anchor_lang::prelude::*;
 
 use crate::{Size, validate, VaultDepositor};
 use crate::error::ErrorCode;
-use crate::state::VaultV1;
+use crate::state::{Vault, VaultProtocol};
 
-pub fn initialize_vault_depositor_v1(ctx: Context<InitializeVaultDepositorV1>) -> Result<()> {
+pub fn initialize_vault_depositor(ctx: Context<InitializeVaultDepositor>) -> Result<()> {
   let mut vault_depositor = ctx.accounts.vault_depositor.load_init()?;
   vault_depositor.vault = ctx.accounts.vault.key();
   vault_depositor.pubkey = ctx.accounts.vault_depositor.key();
@@ -13,24 +13,24 @@ pub fn initialize_vault_depositor_v1(ctx: Context<InitializeVaultDepositorV1>) -
   let vault = ctx.accounts.vault.load()?;
   if vault.permissioned {
     validate!(
-            vault.manager == *ctx.accounts.payer.key,
-            ErrorCode::PermissionedVault,
-            "Vault depositor can only be created by vault manager"
-        )?;
+        vault.manager == *ctx.accounts.payer.key,
+        ErrorCode::PermissionedVault,
+        "Vault depositor can only be created by vault manager"
+    )?;
   } else {
     validate!(
-            vault_depositor.authority == *ctx.accounts.payer.key,
-            ErrorCode::Default,
-            "Vault depositor authority must pay to create account"
-        )?;
+        vault_depositor.authority == *ctx.accounts.payer.key,
+        ErrorCode::Default,
+        "Vault depositor authority must pay to create account"
+    )?;
   }
 
   Ok(())
 }
 
 #[derive(Accounts)]
-pub struct InitializeVaultDepositorV1<'info> {
-  pub vault: AccountLoader<'info, VaultV1>,
+pub struct InitializeVaultDepositor<'info> {
+  pub vault: AccountLoader<'info, Vault>,
   #[account(init,
   seeds = [b"vault_depositor", vault.key().as_ref(), authority.key().as_ref()],
   space = VaultDepositor::SIZE,

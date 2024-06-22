@@ -6,15 +6,15 @@ use drift::program::Drift;
 use drift::state::user::User;
 
 use crate::{AccountMapProvider, declare_vault_seeds, implement_deposit, validate};
-use crate::drift_cpi::{DepositCPI, TokenTransferCPI};
-use crate::error::ErrorCode;
-use crate::state::{VaultDepositor, VaultTrait, VaultV1, VaultVersion};
-use crate::v1_constraints::{
+use crate::constraints::{
   is_authority_for_vault_depositor, is_user_for_vault, is_user_stats_for_vault,
 };
+use crate::drift_cpi::{DepositCPI, TokenTransferCPI};
+use crate::error::ErrorCode;
+use crate::state::{Vault, VaultDepositor, VaultProtocol};
 
-pub fn deposit_v1<'c: 'info, 'info>(
-  ctx: Context<'_, '_, 'c, 'info, DepositV1<'info>>,
+pub fn deposit<'c: 'info, 'info>(
+  ctx: Context<'_, '_, 'c, 'info, Deposit<'info>>,
   amount: u64,
 ) -> Result<()> {
   let clock = &Clock::get()?;
@@ -24,6 +24,17 @@ pub fn deposit_v1<'c: 'info, 'info>(
 
   let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
 
+  // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
+  let vault_protocol = match ctx.remaining_accounts.last() {
+    None => None,
+    Some(a) => {
+      match AccountLoader::<VaultProtocol>::try_from(a) {
+        Err(_) => None,
+        Ok(vp_loader) => Some(vp_loader.load_mut().as_deref_mut()?),
+      }
+    }
+  };
+
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
 
@@ -31,12 +42,11 @@ pub fn deposit_v1<'c: 'info, 'info>(
     perp_market_map,
     spot_market_map,
     mut oracle_map,
-  } = ctx.load_maps(clock.slot, Some(spot_market_index))?;
+  } = ctx.load_maps(clock.slot, Some(spot_market_index), vault_protocol.is_some())?;
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  let vault_version = &mut VaultVersion::V1(&mut vault);
-  vault_depositor.deposit(amount, vault_equity, vault_version, clock.unix_timestamp)?;
+  vault_depositor.deposit(amount, vault_equity, &mut vault, &vault_protocol, clock.unix_timestamp)?;
 
   drop(vault);
   drop(user);
@@ -49,9 +59,9 @@ pub fn deposit_v1<'c: 'info, 'info>(
 }
 
 #[derive(Accounts)]
-pub struct DepositV1<'info> {
+pub struct Deposit<'info> {
   #[account(mut)]
-  pub vault: AccountLoader<'info, VaultV1>,
+  pub vault: AccountLoader<'info, Vault>,
   #[account(mut,
   seeds = [b"vault_depositor", vault.key().as_ref(), authority.key().as_ref()],
   bump,

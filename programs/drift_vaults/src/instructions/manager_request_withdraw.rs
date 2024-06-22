@@ -2,18 +2,29 @@ use anchor_lang::prelude::*;
 use drift::instructions::optional_accounts::AccountMaps;
 use drift::state::user::User;
 
-use crate::{VaultTrait, VaultV1, WithdrawUnit};
+use crate::{Vault, VaultProtocol, WithdrawUnit};
 use crate::AccountMapProvider;
-use crate::v1_constraints::{is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault};
+use crate::constraints::{is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault};
 
-pub fn manager_request_withdraw_v1<'c: 'info, 'info>(
-  ctx: Context<'_, '_, 'c, 'info, ManagerRequestWithdrawV1<'info>>,
+pub fn manager_request_withdraw<'c: 'info, 'info>(
+  ctx: Context<'_, '_, 'c, 'info, ManagerRequestWithdraw<'info>>,
   withdraw_amount: u64,
   withdraw_unit: WithdrawUnit,
 ) -> Result<()> {
   let clock = &Clock::get()?;
   let mut vault = ctx.accounts.vault.load_mut()?;
   let now = clock.unix_timestamp;
+
+  // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
+  let vault_protocol = match ctx.remaining_accounts.last() {
+    None => None,
+    Some(a) => {
+      match AccountLoader::<VaultProtocol>::try_from(a) {
+        Err(_) => None,
+        Ok(vp_loader) => Some(vp_loader.load_mut().as_deref_mut()?),
+      }
+    }
+  };
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
@@ -22,20 +33,20 @@ pub fn manager_request_withdraw_v1<'c: 'info, 'info>(
     perp_market_map,
     spot_market_map,
     mut oracle_map,
-  } = ctx.load_maps(clock.slot, Some(spot_market_index))?;
+  } = ctx.load_maps(clock.slot, Some(spot_market_index), vault_protocol.is_some())?;
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  vault.manager_request_withdraw(withdraw_amount, withdraw_unit, vault_equity, now)?;
+  vault.manager_request_withdraw(&vault_protocol, withdraw_amount, withdraw_unit, vault_equity, now)?;
 
   Ok(())
 }
 
 #[derive(Accounts)]
-pub struct ManagerRequestWithdrawV1<'info> {
+pub struct ManagerRequestWithdraw<'info> {
   #[account(mut,
   constraint = is_manager_for_vault(& vault, & manager) ?)]
-  pub vault: AccountLoader<'info, VaultV1>,
+  pub vault: AccountLoader<'info, Vault>,
   pub manager: Signer<'info>,
   #[account(constraint = is_user_stats_for_vault(& vault, & drift_user_stats) ?)]
   /// CHECK: checked in drift cpi

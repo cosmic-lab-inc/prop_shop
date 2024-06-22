@@ -6,21 +6,28 @@ use drift::instructions::optional_accounts::AccountMaps;
 use drift::program::Drift;
 use drift::state::user::User;
 
-use crate::{
-  AccountMapProvider, declare_vault_seeds, implement_update_user_delegate_cpi,
-  implement_update_user_reduce_only_cpi, implement_withdraw,
-};
-use crate::{Vault, VaultDepositor};
-use crate::drift_cpi::{TokenTransferCPI, UpdateUserDelegateCPI, UpdateUserReduceOnlyCPI, WithdrawCPI};
-use crate::legacy_constraints::{
+use crate::{AccountMapProvider, declare_vault_seeds, implement_update_user_delegate_cpi, implement_update_user_reduce_only_cpi, implement_withdraw};
+use crate::constraints::{
   is_authority_for_vault_depositor, is_user_for_vault, is_user_stats_for_vault,
 };
-use crate::state::{VaultTrait, VaultVersion};
+use crate::drift_cpi::{TokenTransferCPI, UpdateUserDelegateCPI, UpdateUserReduceOnlyCPI, WithdrawCPI};
+use crate::state::{Vault, VaultDepositor, VaultProtocol};
 
-pub fn withdraw<'c: 'info, 'info>(ctx: Context<'_, '_, 'c, 'info, Withdraw<'info>>) -> Result<()> {
+pub fn withdraw_v1<'c: 'info, 'info>(ctx: Context<'_, '_, 'c, 'info, Withdraw<'info>>) -> Result<()> {
   let clock = &Clock::get()?;
   let mut vault = ctx.accounts.vault.load_mut()?;
   let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
+
+  // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
+  let vault_protocol = match ctx.remaining_accounts.last() {
+    None => None,
+    Some(a) => {
+      match AccountLoader::<VaultProtocol>::try_from(a) {
+        Err(_) => None,
+        Ok(vp_loader) => Some(vp_loader.load_mut().as_deref_mut()?),
+      }
+    }
+  };
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
@@ -29,12 +36,11 @@ pub fn withdraw<'c: 'info, 'info>(ctx: Context<'_, '_, 'c, 'info, Withdraw<'info
     perp_market_map,
     spot_market_map,
     mut oracle_map,
-  } = ctx.load_maps(clock.slot, Some(spot_market_index))?;
+  } = ctx.load_maps(clock.slot, Some(spot_market_index), vault_protocol.is_some())?;
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  let vault_version = &mut VaultVersion::Legacy(&mut vault);
-  let (user_withdraw_amount, finishing_liquidation) = vault_depositor.withdraw(vault_equity, vault_version, clock.unix_timestamp)?;
+  let (user_withdraw_amount, finishing_liquidation) = vault_depositor.withdraw(vault_equity, &mut vault, &vault_protocol, clock.unix_timestamp)?;
 
   msg!("user_withdraw_amount: {}", user_withdraw_amount);
 

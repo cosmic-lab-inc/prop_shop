@@ -6,10 +6,9 @@ use drift::program::Drift;
 use drift::state::user::User;
 
 use crate::{AccountMapProvider, declare_vault_seeds};
+use crate::constraints::{is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault};
 use crate::drift_cpi::{DepositCPI, TokenTransferCPI};
-use crate::legacy_constraints::{is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault};
-use crate::state::VaultTrait;
-use crate::Vault;
+use crate::state::{Vault, VaultProtocol};
 
 pub fn manager_deposit<'c: 'info, 'info>(
   ctx: Context<'_, '_, 'c, 'info, ManagerDeposit<'info>>,
@@ -19,6 +18,17 @@ pub fn manager_deposit<'c: 'info, 'info>(
 
   let mut vault = ctx.accounts.vault.load_mut()?;
 
+  // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
+  let vault_protocol = match ctx.remaining_accounts.last() {
+    None => None,
+    Some(a) => {
+      match AccountLoader::<VaultProtocol>::try_from(a) {
+        Err(_) => None,
+        Ok(vp_loader) => Some(vp_loader.load_mut().as_deref_mut()?),
+      }
+    }
+  };
+
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
 
@@ -26,11 +36,11 @@ pub fn manager_deposit<'c: 'info, 'info>(
     perp_market_map,
     spot_market_map,
     mut oracle_map,
-  } = ctx.load_maps(clock.slot, Some(spot_market_index))?;
+  } = ctx.load_maps(clock.slot, Some(spot_market_index), vault_protocol.is_some())?;
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  vault.manager_deposit(amount, vault_equity, clock.unix_timestamp)?;
+  vault.manager_deposit(&vault_protocol, amount, vault_equity, clock.unix_timestamp)?;
 
   drop(vault);
   drop(user);
@@ -73,7 +83,7 @@ pub struct ManagerDeposit<'info> {
   pub token_program: Program<'info, Token>,
 }
 
-impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, ManagerDeposit<'info>> {
+impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, ManagerDepositV1<'info>> {
   fn token_transfer(&self, amount: u64) -> Result<()> {
     let cpi_accounts = Transfer {
       from: self.accounts.user_token_account.to_account_info().clone(),
@@ -89,7 +99,7 @@ impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, ManagerDeposit<'info
   }
 }
 
-impl<'info> DepositCPI for Context<'_, '_, '_, 'info, ManagerDeposit<'info>> {
+impl<'info> DepositCPI for Context<'_, '_, '_, 'info, ManagerDepositV1<'info>> {
   fn drift_deposit(&self, amount: u64) -> Result<()> {
     declare_vault_seeds!(self.accounts.vault, seeds);
     let spot_market_index = self.accounts.vault.load()?.spot_market_index;

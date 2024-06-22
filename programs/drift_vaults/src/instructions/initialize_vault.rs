@@ -6,11 +6,12 @@ use drift::math::constants::PERCENTAGE_PRECISION_U64;
 use drift::program::Drift;
 use drift::state::spot_market::SpotMarket;
 
-use crate::{error::ErrorCode, Size, validate, Vault};
+use crate::{error::ErrorCode, validate};
 use crate::constants::ONE_DAY;
 use crate::drift_cpi::InitializeUserCPI;
-use crate::state::VaultTrait;
+use crate::state::{Vault, VaultProtocol};
 
+// todo
 pub fn initialize_vault<'info>(
   ctx: Context<'_, '_, '_, 'info, InitializeVault<'info>>,
   params: VaultParams,
@@ -27,6 +28,22 @@ pub fn initialize_vault<'info>(
   vault.spot_market_index = params.spot_market_index;
   vault.init_ts = Clock::get()?.unix_timestamp;
 
+  // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
+  let (vault_protocol, vp_key) = match ctx.remaining_accounts.last() {
+    None => (None, None),
+    Some(a) => {
+      match AccountLoader::<VaultProtocol>::try_from(a) {
+        Err(_) => (None, None),
+        Ok(vp_loader) => {
+          let vp = vp_loader.load_mut().as_deref_mut()?;
+          let seeds = vp.get_vault_protocol_seeds(ctx.accounts.vault.to_account_info().key.as_ref());
+          let vp_key = Pubkey::find_program_address(&seeds, ctx.program_id).0;
+          (Some(vp), Some(vp_key))
+        }
+      }
+    }
+  };
+
   validate!(
       params.redeem_period < ONE_DAY * 90,
       ErrorCode::InvalidVaultInitialization,
@@ -37,19 +54,46 @@ pub fn initialize_vault<'info>(
   vault.max_tokens = params.max_tokens;
   vault.min_deposit_amount = params.min_deposit_amount;
 
-  validate!(
-      params.management_fee < PERCENTAGE_PRECISION_U64.cast()?,
-      ErrorCode::InvalidVaultInitialization,
-      "management fee plus protocol fee must be < 100%"
-  )?;
-  vault.management_fee = params.management_fee;
+  if let Some(vp_key) = vp_key {
+    vault.vault_protocol = vp_key;
+  } else {
+    // clients can determine if [`VaultProtocol`] is none by checking if the pubkey is default.
+    vault.vault_protocol = Pubkey::default();
+  }
 
-  validate!(
-      params.profit_share < PERCENTAGE_PRECISION_U64.cast()?,
-      ErrorCode::InvalidVaultInitialization,
-      "manager profit share protocol profit share must be < 100%"
-  )?;
-  vault.profit_share = params.profit_share;
+  if let (Some(vp), Some(vp_params)) = (vault_protocol, params.vault_protocol) {
+    validate!(
+        params.management_fee + vp_params.protocol_fee.cast::<i64>()? < PERCENTAGE_PRECISION_U64.cast()?,
+        ErrorCode::InvalidVaultInitialization,
+        "management fee plus protocol fee must be < 100%"
+    )?;
+    vault.management_fee = params.management_fee;
+    vp.protocol_fee = vp_params.protocol_fee;
+
+    validate!(
+        params.manager_profit_share + vp_params.protocol_profit_share < PERCENTAGE_PRECISION_U64.cast()?,
+        ErrorCode::InvalidVaultInitialization,
+        "manager profit share protocol profit share must be < 100%"
+    )?;
+    vault.manager_profit_share = params.manager_profit_share;
+    vp.protocol_profit_share = vp_params.protocol_profit_share;
+
+    vp.protocol = vp_params.protocol;
+  } else {
+    validate!(
+        params.management_fee < PERCENTAGE_PRECISION_U64.cast()?,
+        ErrorCode::InvalidVaultInitialization,
+        "management fee plus protocol fee must be < 100%"
+    )?;
+    vault.management_fee = params.management_fee;
+
+    validate!(
+        params.manager_profit_share < PERCENTAGE_PRECISION_U64.cast()?,
+        ErrorCode::InvalidVaultInitialization,
+        "manager profit share protocol profit share must be < 100%"
+    )?;
+    vault.manager_profit_share = params.manager_profit_share;
+  }
 
   validate!(
         params.hurdle_rate == 0,
@@ -75,10 +119,19 @@ pub struct VaultParams {
   pub max_tokens: u64,
   pub management_fee: i64,
   pub min_deposit_amount: u64,
-  pub profit_share: u32,
+  pub manager_profit_share: u32,
   pub hurdle_rate: u32,
   pub spot_market_index: u16,
   pub permissioned: bool,
+  // todo: check is this is backwards compatible (old clients are missing field so this must serialize to None)
+  pub vault_protocol: Option<VaultProtocolParams>,
+}
+
+#[derive(Debug, Clone, Copy, AnchorSerialize, AnchorDeserialize, PartialEq, Eq)]
+pub struct VaultProtocolParams {
+  pub protocol: Pubkey,
+  pub protocol_fee: u64,
+  pub protocol_profit_share: u32,
 }
 
 #[derive(Accounts)]
@@ -120,7 +173,7 @@ pub struct InitializeVault<'info> {
   pub token_program: Program<'info, Token>,
 }
 
-impl<'info> InitializeUserCPI for Context<'_, '_, '_, 'info, InitializeVault<'info>> {
+impl<'info> InitializeUserCPI for Context<'_, '_, '_, 'info, InitializeVaultV1<'info>> {
   fn drift_initialize_user(&self, name: [u8; 32], bump: u8) -> Result<()> {
     let vault = self.accounts.vault.load()?;
     let signature_seeds = vault.get_vault_signer_seeds(&name, &bump);
