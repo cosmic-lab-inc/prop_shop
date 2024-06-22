@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use drift::state::spot_market::SpotMarket;
 
 use crate::{Vault, VaultDepositor};
+use crate::state::VaultProtocol;
 
 pub fn is_vault_for_vault_depositor(
   vault_depositor: &AccountLoader<VaultDepositor>,
@@ -53,4 +54,11 @@ pub fn is_spot_market_for_vault(
   Ok(
     (vault.load()?.spot_market_index).eq(&drift_spot_market.load()?.market_index) && (vault.load()?.spot_market_index).eq(&market_index),
   )
+}
+
+pub fn is_vault_protocol_for_vault(
+  vault_protocol: &AccountLoader<VaultProtocol>,
+  vault: &AccountLoader<Vault>,
+) -> anchor_lang::Result<bool> {
+  Ok(vault.load()?.vault_protocol.eq(&vault_protocol.key()))
 }

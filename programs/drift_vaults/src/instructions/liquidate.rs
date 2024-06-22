@@ -1,3 +1,5 @@
+use std::ops::DerefMut;
+
 use anchor_lang::prelude::*;
 use drift::cpi::accounts::UpdateUser;
 use drift::instructions::optional_accounts::AccountMaps;
@@ -10,7 +12,7 @@ use crate::constraints::{
   is_authority_for_vault_depositor, is_user_for_vault, is_user_stats_for_vault,
 };
 use crate::drift_cpi::{UpdateUserDelegateCPI, UpdateUserReduceOnlyCPI};
-use crate::state::{Vault, VaultDepositor, VaultProtocol};
+use crate::state::{Vault, VaultDepositor, VaultProtocolProvider};
 
 pub fn liquidate<'c: 'info, 'info>(
   ctx: Context<'_, '_, 'c, 'info, Liquidate<'info>>,
@@ -23,21 +25,13 @@ pub fn liquidate<'c: 'info, 'info>(
   let vault_depositor = ctx.accounts.vault_depositor.load()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let vault_protocol = match ctx.remaining_accounts.last() {
-    None => None,
-    Some(a) => {
-      match AccountLoader::<VaultProtocol>::try_from(a) {
-        Err(_) => None,
-        Ok(vp_loader) => Some(vp_loader.load_mut().as_deref_mut()?),
-      }
-    }
-  };
+  let mut vp = ctx.vault_protocol().map(|vp| vp.load_mut()).transpose()?;
 
   let AccountMaps {
     perp_market_map,
     spot_market_map,
     mut oracle_map,
-  } = ctx.load_maps(clock.slot, Some(vault.spot_market_index), vault_protocol.is_some())?;
+  } = ctx.load_maps(clock.slot, Some(vault.spot_market_index), vp.is_some())?;
 
   // 1. Check the vault depositor has waited the redeem period
   vault_depositor.last_withdraw_request.check_redeem_period_finished(&vault, now)?;

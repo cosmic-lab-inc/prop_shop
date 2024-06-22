@@ -44,7 +44,7 @@ pub struct InitializeInsuranceFundStake<'info> {
   pub drift_program: Program<'info, Drift>,
 }
 
-impl<'info> InitializeInsuranceFundStakeCPI for Context<'_, '_, '_, 'info, InitializeInsuranceFundStakeV1<'info>> {
+impl<'info> InitializeInsuranceFundStakeCPI for Context<'_, '_, '_, 'info, InitializeInsuranceFundStake<'info>> {
   fn drift_initialize_insurance_fund_stake(&self, market_index: u16) -> Result<()> {
     declare_vault_seeds!(self.accounts.vault, seeds);
 

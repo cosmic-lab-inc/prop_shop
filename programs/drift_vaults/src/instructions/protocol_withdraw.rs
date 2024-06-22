@@ -9,12 +9,12 @@ use drift::program::Drift;
 use drift::state::user::User;
 
 use crate::{AccountMapProvider, declare_vault_seeds};
-use crate::constraints::{is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault};
+use crate::constraints::{is_manager_for_vault, is_user_for_vault, is_user_stats_for_vault, is_vault_protocol_for_vault};
 use crate::drift_cpi::{TokenTransferCPI, WithdrawCPI};
-use crate::state::{Vault, VaultProtocolProvider};
+use crate::state::{Vault, VaultProtocol, VaultProtocolProvider};
 
-pub fn manager_withdraw<'c: 'info, 'info>(
-  ctx: Context<'_, '_, 'c, 'info, ManagerWithdraw<'info>>,
+pub fn protocol_withdraw<'c: 'info, 'info>(
+  ctx: Context<'_, '_, 'c, 'info, ProtocolWithdraw<'info>>,
 ) -> Result<()> {
   let clock = &Clock::get()?;
   let mut vault = ctx.accounts.vault.load_mut()?;
@@ -34,23 +34,26 @@ pub fn manager_withdraw<'c: 'info, 'info>(
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  let manager_withdraw_amount = vault.manager_withdraw(&mut vp, vault_equity, now)?;
+  let protocol_withdraw_amount = vault.protocol_withdraw(&mut vp, vault_equity, now)?;
 
   drop(vault);
   drop(user);
 
-  ctx.drift_withdraw(manager_withdraw_amount)?;
+  ctx.drift_withdraw(protocol_withdraw_amount)?;
 
-  ctx.token_transfer(manager_withdraw_amount)?;
+  ctx.token_transfer(protocol_withdraw_amount)?;
 
   Ok(())
 }
 
 #[derive(Accounts)]
-pub struct ManagerWithdraw<'info> {
+pub struct ProtocolWithdraw<'info> {
   #[account(mut,
   constraint = is_manager_for_vault(& vault, & manager) ?)]
   pub vault: AccountLoader<'info, Vault>,
+  #[account(mut,
+  constraint = is_vault_protocol_for_vault(& vault_protocol, & vault) ?)]
+  pub vault_protocol: AccountLoader<'info, VaultProtocol>,
   pub manager: Signer<'info>,
   #[account(mut,
   seeds = [b"vault_token_account".as_ref(), vault.key().as_ref()],
@@ -79,7 +82,7 @@ pub struct ManagerWithdraw<'info> {
   pub token_program: Program<'info, Token>,
 }
 
-impl<'info> WithdrawCPI for Context<'_, '_, '_, 'info, ManagerWithdraw<'info>> {
+impl<'info> WithdrawCPI for Context<'_, '_, '_, 'info, ProtocolWithdraw<'info>> {
   fn drift_withdraw(&self, amount: u64) -> Result<()> {
     declare_vault_seeds!(self.accounts.vault, seeds);
     let spot_market_index = self.accounts.vault.load()?.spot_market_index;
@@ -103,7 +106,7 @@ impl<'info> WithdrawCPI for Context<'_, '_, '_, 'info, ManagerWithdraw<'info>> {
   }
 }
 
-impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, ManagerWithdraw<'info>> {
+impl<'info> TokenTransferCPI for Context<'_, '_, '_, 'info, ProtocolWithdraw<'info>> {
   fn token_transfer(&self, amount: u64) -> Result<()> {
     declare_vault_seeds!(self.accounts.vault, seeds);
 

@@ -52,6 +52,8 @@ pub enum ErrorCode {
   OngoingLiquidation,
   #[msg("InvalidVaultVersion")]
   InvalidVaultVersion,
+  #[msg("VaultProtocolIsNone")]
+  VaultProtocolIsNone,
 }
 
 impl From<DriftErrorCode> for ErrorCode {

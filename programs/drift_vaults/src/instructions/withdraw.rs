@@ -1,3 +1,5 @@
+use std::ops::DerefMut;
+
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Transfer};
 use anchor_spl::token::{Token, TokenAccount};
@@ -11,23 +13,15 @@ use crate::constraints::{
   is_authority_for_vault_depositor, is_user_for_vault, is_user_stats_for_vault,
 };
 use crate::drift_cpi::{TokenTransferCPI, UpdateUserDelegateCPI, UpdateUserReduceOnlyCPI, WithdrawCPI};
-use crate::state::{Vault, VaultDepositor, VaultProtocol};
+use crate::state::{Vault, VaultDepositor, VaultProtocolProvider};
 
-pub fn withdraw_v1<'c: 'info, 'info>(ctx: Context<'_, '_, 'c, 'info, Withdraw<'info>>) -> Result<()> {
+pub fn withdraw<'c: 'info, 'info>(ctx: Context<'_, '_, 'c, 'info, Withdraw<'info>>) -> Result<()> {
   let clock = &Clock::get()?;
   let mut vault = ctx.accounts.vault.load_mut()?;
   let mut vault_depositor = ctx.accounts.vault_depositor.load_mut()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let vault_protocol = match ctx.remaining_accounts.last() {
-    None => None,
-    Some(a) => {
-      match AccountLoader::<VaultProtocol>::try_from(a) {
-        Err(_) => None,
-        Ok(vp_loader) => Some(vp_loader.load_mut().as_deref_mut()?),
-      }
-    }
-  };
+  let mut vp = ctx.vault_protocol().map(|vp| vp.load_mut()).transpose()?;
 
   let user = ctx.accounts.drift_user.load()?;
   let spot_market_index = vault.spot_market_index;
@@ -36,11 +30,11 @@ pub fn withdraw_v1<'c: 'info, 'info>(ctx: Context<'_, '_, 'c, 'info, Withdraw<'i
     perp_market_map,
     spot_market_map,
     mut oracle_map,
-  } = ctx.load_maps(clock.slot, Some(spot_market_index), vault_protocol.is_some())?;
+  } = ctx.load_maps(clock.slot, Some(spot_market_index), vp.is_some())?;
 
   let vault_equity = vault.calculate_equity(&user, &perp_market_map, &spot_market_map, &mut oracle_map)?;
 
-  let (user_withdraw_amount, finishing_liquidation) = vault_depositor.withdraw(vault_equity, &mut vault, &vault_protocol, clock.unix_timestamp)?;
+  let (user_withdraw_amount, finishing_liquidation) = vault_depositor.withdraw(vault_equity, &mut vault, &mut vp, clock.unix_timestamp)?;
 
   msg!("user_withdraw_amount: {}", user_withdraw_amount);
 

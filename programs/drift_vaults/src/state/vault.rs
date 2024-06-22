@@ -1,3 +1,5 @@
+use std::cell::RefMut;
+
 use anchor_lang::prelude::*;
 use drift::math::casting::Cast;
 use drift::math::constants::{ONE_YEAR, PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_I128};
@@ -113,7 +115,7 @@ impl Vault {
     [b"vault".as_ref(), name, bytemuck::bytes_of(bump)]
   }
 
-  pub fn apply_fee(&mut self, vault_protocol: &Option<&mut VaultProtocol>, vault_equity: u64, now: i64) -> Result<VaultFee> {
+  pub fn apply_fee(&mut self, vault_protocol: &mut Option<RefMut<VaultProtocol>>, vault_equity: u64, now: i64) -> Result<VaultFee> {
     // calculate management fee
     let depositor_equity = depositor_shares_to_vault_amount(self.user_shares, self.total_shares, vault_equity)?.cast::<i128>()?;
     let management_fee_payment: i128 = 0;
@@ -145,7 +147,7 @@ impl Vault {
         self.manager_total_fee = self.manager_total_fee.saturating_add(management_fee_payment.cast()?);
 
         // in case total_shares is pushed to level that warrants a rebase
-        self.apply_rebase(&None, vault_equity)?;
+        self.apply_rebase(&mut None, vault_equity)?;
       }
       Some(vp) => {
         if self.management_fee != 0 && vp.protocol_fee != 0 && depositor_equity > 0 {
@@ -219,14 +221,14 @@ impl Vault {
     })
   }
 
-  pub fn get_manager_shares(&self, vault_protocol: &Option<&mut VaultProtocol>) -> VaultResult<u128> {
+  pub fn get_manager_shares(&self, vault_protocol: &mut Option<RefMut<VaultProtocol>>) -> VaultResult<u128> {
     Ok(match vault_protocol {
       None => self.total_shares.safe_sub(self.user_shares)?,
       Some(vp) => self.total_shares.safe_sub(self.user_shares)?.safe_sub(vp.protocol_profit_and_fee_shares)?
     })
   }
 
-  pub fn get_protocol_shares(&self, vault_protocol: &Option<&mut VaultProtocol>) -> u128 {
+  pub fn get_protocol_shares(&self, vault_protocol: &mut Option<RefMut<VaultProtocol>>) -> u128 {
     match vault_protocol {
       None => 0,
       Some(vp) => vp.protocol_profit_and_fee_shares
@@ -240,7 +242,7 @@ impl Vault {
     })
   }
 
-  pub fn apply_rebase(&mut self, vault_protocol: &Option<&mut VaultProtocol>, vault_equity: u64) -> Result<()> {
+  pub fn apply_rebase(&mut self, vault_protocol: &mut Option<RefMut<VaultProtocol>>, vault_equity: u64) -> Result<()> {
     if vault_equity != 0 && vault_equity.cast::<u128>()? < self.total_shares {
       let (expo_diff, rebase_divisor) = calculate_rebase_info(self.total_shares, vault_equity)?;
 
@@ -289,7 +291,7 @@ impl Vault {
     Ok(vault_equity.safe_mul(spot_market_precision)?.safe_div(oracle_price)?.cast::<u64>()?)
   }
 
-  pub fn manager_deposit(&mut self, vault_protocol: &Option<&mut VaultProtocol>, amount: u64, vault_equity: u64, now: i64) -> Result<()> {
+  pub fn manager_deposit(&mut self, vault_protocol: &mut Option<RefMut<VaultProtocol>>, amount: u64, vault_equity: u64, now: i64) -> Result<()> {
     self.apply_rebase(vault_protocol, vault_equity)?;
     let VaultFee {
       management_fee_payment,
@@ -383,7 +385,7 @@ impl Vault {
 
   pub fn manager_request_withdraw(
     &mut self,
-    vault_protocol: &Option<&mut VaultProtocol>,
+    vault_protocol: &mut Option<RefMut<VaultProtocol>>,
     withdraw_amount: u64,
     withdraw_unit: WithdrawUnit,
     vault_equity: u64,
@@ -483,7 +485,7 @@ impl Vault {
 
   pub fn manager_cancel_withdraw_request(
     &mut self,
-    vault_protocol: &Option<&mut VaultProtocol>,
+    vault_protocol: &mut Option<RefMut<VaultProtocol>>,
     vault_equity: u64,
     now: i64,
   ) -> Result<()> {
@@ -561,7 +563,7 @@ impl Vault {
     Ok(())
   }
 
-  pub fn manager_withdraw(&mut self, vault_protocol: &Option<&mut VaultProtocol>, vault_equity: u64, now: i64) -> Result<u64> {
+  pub fn manager_withdraw(&mut self, vault_protocol: &mut Option<RefMut<VaultProtocol>>, vault_equity: u64, now: i64) -> Result<u64> {
     self.last_manager_withdraw_request.check_redeem_period_finished(self, now)?;
 
     self.apply_rebase(vault_protocol, vault_equity)?;
@@ -692,7 +694,7 @@ impl Vault {
 
   pub fn protocol_request_withdraw(
     &mut self,
-    vault_protocol: &Option<&mut VaultProtocol>,
+    vault_protocol: &mut Option<RefMut<VaultProtocol>>,
     withdraw_amount: u64,
     withdraw_unit: WithdrawUnit,
     vault_equity: u64,
@@ -706,12 +708,12 @@ impl Vault {
       protocol_fee_shares
     } = self.apply_fee(vault_protocol, vault_equity, now)?;
 
-    let vault_shares_before: u128 = self.get_protocol_shares(vault_protocol)?;
+    let vault_shares_before: u128 = self.get_protocol_shares(vault_protocol);
 
     let (withdraw_value, n_shares) = withdraw_unit.get_withdraw_value_and_shares(
       withdraw_amount,
       vault_equity,
-      self.get_protocol_shares(vault_protocol)?,
+      self.get_protocol_shares(vault_protocol),
       self.total_shares,
     )?;
 
@@ -735,7 +737,7 @@ impl Vault {
     }
     self.total_withdraw_requested = self.total_withdraw_requested.safe_add(withdraw_value)?;
 
-    let vault_shares_after: u128 = self.get_protocol_shares(vault_protocol)?;
+    let vault_shares_after: u128 = self.get_protocol_shares(vault_protocol);
 
     match vault_protocol {
       None => {
@@ -789,13 +791,13 @@ impl Vault {
 
   pub fn protocol_cancel_withdraw_request(
     &mut self,
-    vault_protocol: &Option<&mut VaultProtocol>,
+    vault_protocol: &mut Option<RefMut<VaultProtocol>>,
     vault_equity: u64,
     now: i64,
   ) -> Result<()> {
     self.apply_rebase(vault_protocol, vault_equity)?;
 
-    let vault_shares_before: u128 = self.get_protocol_shares(vault_protocol)?;
+    let vault_shares_before: u128 = self.get_protocol_shares(vault_protocol);
     let total_vault_shares_before = self.total_shares;
     let user_vault_shares_before = self.user_shares;
 
@@ -815,7 +817,7 @@ impl Vault {
 
     self.user_shares = self.user_shares.safe_sub(vault_shares_lost)?;
 
-    let vault_shares_after = self.get_protocol_shares(vault_protocol)?;
+    let vault_shares_after = self.get_protocol_shares(vault_protocol);
 
     match vault_protocol {
       None => {
@@ -872,7 +874,7 @@ impl Vault {
     Ok(())
   }
 
-  pub fn protocol_withdraw(&mut self, vault_protocol: &Option<&mut VaultProtocol>, vault_equity: u64, now: i64) -> Result<u64> {
+  pub fn protocol_withdraw(&mut self, vault_protocol: &mut Option<RefMut<VaultProtocol>>, vault_equity: u64, now: i64) -> Result<u64> {
     self.last_manager_withdraw_request.check_redeem_period_finished(self, now)?;
 
     self.apply_rebase(vault_protocol, vault_equity)?;
@@ -884,7 +886,7 @@ impl Vault {
       protocol_fee_shares
     } = self.apply_fee(vault_protocol, vault_equity, now)?;
 
-    let vault_shares_before: u128 = self.get_protocol_shares(vault_protocol)?;
+    let vault_shares_before: u128 = self.get_protocol_shares(vault_protocol);
     let total_vault_shares_before = self.total_shares;
     let user_vault_shares_before = self.user_shares;
 
@@ -918,7 +920,7 @@ impl Vault {
     }
     self.net_deposits = self.net_deposits.safe_sub(n_tokens.cast()?)?;
 
-    let vault_shares_before = self.get_protocol_shares(vault_protocol)?;
+    let vault_shares_before = self.get_protocol_shares(vault_protocol);
 
     validate!(
         vault_shares_before >= n_shares,
@@ -932,7 +934,7 @@ impl Vault {
     if let Some(vp) = vault_protocol {
       vp.protocol_profit_and_fee_shares = vp.protocol_profit_and_fee_shares.safe_sub(n_shares)?;
     }
-    let vault_shares_after = self.get_protocol_shares(vault_protocol)?;
+    let vault_shares_after = self.get_protocol_shares(vault_protocol);
 
     match vault_protocol {
       None => {
@@ -989,7 +991,7 @@ impl Vault {
     Ok(n_tokens)
   }
 
-  pub fn profit_share(&self, vault_protocol: &Option<&mut VaultProtocol>) -> u32 {
+  pub fn profit_share(&self, vault_protocol: &Option<RefMut<VaultProtocol>>) -> u32 {
     match vault_protocol {
       None => self.manager_profit_share,
       Some(vp) => self.manager_profit_share.saturating_add(vp.protocol_profit_share),

@@ -1,5 +1,10 @@
-use anchor_lang::prelude::*;
+use std::cell::RefMut;
 
+use anchor_lang::prelude::*;
+use anchor_lang::prelude::{AccountLoader, Context};
+
+use crate::error::{ErrorCode, VaultResult};
+use crate::state::Size;
 use crate::state::withdraw_request::WithdrawRequest;
 
 pub struct VaultFee {
@@ -9,7 +14,9 @@ pub struct VaultFee {
   pub protocol_fee_shares: i64,
 }
 
-#[derive(Default, Debug, Clone, Copy, AnchorSerialize, AnchorDeserialize, PartialEq, Eq)]
+#[account(zero_copy(unsafe))]
+#[derive(Default, Eq, PartialEq, Debug)]
+#[repr(C)]
 pub struct VaultProtocol {
   /// The protocol, company, or entity that services the product using this vault.
   /// The protocol is not allowed to deposit into the vault but can profit share and collect annual fees just like the manager.
@@ -30,10 +37,35 @@ pub struct VaultProtocol {
   /// Percentage the protocol charges on all profits realized by depositors: PERCENTAGE_PRECISION
   pub protocol_profit_share: u32,
   pub bump: u8,
+  /// [`VaultProtocol`] is 117 bytes with padding to 120 bytes to make it a multiple of 8.
+  pub padding: [u8; 3],
 }
 
+impl Size for VaultProtocol {
+  const SIZE: usize = 120 + 8;
+}
+// const_assert_eq!(VaultProtocol::SIZE, std::mem::size_of::<VaultProtocol>() + 8);
+
 impl VaultProtocol {
-  pub fn get_vault_protocol_seeds<'a>(&self, vault: &'a [u8]) -> [&'a [u8]; 3] {
-    [b"vault".as_ref(), vault, bytemuck::bytes_of(&self.bump)]
+  pub fn get_vault_protocol_seeds<'a>(&self, vault: &'a [u8], bump: &'a u8) -> [&'a [u8]; 3] {
+    [b"vault_protocol".as_ref(), vault, bytemuck::bytes_of(bump)]
+  }
+}
+
+pub trait VaultProtocolProvider<'a> {
+  fn vault_protocol(&self) -> Option<AccountLoader<'a, VaultProtocol>>;
+}
+
+impl<'a: 'info, 'info, T: anchor_lang::Bumps> VaultProtocolProvider<'a> for Context<'_, '_, 'a, 'info, T> {
+  fn vault_protocol(&self) -> Option<AccountLoader<'a, VaultProtocol>> {
+    let acct = match self.remaining_accounts.last() {
+      Some(acct) => acct,
+      None => return None,
+    };
+    let vp_loader = match AccountLoader::<'a, VaultProtocol>::try_from(acct) {
+      Ok(vp_loader) => vp_loader,
+      Err(_) => return None,
+    };
+    Some(vp_loader)
   }
 }

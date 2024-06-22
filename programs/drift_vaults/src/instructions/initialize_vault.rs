@@ -1,3 +1,5 @@
+use std::ops::DerefMut;
+
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use drift::cpi::accounts::{InitializeUser, InitializeUserStats};
@@ -6,14 +8,14 @@ use drift::math::constants::PERCENTAGE_PRECISION_U64;
 use drift::program::Drift;
 use drift::state::spot_market::SpotMarket;
 
-use crate::{error::ErrorCode, validate};
+use crate::{error::ErrorCode, Size, validate};
 use crate::constants::ONE_DAY;
 use crate::drift_cpi::InitializeUserCPI;
-use crate::state::{Vault, VaultProtocol};
+use crate::state::{Vault, VaultProtocol, VaultProtocolProvider};
 
 // todo
-pub fn initialize_vault<'info>(
-  ctx: Context<'_, '_, '_, 'info, InitializeVault<'info>>,
+pub fn initialize_vault<'c: 'info, 'info>(
+  ctx: Context<'_, '_, 'c, 'info, InitializeVault<'info>>,
   params: VaultParams,
 ) -> Result<()> {
   let bump = ctx.bumps.vault;
@@ -29,20 +31,12 @@ pub fn initialize_vault<'info>(
   vault.init_ts = Clock::get()?.unix_timestamp;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let (vault_protocol, vp_key) = match ctx.remaining_accounts.last() {
-    None => (None, None),
-    Some(a) => {
-      match AccountLoader::<VaultProtocol>::try_from(a) {
-        Err(_) => (None, None),
-        Ok(vp_loader) => {
-          let vp = vp_loader.load_mut().as_deref_mut()?;
-          let seeds = vp.get_vault_protocol_seeds(ctx.accounts.vault.to_account_info().key.as_ref());
-          let vp_key = Pubkey::find_program_address(&seeds, ctx.program_id).0;
-          (Some(vp), Some(vp_key))
-        }
-      }
-    }
-  };
+  let mut vp = ctx.vault_protocol().map(|vp| vp.load_mut()).transpose()?;
+
+  let vp_key = vp.as_ref().map(|vp| {
+    let seeds = vp.get_vault_protocol_seeds(ctx.accounts.vault.to_account_info().key.as_ref(), &vp.bump);
+    Pubkey::find_program_address(&seeds, ctx.program_id).0
+  });
 
   validate!(
       params.redeem_period < ONE_DAY * 90,
@@ -61,7 +55,7 @@ pub fn initialize_vault<'info>(
     vault.vault_protocol = Pubkey::default();
   }
 
-  if let (Some(vp), Some(vp_params)) = (vault_protocol, params.vault_protocol) {
+  if let (Some(mut vp), Some(vp_params)) = (vp, params.vault_protocol) {
     validate!(
         params.management_fee + vp_params.protocol_fee.cast::<i64>()? < PERCENTAGE_PRECISION_U64.cast()?,
         ErrorCode::InvalidVaultInitialization,
@@ -173,7 +167,7 @@ pub struct InitializeVault<'info> {
   pub token_program: Program<'info, Token>,
 }
 
-impl<'info> InitializeUserCPI for Context<'_, '_, '_, 'info, InitializeVaultV1<'info>> {
+impl<'info> InitializeUserCPI for Context<'_, '_, '_, 'info, InitializeVault<'info>> {
   fn drift_initialize_user(&self, name: [u8; 32], bump: u8) -> Result<()> {
     let vault = self.accounts.vault.load()?;
     let signature_seeds = vault.get_vault_signer_seeds(&name, &bump);

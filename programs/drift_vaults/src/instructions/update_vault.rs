@@ -1,25 +1,19 @@
+use std::ops::DerefMut;
+
 use anchor_lang::prelude::*;
 
 use crate::{error::ErrorCode, validate};
 use crate::constraints::is_manager_for_vault;
-use crate::state::{Vault, VaultProtocol};
+use crate::state::{AccountMapProvider, Vault, VaultProtocol, VaultProtocolProvider};
 
-pub fn update_vault<'info>(
-  ctx: Context<'_, '_, '_, 'info, UpdateVault<'info>>,
+pub fn update_vault<'c: 'info, 'info>(
+  ctx: Context<'_, '_, 'c, 'info, UpdateVault<'info>>,
   params: UpdateVaultParams,
 ) -> Result<()> {
   let mut vault = ctx.accounts.vault.load_mut()?;
 
   // backwards compatible: if last rem acct does not deserialize into [`VaultProtocol`] then it's a legacy vault.
-  let vault_protocol = match ctx.remaining_accounts.last() {
-    None => None,
-    Some(a) => {
-      match AccountLoader::<VaultProtocol>::try_from(a) {
-        Err(_) => None,
-        Ok(vp_loader) => Some(vp_loader.load_mut().as_deref_mut()?),
-      }
-    }
-  };
+  let mut vp = ctx.vault_protocol().map(|vp| vp.load_mut()).transpose()?;
 
   validate!(!vault.in_liquidation(), ErrorCode::OngoingLiquidation)?;
 
@@ -49,7 +43,7 @@ pub fn update_vault<'info>(
     vault.management_fee = management_fee;
   }
 
-  if let (Some(vp), Some(vp_params)) = (vault_protocol, params.vault_protocol) {
+  if let (Some(mut vp), Some(vp_params)) = (vp, params.vault_protocol) {
     if let Some(new_protocol_fee) = vp_params.protocol_fee {
       validate!(
               new_protocol_fee < vp.protocol_fee,

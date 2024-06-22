@@ -7,22 +7,23 @@ use drift::state::spot_market_map::get_writable_spot_market_set;
 
 pub trait AccountMapProvider<'a> {
   fn load_maps(
-      &self,
-      slot: u64,
-      writable_spot_market: Option<u16>,
-      has_vault_protocol: bool,
+    &self,
+    slot: u64,
+    writable_spot_market: Option<u16>,
+    has_vault_protocol: bool,
   ) -> DriftResult<AccountMaps<'a>>;
 }
 
 impl<'a: 'info, 'info, T: anchor_lang::Bumps> AccountMapProvider<'a> for Context<'_, '_, 'a, 'info, T> {
   fn load_maps(
-      &self,
-      slot: u64,
-      writable_spot_market_index: Option<u16>,
-      has_vault_protocol: bool,
+    &self,
+    slot: u64,
+    writable_spot_market_index: Option<u16>,
+    has_vault_protocol: bool,
   ) -> DriftResult<AccountMaps<'a>> {
     // if [`VaultProtocol`] exists it will be the last index in the remaining_accounts, so we need to skip it.
-    let remaining_accounts_iter = self.remaining_accounts.iter()[..self.remaining_accounts.len() - has_vault_protocol].peekable();
+    let end_index = self.remaining_accounts.len() - (has_vault_protocol as usize);
+    let remaining_accounts_iter = &mut self.remaining_accounts[..end_index].iter().peekable();
     load_maps(
       remaining_accounts_iter,
       &BTreeSet::new(),
