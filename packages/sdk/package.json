@@ -88,12 +88,8 @@
     "@coral-xyz/anchor": "0.28.0",
     "@drift-labs/competitions-sdk": "0.2.330",
     "@drift-labs/sdk": "2.84.0-beta.2",
-    "@drift-labs/vaults-sdk": "0.1.320"
+    "@drift-labs/vaults-sdk": "file:../../../drift-vaults/ts/sdk"
   },
-  "bugs": {
-    "url": "https://github.com/cosmic-lab-inc/epoch-app/issues"
-  },
-  "homepage": "https://github.com/cosmic-lab-inc/epoch-app#readme",
   "directories": {
     "test": "tests"
   }

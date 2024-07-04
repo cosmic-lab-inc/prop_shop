@@ -4,4 +4,3 @@ export * from "./constants";
 export * from "./programs";
 export * from "./rpc";
 export * from "./client";
-export * from "./idls";
