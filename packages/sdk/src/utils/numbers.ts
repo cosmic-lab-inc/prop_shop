@@ -1,3 +1,6 @@
+import { BN } from "@coral-xyz/anchor";
+import { PERCENTAGE_PRECISION } from "@drift-labs/sdk";
+
 export const shortenNumber = (
   number: number,
   customSuffixes: string[] = ["", "k", "m", "b", "t"],
@@ -59,4 +62,9 @@ export function trunc(number: number, decimals: number): number {
 // generate random number between min and max
 export function randomNumber(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// Example: 100_000 = 10%, so 10% / 100 = 0.1 * PERCENTAGE_PRECISION = 100_000
+export function percentToPercentPrecision(percent: number): BN {
+  return new BN((percent / 100) * PERCENTAGE_PRECISION.toNumber());
 }
