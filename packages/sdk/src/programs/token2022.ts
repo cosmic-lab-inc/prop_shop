@@ -295,7 +295,7 @@ export function tokenAmountToDecimal(amount: number, decimals: number): number {
   return Number(amount) / 10 ** decimals;
 }
 
-export const getParsedTokenBalancesForKey = async (
+export const getParsedToken2022BalancesForKey = async (
   connection: Connection,
   key: PublicKey,
   tokenProgram = TOKEN_2022_PROGRAM_ID,

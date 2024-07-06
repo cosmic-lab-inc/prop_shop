@@ -2,7 +2,7 @@ import React from "react";
 import { customTheme } from "../../styles";
 import { Box, Typography } from "@mui/material";
 import { FundOverviewCard } from "../../components";
-import { mockData, randomNumber } from "@cosmic-lab/epoch-sdk";
+import { mockData, randomNumber } from "@cosmic-lab/prop-shop-sdk";
 
 export function TopFunds() {
   return (

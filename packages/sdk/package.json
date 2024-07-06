@@ -1,5 +1,5 @@
 {
-  "name": "@cosmic-lab/epoch-sdk",
+  "name": "@cosmic-lab/prop-shop-sdk",
   "version": "0.2.8",
   "author": "Drew Riester <epochsolana@gmail.com>",
   "description": "Bindings for the Epoch API",
@@ -86,9 +86,8 @@
     "vite": "4.3.9",
     "buffer": "^6.0.3",
     "@coral-xyz/anchor": "0.28.0",
-    "@drift-labs/competitions-sdk": "0.2.330",
-    "@drift-labs/sdk": "2.84.0-beta.2",
-    "@drift-labs/vaults-sdk": "file:../../../drift-vaults/ts/sdk"
+    "@drift-labs/sdk": "2.86.0-beta.1",
+    "@drift-labs/vaults-sdk": "file:../../../drift-vaults/ts/sdk/lib"
   },
   "directories": {
     "test": "tests"

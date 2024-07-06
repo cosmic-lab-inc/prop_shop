@@ -11,9 +11,9 @@
     "test": "jest",
     "lint": "prettier --write \"./**/*.{ts,tsx}\" --loglevel silent",
     "build": "lerna run build",
-    "build:sdk": "lerna run build --scope @cosmic-lab/epoch-sdk",
-    "build:app": "lerna run build --scope epoch-app",
-    "dev:app": "lerna run start --scope epoch-app  --stream",
-    "start:app": "lerna run start --scope epoch-app  --stream"
+    "build:sdk": "lerna run build --scope @cosmic-lab/prop-shop-sdk",
+    "build:app": "lerna run build --scope prop-shop-app",
+    "dev:app": "lerna run start --scope prop-shop-app  --stream",
+    "start:app": "lerna run start --scope prop-shop-app  --stream"
   }
 }

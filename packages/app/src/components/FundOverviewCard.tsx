@@ -2,7 +2,7 @@ import React, { ReactNode } from "react";
 import { Box, styled, Typography } from "@mui/material";
 import { customTheme } from "../styles";
 import { Line, LineChart, XAxis, YAxis } from "recharts";
-import { formatNumber, trunc } from "@cosmic-lab/epoch-sdk";
+import { formatNumber, trunc } from "@cosmic-lab/prop-shop-sdk";
 
 export type FundOverviewProps = {
   title: string;

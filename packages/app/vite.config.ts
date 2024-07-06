@@ -20,10 +20,10 @@ export default defineConfig(({ mode }) => {
         os: "os-browserify",
         url: "url",
         util: "util",
+        fs: "fs",
       },
     },
     define: {
-      "process.env.OPENAI_KEY": JSON.stringify(env.OPENAI_KEY),
       "process.env.ENV": JSON.stringify(env.ENV),
       "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
       global: "globalThis",
@@ -50,6 +50,7 @@ export default defineConfig(({ mode }) => {
             Buffer: ["buffer", "Buffer"],
           }),
         ],
+        external: ["crypto", "@drift-labs/vaults-sdk"],
       },
       commonjsOptions: {
         transformMixedEsModules: true,

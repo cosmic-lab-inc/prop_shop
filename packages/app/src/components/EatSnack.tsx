@@ -1,7 +1,7 @@
 import React from "react";
 import { Button, Typography } from "@mui/material";
 import { formatExplorerLink } from "@cosmic-lab/data-source";
-import { SnackElement, SnackInfo } from "@cosmic-lab/epoch-sdk";
+import { SnackElement, SnackInfo } from "@cosmic-lab/prop-shop-sdk";
 import { Connection } from "@solana/web3.js";
 
 export function eatSnack(

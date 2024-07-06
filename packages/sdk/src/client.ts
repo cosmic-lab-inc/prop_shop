@@ -62,6 +62,10 @@ export class PropShopClient {
     this.exists = true;
   }
 
+  /*
+    * Initialize the DriftClient and VaultClient.
+    * Call this upon connecting a wallet.
+   */
   private async initClient(
     config: DriftClientConfig,
     depositUsdc?: number,
@@ -149,6 +153,10 @@ export class PropShopClient {
     };
   }
 
+  /*
+   * Initialize the User for the connected wallet,
+   * and optionally deposit USDC as collateral.
+   */
   async initUserIdempotent(depositUsdc?: number): Promise<User> {
     if (!this.exists) {
       throw new Error("PropShopClient not initialized");
