@@ -1,4 +1,10 @@
-import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from "@solana/web3.js";
 import {
   AsyncSigner,
   keypairToAsyncSigner,
@@ -59,6 +65,23 @@ export class PropShopClient {
   }
 
   /**
+   * For use from a CLI or test suite.
+   */
+  public static keypairToIWallet(kp: Keypair): IWallet {
+    return {
+      signTransaction(tx: Transaction): Promise<Transaction> {
+        tx.partialSign(kp);
+        return Promise.resolve(tx);
+      },
+      signAllTransactions(txs: Transaction[]): Promise<Transaction[]> {
+        txs.forEach((tx) => tx.partialSign(kp));
+        return Promise.resolve(txs);
+      },
+      publicKey: kp.publicKey,
+    };
+  }
+
+  /**
    * Helper method to convert a connected Solana wallet adapter to AsyncSigner.
    * For clients directly using the SDK within a React app that uses `@solana/wallet-adapter-react` to connect to a wallet.
    */
@@ -70,7 +93,7 @@ export class PropShopClient {
 
   /**
    * Helper method to convert a Keypair to AsyncSigner.
-   * For clients directly using the SDK outside of a React app (such as developers or a bot)
+   * For clients directly using the SDK outside a React app (such as developers or a bot)
    * For most the Keypair would be read from a local file or environment variable.
    */
   public static keypairToAsyncSigner(key: Keypair): AsyncSigner {
