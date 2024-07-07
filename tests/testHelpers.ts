@@ -918,9 +918,10 @@ export async function bootstrapSignerClientAndUser(params: {
   programId: PublicKey;
   usdcMint: Keypair;
   usdcAmount: BN;
+  driftClientConfig: Omit<DriftClientConfig, "connection" | "wallet">;
   depositCollateral?: boolean;
   vaultClientCliMode?: boolean;
-  driftClientConfig: Omit<DriftClientConfig, "connection" | "wallet">;
+  signer?: Keypair;
 }): Promise<{
   signer: Keypair;
   user: User;
@@ -947,7 +948,12 @@ export async function bootstrapSignerClientAndUser(params: {
     oracleInfos,
   } = driftClientConfig;
 
-  const signer = Keypair.generate();
+  let signer: Keypair;
+  if (!params.signer) {
+    signer = Keypair.generate();
+  } else {
+    signer = params.signer;
+  }
   await payer.connection.requestAirdrop(signer.publicKey, LAMPORTS_PER_SOL);
   await sleep(1000);
 

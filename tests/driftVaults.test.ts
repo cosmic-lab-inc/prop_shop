@@ -49,6 +49,7 @@ import {
   getCompetitionAddressSync,
   getCompetitorAddressSync,
 } from "@drift-labs/competitions-sdk";
+import { TEST_VAULT_DEPOSITOR } from "@cosmic-lab/prop-shop-sdk";
 
 describe("driftProtocolVaults", () => {
   const opts: ConfirmOptions = {
@@ -74,7 +75,7 @@ describe("driftProtocolVaults", () => {
   let fillerClient: VaultClient;
   let fillerUser: User;
 
-  let vd: Keypair;
+  const vd = TEST_VAULT_DEPOSITOR;
   let vdClient: VaultClient;
   let vdUser: User;
   let vdUserUSDCAccount: Keypair;
@@ -232,6 +233,7 @@ describe("driftProtocolVaults", () => {
       usdcMint,
       usdcAmount,
       depositCollateral: false,
+      signer: vd,
       driftClientConfig: {
         accountSubscription: {
           type: "websocket",
@@ -244,7 +246,7 @@ describe("driftProtocolVaults", () => {
         oracleInfos,
       },
     });
-    vd = bootstrapVD.signer;
+    // vd = bootstrapVD.signer;
     vdClient = bootstrapVD.vaultClient;
     vdUser = bootstrapVD.user;
     vdUserUSDCAccount = bootstrapVD.userUSDCAccount;
