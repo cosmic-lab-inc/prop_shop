@@ -8,7 +8,7 @@ import ListItem from "@mui/material/ListItem";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
-import { WalletButton } from "../components";
+import { WalletButton } from "./Buttons";
 import { customTheme } from "../styles";
 import { DRAWER_WIDTH, TOOLBAR_HEIGHT } from "../constants";
 import HomeIcon from "@mui/icons-material/Home";

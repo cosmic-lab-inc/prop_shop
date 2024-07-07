@@ -18,9 +18,9 @@
     "tsconfig.json"
   ],
   "scripts": {
-    "clean": "rm -rf dist && rm -rf build && rm -rf node_modules",
-    "check-types": "tsc --noEmit",
-    "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint && yarn run check-types",
+    "clean": "rm -rf dist && rm -rf node_modules",
+    "check": "tsc --noEmit",
+    "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint && yarn run check",
     "test": "jest",
     "build": "vite build",
     "dev": "vite --force --port 3000 --host 0.0.0.0",

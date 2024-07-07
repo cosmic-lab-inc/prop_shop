@@ -8,7 +8,10 @@ import { SnackbarProvider, useSnackbar } from "notistack";
 import type { ReactNode } from "react";
 import React, { useCallback, useMemo } from "react";
 import { ThemeWrapper } from "../styles";
-import { SolflareWalletAdapter } from "@solana/wallet-adapter-wallets";
+import {
+  PhantomWalletAdapter,
+  SolflareWalletAdapter,
+} from "@solana/wallet-adapter-wallets";
 import { CssBaseline } from "@mui/material";
 import Box from "@mui/material/Box";
 import { Toolbar } from "../components";
@@ -28,7 +31,7 @@ function Context({ children }: { children: ReactNode }) {
   const endpoint = useMemo(() => "http://localhost:8899", []);
 
   const wallets = useMemo(
-    () => [new SolflareWalletAdapter()],
+    () => [new SolflareWalletAdapter(), new PhantomWalletAdapter()],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -50,7 +53,7 @@ function Context({ children }: { children: ReactNode }) {
   return (
     <ConnectionProvider endpoint={endpoint}>
       <SnackbarProvider>
-        <WalletProvider wallets={wallets} onError={onError}>
+        <WalletProvider wallets={wallets} onError={onError} autoConnect>
           <WalletDialogProvider>{children}</WalletDialogProvider>
         </WalletProvider>
       </SnackbarProvider>
