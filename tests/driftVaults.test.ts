@@ -338,16 +338,8 @@ describe("driftProtocolVaults", () => {
     });
 
     await adminClient.fetchAccounts();
-    console.log(
-      "auths:",
-      adminClient.getStateAccount().numberOfAuthorities.toNumber(),
-    );
-    console.log(
-      "subs:",
-      adminClient.getStateAccount().numberOfSubAccounts.toNumber(),
-    );
-    // assert(adminClient.getStateAccount().numberOfAuthorities.eq(new BN(7)));
-    // assert(adminClient.getStateAccount().numberOfSubAccounts.eq(new BN(7)));
+    assert(adminClient.getStateAccount().numberOfAuthorities.eq(new BN(7)));
+    assert(adminClient.getStateAccount().numberOfSubAccounts.eq(new BN(7)));
   });
 
   it("Initialize Vault Depositor", async () => {
