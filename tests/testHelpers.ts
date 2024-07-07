@@ -44,14 +44,14 @@ import {
 import { IDL, VaultClient } from "@drift-labs/vaults-sdk";
 
 export async function mockOracle(
-  program: Program<anchor.Idl>,
+  // program: Program<anchor.Idl>,
   price: number = 50 * 10e7,
   expo = -7,
   confidence?: number,
   tokenFeed?: Keypair,
 ): Promise<PublicKey> {
   // default: create a $50 coin oracle
-  // const program = anchor.workspace.Pyth;
+  const program = anchor.workspace.Pyth;
 
   anchor.setProvider(
     anchor.AnchorProvider.local(undefined, {

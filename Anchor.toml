@@ -15,6 +15,10 @@ cluster = "Localnet"
 wallet = "~/.config/solana/id.json"
 
 [[test.genesis]]
+address = "vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR"
+program = "./deps/drift_vaults.so"
+
+[[test.genesis]]
 address = "dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH"
 program = "./deps/drift.so"
 
