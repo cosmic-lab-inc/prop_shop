@@ -467,7 +467,7 @@
     tweetnacl "^1.0.3"
 
 "@cosmic-lab/prop-shop-sdk@file:packages/sdk":
-  version "0.2.8"
+  version "0.2.9"
   dependencies:
     "@cosmic-lab/data-source" "^0.7.4"
     "@solana/spl-token" "^0.3.7"

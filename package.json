@@ -7,13 +7,12 @@
     ]
   },
   "scripts": {
-    "clean": "yes | lerna clean && rm -rf .nx && yarn",
+    "clean": "yes | lerna run clean && lerna clean -y && rm -rf .nx",
     "test": "jest",
     "lint": "prettier --write \"./**/*.{ts,tsx}\" --loglevel silent",
-    "build": "lerna run build",
     "build:sdk": "lerna run build --scope @cosmic-lab/prop-shop-sdk",
     "build:app": "lerna run build --scope prop-shop-app",
-    "dev:app": "lerna run start --scope prop-shop-app  --stream",
+    "build": "lerna run build",
     "start:app": "lerna run start --scope prop-shop-app  --stream",
     "setup-target": "rm -rf target && mkdir target && mkdir target/deploy && mkdir target/idl",
     "update-competitions": "cp deps/drift_competitions.so target/deploy/drift_competitions.so",

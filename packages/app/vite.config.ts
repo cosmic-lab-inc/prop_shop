@@ -17,14 +17,13 @@ export default defineConfig(({ mode }) => {
         assert: "assert",
         http: "stream-http",
         https: "https-browserify",
-        // os: "os-browserify",
         url: "url",
         util: "util",
         fs: "fs",
+        "@cosmic-lab/prop-shop-sdk": "@cosmic-lab/prop-shop-sdk/src",
       },
     },
     define: {
-      "process.env.ENV": JSON.stringify(env.ENV),
       "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
       global: "globalThis",
     },
@@ -41,6 +40,8 @@ export default defineConfig(({ mode }) => {
           }),
         ],
       },
+      exclude: ["@cosmic-lab/prop-shop-sdk"],
+      link: ["@cosmic-lab/prop-shop-sdk"],
     },
     build: {
       rollupOptions: {

@@ -68,7 +68,7 @@ export function TopFunds() {
 // import { customTheme } from "../../styles";
 // import { Box, Typography } from "@mui/material";
 // import { FundOverviewCard } from "../../components";
-// import { mockFundOverviews } from "../../lib";
+// import { mockFundOverviews } from "../../lib/mockData";
 //
 // export function TopFunds() {
 //   // todo: fetch vaults and sort by criteria using PropShopClient
