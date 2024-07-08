@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
         assert: "assert",
         http: "stream-http",
         https: "https-browserify",
-        os: "os-browserify",
+        // os: "os-browserify",
         url: "url",
         util: "util",
         fs: "fs",

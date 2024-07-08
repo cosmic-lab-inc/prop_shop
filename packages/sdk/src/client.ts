@@ -12,16 +12,6 @@ import {
 } from "@cosmic-lab/data-source";
 import { WalletContextState } from "@solana/wallet-adapter-react";
 import { makeAutoObservable } from "mobx";
-import {
-  getVaultAddressSync,
-  getVaultDepositorAddressSync,
-  IDL as DRIFT_VAULTS_IDL,
-  Vault,
-  VaultClient,
-  VaultDepositor,
-  VaultProtocolParams,
-  WithdrawUnit,
-} from "@drift-labs/vaults-sdk";
 import * as anchor from "@coral-xyz/anchor";
 import { BN, ProgramAccount } from "@coral-xyz/anchor";
 import {
@@ -49,6 +39,16 @@ import { IDL as DRIFT_IDL } from "./idl/drift";
 import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
 import { SnackInfo } from "./types";
+import {
+  getVaultAddressSync,
+  getVaultDepositorAddressSync,
+  IDL as DRIFT_VAULTS_IDL,
+  Vault,
+  VaultClient,
+  VaultDepositor,
+  VaultProtocolParams,
+  WithdrawUnit,
+} from "@drift-labs/vaults-sdk";
 
 export class PropShopClient {
   connection: Connection;
