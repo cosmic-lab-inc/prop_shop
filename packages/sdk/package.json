@@ -1,14 +1,14 @@
 {
   "name": "@cosmic-lab/prop-shop-sdk",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "author": "Drew Riester <epochsolana@gmail.com>",
-  "description": "Bindings for the Epoch API",
+  "description": "Frontend client for Prop Shop",
   "license": "Apache-2.0",
   "type": "module",
   "main": "src/index.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmic-lab-inc/epoch-app.git"
+    "url": "git+https://github.com/cosmic-lab-inc/prop_shop.git"
   },
   "files": [
     "src",
@@ -22,7 +22,7 @@
     "tsconfig.json"
   ],
   "scripts": {
-    "clean": "rm -rf dist && rm -rf build && rm -rf node_modules",
+    "clean": "yes | rm -rf dist && rm -rf node_modules",
     "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint",
     "test": "jest",
     "build": "tsc --noEmit"
@@ -88,8 +88,5 @@
     "@coral-xyz/anchor": "0.28.0",
     "@drift-labs/sdk": "2.86.0-beta.1",
     "@drift-labs/vaults-sdk": "file:../../../drift-vaults/ts/sdk/lib"
-  },
-  "directories": {
-    "test": "tests"
   }
 }

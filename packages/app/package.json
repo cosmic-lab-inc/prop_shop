@@ -18,12 +18,11 @@
     "tsconfig.json"
   ],
   "scripts": {
-    "clean": "rm -rf dist && rm -rf node_modules",
+    "clean": "yes | rm -rf dist && rm -rf node_modules",
     "check": "tsc --noEmit",
     "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint && yarn run check",
     "test": "jest",
-    "build": "vite build",
-    "dev": "vite --force --port 3000 --host 0.0.0.0",
+    "build": "vite build --debug",
     "start": "vite"
   },
   "dependencies": {

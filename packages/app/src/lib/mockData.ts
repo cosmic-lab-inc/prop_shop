@@ -38,5 +38,3 @@
 //   }
 //   return funds;
 // }
-
-export {};
