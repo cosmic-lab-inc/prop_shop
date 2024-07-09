@@ -466,22 +466,27 @@
     neverthrow "^6.0.0"
     tweetnacl "^1.0.3"
 
-"@cosmic-lab/prop-shop-sdk@file:packages/sdk":
-  version "0.2.9"
-  dependencies:
-    "@cosmic-lab/data-source" "^0.7.4"
-    "@solana/spl-token" "^0.3.7"
-    "@solana/web3.js" "^1.77.3"
-    bs58 "4.0.1"
-    neverthrow "^6.0.0"
-    tweetnacl "^1.0.3"
-
 "@cspotcode/source-map-support@^0.8.0":
   version "0.8.1"
   resolved "https://registry.npmjs.org/@cspotcode/source-map-support/-/source-map-support-0.8.1.tgz"
   integrity sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==
   dependencies:
     "@jridgewell/trace-mapping" "0.3.9"
+
+"@drift-labs/competitions-sdk@0.2.334":
+  version "0.2.334"
+  resolved "https://registry.yarnpkg.com/@drift-labs/competitions-sdk/-/competitions-sdk-0.2.334.tgz#b2950ac25296d2a945ceac5ce95045393a4fca8e"
+  integrity sha512-oSBlPHdKULwvX1qPBxdUFWYgV9kusXH9iWt/kZTrAqvNjuXYyDUDQl0t8Bf54Odc7nQcyGJnXbmiBCDuWV/y/g==
+  dependencies:
+    "@coral-xyz/anchor" "^0.26.0"
+    "@drift-labs/sdk" "2.84.0-beta.6"
+    "@solana/web3.js" "1.73.2"
+    "@switchboard-xyz/solana.js" "^2.7.1"
+    cerializr "^3.1.4"
+    dotenv "^16.3.1"
+    strict-event-emitter-types "^2.0.0"
+    ts-node "^10.9.1"
+    typescript "^5.1.6"
 
 "@drift-labs/competitions-sdk@0.2.350":
   version "0.2.350"
@@ -497,6 +502,22 @@
     strict-event-emitter-types "^2.0.0"
     ts-node "^10.9.1"
     typescript "^5.1.6"
+
+"@drift-labs/sdk@2.84.0-beta.6":
+  version "2.84.0-beta.6"
+  resolved "https://registry.yarnpkg.com/@drift-labs/sdk/-/sdk-2.84.0-beta.6.tgz#74117e5fd07d5d19f5dae79b1bdb1a8e4facc4ad"
+  integrity sha512-T42Mvx7D0w8f/eZcVijhZ4U+/D4oZ3S5nM5BRYqEKJHztCFL6Y0d3HvTpMFxc6MNbozSOq8djyjyJg1Zx0Nk9Q==
+  dependencies:
+    "@coral-xyz/anchor" "0.28.0"
+    "@ellipsis-labs/phoenix-sdk" "^1.4.2"
+    "@project-serum/serum" "^0.13.38"
+    "@pythnetwork/client" "2.5.3"
+    "@pythnetwork/pyth-solana-receiver" "^0.7.0"
+    "@solana/spl-token" "^0.3.7"
+    "@solana/web3.js" "1.92.3"
+    strict-event-emitter-types "^2.0.0"
+    uuid "^8.3.2"
+    zstddec "^0.1.0"
 
 "@drift-labs/sdk@2.86.0-beta.1":
   version "2.86.0-beta.1"
@@ -518,8 +539,20 @@
     uuid "^8.3.2"
     zstddec "^0.1.0"
 
-"@drift-labs/vaults-sdk@file:../drift-vaults/ts/sdk/lib":
-  version "0.0.0"
+"@drift-labs/vaults-sdk@0.1.338":
+  version "0.1.338"
+  resolved "https://registry.yarnpkg.com/@drift-labs/vaults-sdk/-/vaults-sdk-0.1.338.tgz#5107b4c8b9cc5b76adefd307e45b196ddd0180e7"
+  integrity sha512-fctgSuhay8A2td+mExzcCtcmccbVhvTknJ9wHED0ZFV0UbcaUIr58pJBgAnOXVsLaQQNJyV2L7URqjOoRz9VCA==
+  dependencies:
+    "@coral-xyz/anchor" "0.28.0"
+    "@drift-labs/competitions-sdk" "0.2.334"
+    "@drift-labs/sdk" "2.86.0-beta.1"
+    "@solana/web3.js" "1.73.2"
+    commander "^11.0.0"
+    dotenv "^16.3.1"
+    strict-event-emitter-types "^2.0.0"
+    ts-node "^10.9.1"
+    typescript "^5.1.6"
 
 "@ellipsis-labs/phoenix-sdk@^1.4.2":
   version "1.4.5"
@@ -5105,6 +5138,11 @@ comma-separated-tokens@^2.0.0:
   version "2.0.3"
   resolved "https://registry.npmjs.org/comma-separated-tokens/-/comma-separated-tokens-2.0.3.tgz"
   integrity sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg==
+
+commander@^11.0.0:
+  version "11.1.0"
+  resolved "https://registry.yarnpkg.com/commander/-/commander-11.1.0.tgz#62fdce76006a68e5c1ab3314dc92e800eb83d906"
+  integrity sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ==
 
 commander@^2.20.3:
   version "2.20.3"
@@ -12256,11 +12294,6 @@ ts-node@^10.9.1, ts-node@^10.9.2:
     v8-compile-cache-lib "^3.0.1"
     yn "3.1.1"
 
-tsc@^2.0.4:
-  version "2.0.4"
-  resolved "https://registry.npmjs.org/tsc/-/tsc-2.0.4.tgz"
-  integrity sha512-fzoSieZI5KKJVBYGvwbVZs/J5za84f2lSTLPYf6AGiIf43tZ3GNrI1QzTLcjtyDDP4aLxd46RTZq1nQxe7+k5Q==
-
 tsconfig-paths@^3.12.0, tsconfig-paths@^3.14.1, tsconfig-paths@^3.5.0:
   version "3.15.0"
   resolved "https://registry.npmjs.org/tsconfig-paths/-/tsconfig-paths-3.15.0.tgz"
@@ -12426,12 +12459,12 @@ typeforce@^1.11.5:
   resolved "https://registry.npmjs.org/typescript/-/typescript-5.4.3.tgz"
   integrity sha512-KrPd3PKaCLr78MalgiwJnA25Nm8HAmdwN3mYUYZgG/wizIo9EainNVQI9/yDavtVFRN2h3k8uf3GLHuhDMgEHg==
 
-typescript@^4.6.2, typescript@^4.9.5:
+typescript@^4.6.2:
   version "4.9.5"
   resolved "https://registry.npmjs.org/typescript/-/typescript-4.9.5.tgz"
   integrity sha512-1FXk9E2Hm+QzZQ7z+McJiHL4NW1F2EzMu9Nq9i3zAaGqibafqYwCVU6WyWAuyQRRzOlxou8xZSyXLEN8oKj24g==
 
-typescript@^5.1.6:
+typescript@^5, typescript@^5.1.6:
   version "5.5.3"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.5.3.tgz#e1b0a3c394190838a0b168e771b0ad56a0af0faa"
   integrity sha512-/hreyEujaB0w76zKo6717l3L0o/qEUtRgdvUBvlkhoWeOVMjMuHNHk0BRBzikzuGDqNmPQbg5ifMEqsHLiIUcQ==

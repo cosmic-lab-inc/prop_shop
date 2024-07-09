@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
         url: "url",
         util: "util",
         fs: "fs",
-        "@cosmic-lab/prop-shop-sdk": "@cosmic-lab/prop-shop-sdk/src",
+        zlib: "zlib",
       },
     },
     define: {
@@ -40,8 +40,7 @@ export default defineConfig(({ mode }) => {
           }),
         ],
       },
-      exclude: ["@cosmic-lab/prop-shop-sdk"],
-      link: ["@cosmic-lab/prop-shop-sdk"],
+      include: ["@cosmic-lab/prop-shop-sdk"],
     },
     build: {
       rollupOptions: {
@@ -51,10 +50,15 @@ export default defineConfig(({ mode }) => {
             Buffer: ["buffer", "Buffer"],
           }),
         ],
-        external: ["crypto", "@drift-labs/vaults-sdk"],
+        external: [
+          "crypto",
+          "@drift-labs/vaults-sdk",
+          "@cosmic-lab/prop-shop-sdk",
+        ],
       },
       commonjsOptions: {
         transformMixedEsModules: true,
+        include: [/@cosmic-lab\/prop-shop-sdk/, /node_modules/],
       },
     },
     publicDir: "static",

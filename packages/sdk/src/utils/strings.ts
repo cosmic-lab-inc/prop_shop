@@ -14,11 +14,15 @@ export function copyToClipboard(text: string): void {
   navigator.clipboard.writeText(text).catch(console.error);
 }
 
-export function randomId(): string {
+export function randomName(words: number = 2): string {
   const id = uniqueNamesGenerator({
     dictionaries: [adjectives, animals, colors],
-    length: 2,
+    length: words,
   });
   // replace _ with -
   return id.replace("_", "-");
+}
+
+export function truncateString(str: string, length: number = 10): string {
+  return str.length > length ? `${str.slice(0, length)}...` : str;
 }

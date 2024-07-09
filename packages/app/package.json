@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@cosmic-lab/data-source": "^0.7.4",
-    "@cosmic-lab/prop-shop-sdk": "0.2.9",
+    "@cosmic-lab/prop-shop-sdk": "^0.2.10",
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.11.16",
@@ -130,8 +130,7 @@
     "stream-http": "^3.1.0",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
-    "tsc": "^2.0.4",
-    "typescript": "^4.9.5",
+    "typescript": "^5",
     "url": "^0.11.0",
     "util": "^0.12.3",
     "vite": "4.3.9"

@@ -1,5 +1,4 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
@@ -17,13 +16,5 @@
     "outDir": "dist",
     "strictNullChecks": true,
     "noImplicitAny": true
-  },
-  "include": [
-    "src/**/*",
-    "package.json"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  }
 }

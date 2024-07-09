@@ -2,21 +2,15 @@ import React, { ReactNode } from "react";
 import { Box, styled, Typography } from "@mui/material";
 import { customTheme } from "../styles";
 import { Line, LineChart, XAxis, YAxis } from "recharts";
-import { formatNumber, trunc } from "@cosmic-lab/prop-shop-sdk";
-
-export type FundOverviewProps = {
-  title: string;
-  investors: number;
-  aum: number;
-  data: number[];
-};
+import { formatNumber, truncateNumber } from "@cosmic-lab/prop-shop-sdk";
+import { FundOverview } from "../lib";
 
 export function FundOverviewCard({
   title,
   investors,
   aum,
   data,
-}: FundOverviewProps) {
+}: FundOverview) {
   const roi = ((data[data.length - 1] - data[0]) / data[0]) * 100;
   const drawdown = Math.min(...data.map((d) => (d - data[0]) / data[0]));
   const _data = data.map((d) => ({ y: d }));
@@ -56,7 +50,7 @@ export function FundOverviewCard({
               variant="h2"
               sx={{ color: roi > 0 ? customTheme.success : customTheme.error }}
             >
-              {formatNumber(trunc(roi, 2))}%
+              {formatNumber(truncateNumber(roi, 2))}%
             </Typography>
           </TH>
         </TableRow>
@@ -65,7 +59,9 @@ export function FundOverviewCard({
             <Typography variant="body1">Drawdown</Typography>
           </TH>
           <TH>
-            <Typography variant="body1">{trunc(drawdown, 2)}%</Typography>
+            <Typography variant="body1">
+              {truncateNumber(drawdown, 2)}%
+            </Typography>
           </TH>
         </TableRow>
         <TableRow hover>
@@ -74,7 +70,7 @@ export function FundOverviewCard({
           </TH>
           <TH>
             <Typography variant="body1">
-              ${formatNumber(trunc(aum, 2))}
+              ${formatNumber(truncateNumber(aum, 2))}
             </Typography>
           </TH>
         </TableRow>

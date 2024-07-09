@@ -54,7 +54,7 @@ export function mockData(startingBalance: number, N: number): number[] {
 }
 
 // truncate number to N decimals
-export function trunc(number: number, decimals: number): number {
+export function truncateNumber(number: number, decimals: number): number {
   const factor = Math.pow(10, decimals);
   return Math.round(number * factor) / factor;
 }

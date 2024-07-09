@@ -6,7 +6,7 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "node",
-    "noEmit": true,
+    "noEmit": false,
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "experimentalDecorators": true,
@@ -16,13 +16,6 @@
     "skipLibCheck": true,
     "strictNullChecks": true,
     "strictPropertyInitialization": true,
-  },
-  "include": [
-    "src/**/*",
-    "package.json"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+    "outDir": "dist"
+  }
 }

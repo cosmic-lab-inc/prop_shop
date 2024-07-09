@@ -1,36 +1,29 @@
 {
   "name": "@cosmic-lab/prop-shop-sdk",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "author": "Drew Riester <epochsolana@gmail.com>",
   "description": "Frontend client for Prop Shop",
   "license": "Apache-2.0",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cosmic-lab-inc/prop_shop.git"
   },
-  "files": [
-    "src",
-    ".editorconfig",
-    ".env",
-    ".gitignore",
-    ".prettierignore",
-    ".prettierrc",
-    "LICENSE",
-    "package.json",
-    "tsconfig.json"
-  ],
   "scripts": {
     "clean": "yes | rm -rf dist && rm -rf node_modules",
     "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint",
     "test": "jest",
-    "build": "tsc --noEmit"
+    "build": "tsc"
   },
   "dependencies": {
     "@solana/spl-token": "^0.3.7",
     "@solana/web3.js": "^1.77.3",
     "@cosmic-lab/data-source": "^0.7.4",
+    "@coral-xyz/anchor": "0.28.0",
+    "@drift-labs/sdk": "2.86.0-beta.1",
+    "@drift-labs/vaults-sdk": "0.1.338",
     "bs58": "4.0.1",
     "neverthrow": "^6.0.0",
     "tweetnacl": "^1.0.3"
@@ -80,13 +73,9 @@
     "semver": "^7.5.3",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
-    "tsc": "^2.0.4",
-    "typescript": "^4.9.5",
+    "typescript": "^5",
     "util": "^0.12.3",
     "vite": "4.3.9",
-    "buffer": "^6.0.3",
-    "@coral-xyz/anchor": "0.28.0",
-    "@drift-labs/sdk": "2.86.0-beta.1",
-    "@drift-labs/vaults-sdk": "file:../../../drift-vaults/ts/sdk/lib"
+    "buffer": "^6.0.3"
   }
 }
