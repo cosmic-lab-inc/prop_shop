@@ -40,6 +40,7 @@ export default defineConfig(({ mode }) => {
           }),
         ],
       },
+      // https://vitejs.dev/guide/dep-pre-bundling.html#monorepos-and-linked-dependencies
       include: ["@cosmic-lab/prop-shop-sdk"],
     },
     build: {
@@ -58,6 +59,7 @@ export default defineConfig(({ mode }) => {
       },
       commonjsOptions: {
         transformMixedEsModules: true,
+        // https://vitejs.dev/guide/dep-pre-bundling.html#monorepos-and-linked-dependencies
         include: [/@cosmic-lab\/prop-shop-sdk/, /node_modules/],
       },
     },

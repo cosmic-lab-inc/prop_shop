@@ -2,9 +2,10 @@ import React from "react";
 import { customTheme } from "../../styles";
 import { Box, Typography } from "@mui/material";
 import { FundOverviewCard } from "../../components";
-import { mockFundOverviews } from "../../lib";
+import { mockFundOverviews, useClient } from "../../lib";
 
 export function TopFunds() {
+  const client = useClient();
   // todo: fetch vaults and sort by criteria using PropShopClient
   const funds = mockFundOverviews();
   return (

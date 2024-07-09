@@ -1,19 +1,15 @@
 import {
   Connection,
-  Keypair,
   PublicKey,
   SystemProgram,
   Transaction,
+  VersionedTransaction,
 } from "@solana/web3.js";
-import {
-  AsyncSigner,
-  keypairToAsyncSigner,
-  walletAdapterToAsyncSigner,
-} from "@cosmic-lab/data-source";
 import { WalletContextState } from "@solana/wallet-adapter-react";
 import { makeAutoObservable } from "mobx";
 import * as anchor from "@coral-xyz/anchor";
 import { BN, ProgramAccount } from "@coral-xyz/anchor";
+import { Wallet as AnchorWallet } from "@coral-xyz/anchor/dist/cjs/provider";
 import {
   decodeName,
   DRIFT_PROGRAM_ID,
@@ -52,65 +48,59 @@ import {
 
 export class PropShopClient {
   connection: Connection;
-  wallet: IWallet;
-  private exists: boolean = false;
-  usdcMint: PublicKey | undefined;
-  usdcAta: PublicKey | undefined;
+  wallet: WalletContextState;
   vaultClient: VaultClient | undefined;
 
-  constructor(wallet: IWallet, connection: Connection) {
+  constructor(wallet: WalletContextState, connection: Connection) {
     makeAutoObservable(this);
     this.wallet = wallet;
     this.connection = connection;
   }
 
-  /**
-   * For use from a CLI or test suite.
-   */
-  public static keypairToIWallet(kp: Keypair): IWallet {
+  public static walletAdapterToIWallet(wallet: WalletContextState): IWallet {
+    if (
+      !wallet.wallet ||
+      !wallet.signTransaction ||
+      !wallet.signAllTransactions ||
+      !wallet.publicKey
+    ) {
+      throw new Error("Wallet not connected");
+    }
     return {
       signTransaction(tx: Transaction): Promise<Transaction> {
-        tx.partialSign(kp);
-        return Promise.resolve(tx);
+        return wallet.signTransaction!(tx);
       },
       signAllTransactions(txs: Transaction[]): Promise<Transaction[]> {
-        txs.forEach((tx) => tx.partialSign(kp));
-        return Promise.resolve(txs);
+        return wallet.signAllTransactions!(txs);
       },
-      publicKey: kp.publicKey,
+      publicKey: wallet.publicKey,
     };
   }
 
-  /**
-   * Helper method to convert a connected Solana wallet adapter to AsyncSigner.
-   * For clients directly using the SDK within a React app that uses `@solana/wallet-adapter-react` to connect to a wallet.
-   */
-  public static walletAdapterToAsyncSigner(
+  public static walletAdapterToAnchorWallet(
     wallet: WalletContextState,
-  ): AsyncSigner {
-    return walletAdapterToAsyncSigner(wallet);
-  }
-
-  /**
-   * Helper method to convert a Keypair to AsyncSigner.
-   * For clients directly using the SDK outside a React app (such as developers or a bot)
-   * For most the Keypair would be read from a local file or environment variable.
-   */
-  public static keypairToAsyncSigner(key: Keypair): AsyncSigner {
-    return keypairToAsyncSigner(key);
-  }
-
-  public static readKeypairFromEnv(key: string): Keypair {
-    try {
-      const raw = process.env[key];
-      if (!raw) throw new Error(`${key} not found in env`);
-      const byteArray = JSON.parse(raw);
-      const buffer = Buffer.from(byteArray);
-      return Keypair.fromSecretKey(buffer);
-    } catch (e: any) {
-      console.error(`${key} not found in env`);
-      throw e;
+  ): AnchorWallet {
+    if (
+      !wallet.wallet ||
+      !wallet.signTransaction ||
+      !wallet.signAllTransactions ||
+      !wallet.publicKey
+    ) {
+      throw new Error("Wallet not connected");
     }
+    return {
+      signTransaction<T extends Transaction | VersionedTransaction>(
+        tx: T,
+      ): Promise<T> {
+        return wallet.signTransaction!(tx);
+      },
+      signAllTransactions<T extends Transaction | VersionedTransaction>(
+        txs: T[],
+      ): Promise<T[]> {
+        return wallet.signAllTransactions!(txs);
+      },
+      publicKey: wallet.publicKey,
+    };
   }
 
   //
@@ -121,52 +111,43 @@ export class PropShopClient {
    * Initialize the DriftClient and VaultClient.
    * Call this upon connecting a wallet.
    */
-  public async initialize(depositUsdc?: number): Promise<void> {
-    const { vaultClient, usdcAta, usdcMint } = await this.initClient(
-      {
-        wallet: this.wallet,
-        connection: this.connection,
-        accountSubscription: {
-          type: "websocket",
-          resubTimeoutMs: 30_000,
-        },
-        opts: {
-          preflightCommitment: "confirmed",
-          skipPreflight: false,
-          commitment: "confirmed",
-        },
-        activeSubAccountId: 0,
+  public async initialize(): Promise<void> {
+    const { vaultClient } = await this.initClient(this.wallet, {
+      connection: this.connection,
+      accountSubscription: {
+        type: "websocket",
+        resubTimeoutMs: 30_000,
       },
-      depositUsdc,
-    );
+      opts: {
+        preflightCommitment: "confirmed",
+        skipPreflight: false,
+        commitment: "confirmed",
+      },
+      activeSubAccountId: 0,
+    });
     this.vaultClient = vaultClient;
-    this.usdcAta = usdcAta;
-    this.usdcMint = usdcMint;
-    this.exists = true;
   }
 
   private async initClient(
-    config: DriftClientConfig,
-    depositUsdc?: number,
+    walletCtx: WalletContextState,
+    config: Omit<DriftClientConfig, "wallet">,
   ): Promise<{
-    wallet: IWallet;
-    usdcMint: PublicKey;
-    usdcAta: PublicKey;
     vaultClient: VaultClient;
   }> {
-    const {
-      wallet,
-      connection,
-      accountSubscription,
-      opts,
-      activeSubAccountId,
-    } = config;
+    if (!walletCtx.wallet) {
+      throw new Error("Wallet not connected");
+    }
+    const { connection, accountSubscription, opts, activeSubAccountId } =
+      config;
+    const iWallet = PropShopClient.walletAdapterToIWallet(walletCtx);
+    const anchorWallet = PropShopClient.walletAdapterToAnchorWallet(walletCtx);
 
     const provider = new anchor.AnchorProvider(
       connection,
-      // @ts-ignore
-      wallet,
-      opts,
+      anchorWallet,
+      opts ?? {
+        commitment: "confirmed",
+      },
     );
     const driftVaultsProgram = new anchor.Program(
       DRIFT_VAULTS_IDL,
@@ -195,7 +176,7 @@ export class PropShopClient {
 
     const driftClient = new DriftClient({
       connection,
-      wallet,
+      wallet: iWallet,
       opts: {
         commitment: "confirmed",
       },
@@ -213,34 +194,37 @@ export class PropShopClient {
       program: driftVaultsProgram,
     });
 
-    const spotMarket = driftClient.getSpotMarketAccount(0);
-    if (!spotMarket) {
-      throw new Error(`USDC spot market not found in DriftClient`);
-    }
-    const usdcMint = spotMarket.mint;
-    const usdcAta = getAssociatedTokenAddress(usdcMint, wallet.publicKey);
-
-    if (depositUsdc) {
-      await this.initUserIdempotent(depositUsdc);
-    }
-
     return {
-      wallet,
-      usdcMint,
-      usdcAta,
       vaultClient,
     };
+  }
+
+  get publicKey(): PublicKey {
+    if (!this.wallet.publicKey) {
+      throw new Error("Wallet not connected");
+    }
+    return this.wallet.publicKey;
   }
 
   /**
    * Initialize the User for the connected wallet,
    * and optionally deposit USDC as collateral.
-   * Call this before joining a vault.
+   * Call this before joining or depositing to a vault.
    */
-  async initUserIdempotent(depositUsdc?: number): Promise<User> {
-    if (!this.exists) {
+  async initUser(depositUsdc?: number): Promise<{
+    user: User;
+    usdcMint: PublicKey;
+    usdcAta: PublicKey;
+  }> {
+    if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
+    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(0);
+    if (!spotMarket) {
+      throw new Error("USDC spot market not found in DriftClient");
+    }
+    const usdcMint = spotMarket.mint;
+    const usdcAta = getAssociatedTokenAddress(usdcMint, this.publicKey);
     const user = new User({
       // @ts-ignore
       driftClient: this.vaultClient.driftClient,
@@ -252,7 +236,7 @@ export class PropShopClient {
       if (depositUsdc) {
         await this.vaultClient!.driftClient.initializeUserAccountAndDepositCollateral(
           QUOTE_PRECISION.mul(new BN(depositUsdc)),
-          this.usdcAta!,
+          usdcAta,
           0,
           this.vaultClient!.driftClient.activeSubAccountId,
         );
@@ -263,7 +247,11 @@ export class PropShopClient {
       }
       await user.subscribe();
     }
-    return user;
+    return {
+      user,
+      usdcMint,
+      usdcAta,
+    };
   }
 
   /**
@@ -328,7 +316,7 @@ export class PropShopClient {
             // "authority" field offset
             offset: 64,
             // this wallet must be the authority of the VaultDepositor to be the investor
-            bytes: this.wallet.publicKey.toBase58(),
+            bytes: this.publicKey.toBase58(),
           },
         },
       ]);
@@ -349,7 +337,7 @@ export class PropShopClient {
             // "authority" field offset
             offset: 64,
             // this wallet must be the authority of the VaultDepositor to be the investor
-            bytes: this.wallet.publicKey.toBase58(),
+            bytes: this.publicKey.toBase58(),
           },
         },
       ]);
@@ -463,7 +451,7 @@ export class PropShopClient {
     const vaultDepositor = getVaultDepositorAddressSync(
       this.vaultClient.program.programId,
       vault,
-      this.wallet.publicKey,
+      this.publicKey,
     );
     const amount = QUOTE_PRECISION.mul(new BN(usdc));
 
@@ -471,7 +459,7 @@ export class PropShopClient {
     let initVaultDepositor = undefined;
     if (!vdExists) {
       initVaultDepositor = {
-        authority: this.wallet.publicKey,
+        authority: this.publicKey,
         vault,
       };
     }
@@ -504,7 +492,7 @@ export class PropShopClient {
     const vaultDepositor = getVaultDepositorAddressSync(
       this.vaultClient.program.programId,
       vault,
-      this.wallet.publicKey,
+      this.publicKey,
     );
     const amount = QUOTE_PRECISION.mul(new BN(usdc));
     const sig = await this.vaultClient.requestWithdraw(
@@ -535,7 +523,7 @@ export class PropShopClient {
     const vaultDepositor = getVaultDepositorAddressSync(
       this.vaultClient.program.programId,
       vault,
-      this.wallet.publicKey,
+      this.publicKey,
     );
     const sig = await this.vaultClient.withdraw(vaultDepositor);
     console.debug("withdraw:", formatExplorerLink(sig, this.connection));
