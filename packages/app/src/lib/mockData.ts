@@ -1,10 +1,10 @@
 import {
+  FundOverview,
   mockData,
   randomName,
   randomNumber,
   truncateString,
 } from "@cosmic-lab/prop-shop-sdk";
-import { FundOverview } from "./types";
 
 export function mockFundOverviews(quantity: number = 10): FundOverview[] {
   const one: FundOverview = {

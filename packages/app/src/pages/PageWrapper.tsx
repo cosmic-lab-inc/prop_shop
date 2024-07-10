@@ -28,7 +28,10 @@ export function PageWrapper({ children }: { children: ReactNode }) {
 }
 
 function Context({ children }: { children: ReactNode }) {
-  const endpoint = useMemo(() => "http://localhost:8899", []);
+  const endpoint = useMemo(
+    () => process.env.RPC_URL ?? "http://localhost:8899",
+    [],
+  );
 
   const wallets = useMemo(
     () => [new SolflareWalletAdapter(), new PhantomWalletAdapter()],

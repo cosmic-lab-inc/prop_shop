@@ -6,7 +6,7 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 import { WalletContextState } from "@solana/wallet-adapter-react";
-import { makeAutoObservable } from "mobx";
+import { makeObservable } from "mobx";
 import * as anchor from "@coral-xyz/anchor";
 import { BN, ProgramAccount } from "@coral-xyz/anchor";
 import { Wallet as AnchorWallet } from "@coral-xyz/anchor/dist/cjs/provider";
@@ -17,10 +17,7 @@ import {
   DriftClientConfig,
   encodeName,
   IWallet,
-  OracleInfo,
-  PerpMarketAccount,
   QUOTE_PRECISION,
-  SpotMarketAccount,
   User,
 } from "@drift-labs/sdk";
 import {
@@ -34,7 +31,7 @@ import { getAssociatedTokenAddress } from "./programs";
 import { IDL as DRIFT_IDL } from "./idl/drift";
 import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
-import { SnackInfo } from "./types";
+import { FundOverview, SnackInfo } from "./types";
 import {
   getVaultAddressSync,
   getVaultDepositorAddressSync,
@@ -50,11 +47,34 @@ export class PropShopClient {
   connection: Connection;
   wallet: WalletContextState;
   vaultClient: VaultClient | undefined;
+  loading: boolean;
 
   constructor(wallet: WalletContextState, connection: Connection) {
-    makeAutoObservable(this);
+    makeObservable(this);
+    this.allVaults = this.allVaults.bind(this);
+    this.managedVaults = this.managedVaults.bind(this);
+    this.investedVaults = this.investedVaults.bind(this);
+    this.aggregateTVL = this.aggregateTVL.bind(this);
+    this.aggregateDeposits = this.aggregateDeposits.bind(this);
+    this.aggregatePNL = this.aggregatePNL.bind(this);
+    this.initUser = this.initUser.bind(this);
+    this.userInitialized = this.userInitialized.bind(this);
+    this.joinVault = this.joinVault.bind(this);
+    this.deposit = this.deposit.bind(this);
+    this.requestWithdraw = this.requestWithdraw.bind(this);
+    this.withdraw = this.withdraw.bind(this);
+    this.createVault = this.createVault.bind(this);
+    this.delegateVault = this.delegateVault.bind(this);
+    this.updateVault = this.updateVault.bind(this);
+    this.managerDeposit = this.managerDeposit.bind(this);
+    this.managerRequestWithdraw = this.managerRequestWithdraw.bind(this);
+    this.managerWithdraw = this.managerWithdraw.bind(this);
+    this.protocolRequestWithdraw = this.protocolRequestWithdraw.bind(this);
+    this.protocolWithdraw = this.protocolWithdraw.bind(this);
+
     this.wallet = wallet;
     this.connection = connection;
+    this.loading = false;
   }
 
   public static walletAdapterToIWallet(wallet: WalletContextState): IWallet {
@@ -108,11 +128,17 @@ export class PropShopClient {
   //
 
   /**
-   * Initialize the DriftClient and VaultClient.
+   * Initialize the VaultClient.
    * Call this upon connecting a wallet.
    */
   public async initialize(): Promise<void> {
-    const { vaultClient } = await this.initClient(this.wallet, {
+    console.log("inside init");
+    if (!this.wallet) {
+      throw new Error("Wallet not connected during initialization");
+    }
+    this.loading = true;
+    console.log("loading...");
+    const config: Omit<DriftClientConfig, "wallet"> = {
       connection: this.connection,
       accountSubscription: {
         type: "websocket",
@@ -124,23 +150,14 @@ export class PropShopClient {
         commitment: "confirmed",
       },
       activeSubAccountId: 0,
-    });
-    this.vaultClient = vaultClient;
-  }
+    };
 
-  private async initClient(
-    walletCtx: WalletContextState,
-    config: Omit<DriftClientConfig, "wallet">,
-  ): Promise<{
-    vaultClient: VaultClient;
-  }> {
-    if (!walletCtx.wallet) {
-      throw new Error("Wallet not connected");
-    }
     const { connection, accountSubscription, opts, activeSubAccountId } =
       config;
-    const iWallet = PropShopClient.walletAdapterToIWallet(walletCtx);
-    const anchorWallet = PropShopClient.walletAdapterToAnchorWallet(walletCtx);
+    const iWallet = PropShopClient.walletAdapterToIWallet(this.wallet);
+    const anchorWallet = PropShopClient.walletAdapterToAnchorWallet(
+      this.wallet,
+    );
 
     const provider = new anchor.AnchorProvider(
       connection,
@@ -160,19 +177,19 @@ export class PropShopClient {
       provider,
     );
 
-    // Perp/Spot market account types do not define padding so eslint errors, but it is safe.
-    const perpMarkets =
-      (await driftProgram.account.perpMarket.all()) as unknown as PerpMarketAccount[];
-    const perpMarketIndexes = perpMarkets.map((m) => m.marketIndex);
-    const spotMarkets =
-      (await driftProgram.account.spotMarket.all()) as unknown as SpotMarketAccount[];
-    const spotMarketIndexes = spotMarkets.map((m) => m.marketIndex);
-    const oracleInfos: OracleInfo[] = perpMarkets.map((m) => {
-      return {
-        publicKey: m.amm.oracle,
-        source: m.amm.oracleSource,
-      };
-    });
+    // // Perp/Spot market account types do not define padding so eslint errors, but it is safe.
+    // const perpMarkets =
+    //   (await driftProgram.account.perpMarket.all()) as unknown as ProgramAccount<PerpMarketAccount>[];
+    // const perpMarketIndexes = perpMarkets.map((m) => m.account.marketIndex);
+    // const spotMarkets =
+    //   (await driftProgram.account.spotMarket.all()) as unknown as ProgramAccount<SpotMarketAccount>[];
+    // const spotMarketIndexes = spotMarkets.map((m) => m.account.marketIndex);
+    // const oracleInfos: OracleInfo[] = perpMarkets.map((m) => {
+    //   return {
+    //     publicKey: m.account.amm.oracle,
+    //     source: m.account.amm.oracleSource,
+    //   };
+    // });
 
     const driftClient = new DriftClient({
       connection,
@@ -181,10 +198,10 @@ export class PropShopClient {
         commitment: "confirmed",
       },
       activeSubAccountId,
-      perpMarketIndexes,
-      spotMarketIndexes,
-      oracleInfos,
       accountSubscription,
+      // perpMarketIndexes,
+      // spotMarketIndexes,
+      // oracleInfos,
     });
     await driftClient.subscribe();
 
@@ -194,9 +211,9 @@ export class PropShopClient {
       program: driftVaultsProgram,
     });
 
-    return {
-      vaultClient,
-    };
+    this.vaultClient = vaultClient;
+    this.loading = false;
+    console.log("done initializing");
   }
 
   get publicKey(): PublicKey {
@@ -288,6 +305,67 @@ export class PropShopClient {
   }
 
   /**
+   * VaultDepositors the connected wallet is the authority of.
+   */
+  public async vaultDepositors(): Promise<ProgramAccount<VaultDepositor>[]> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vds: ProgramAccount<VaultDepositor>[] =
+      await this.vaultClient.program.account.vaultDepositor.all([
+        {
+          memcmp: {
+            // "authority" field offset
+            offset: 64,
+            // this wallet must be the authority of the VaultDepositor to be the investor
+            bytes: this.publicKey.toBase58(),
+          },
+        },
+      ]);
+    return vds;
+  }
+
+  public async fundOverviews(protocolsOnly?: boolean): Promise<FundOverview[]> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    let now = new Date().getTime();
+    const vaults = await this.allVaults(protocolsOnly);
+    console.log(
+      `fetched ${vaults.length} vaults in ${new Date().getTime() - now}ms`,
+    );
+    now = new Date().getTime();
+    const vds = await this.vaultDepositors();
+    console.log(`fetched ${vds.length} vds in ${new Date().getTime() - now}ms`);
+    // get count of vds per vault
+    const vaultVds = new Map<PublicKey, ProgramAccount<VaultDepositor>[]>();
+    for (const vd of vds) {
+      if (vaultVds.has(vd.account.vault)) {
+        vaultVds.set(vd.account.vault, [
+          ...vaultVds.get(vd.account.vault)!,
+          vd,
+        ]);
+      } else {
+        vaultVds.set(vd.account.vault, [vd]);
+      }
+    }
+    const fundOverviews: FundOverview[] = [];
+    for (const vault of vaults) {
+      const investors = vaultVds.get(vault.pubkey) ?? [];
+      const aum = await this.aggregateTVL(investors);
+      fundOverviews.push({
+        title: decodeName(vault.name),
+        investors: investors.length,
+        aum,
+        // todo: get vault pnl history from API
+        data: [],
+      });
+    }
+    console.log("fund overviews:", fundOverviews.length);
+    return fundOverviews;
+  }
+
+  /**
    * Vaults the connected wallet manages.
    */
   public async managedVaults(): Promise<ProgramAccount<Vault>[]> {
@@ -321,27 +399,6 @@ export class PropShopClient {
         },
       ]);
     return vds.map((vd) => vd.account.vault);
-  }
-
-  /**
-   * VaultDepositors the connected wallet is the authority of.
-   */
-  public async vaultDepositors(): Promise<ProgramAccount<VaultDepositor>[]> {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
-    const vds: ProgramAccount<VaultDepositor>[] =
-      await this.vaultClient.program.account.vaultDepositor.all([
-        {
-          memcmp: {
-            // "authority" field offset
-            offset: 64,
-            // this wallet must be the authority of the VaultDepositor to be the investor
-            bytes: this.publicKey.toBase58(),
-          },
-        },
-      ]);
-    return vds;
   }
 
   /**

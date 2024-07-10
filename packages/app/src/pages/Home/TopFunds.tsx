@@ -2,12 +2,31 @@ import React from "react";
 import { customTheme } from "../../styles";
 import { Box, Typography } from "@mui/material";
 import { FundOverviewCard } from "../../components";
+// import { FundOverview } from "@cosmic-lab/prop-shop-sdk";
 import { mockFundOverviews, useClient } from "../../lib";
 
 export function TopFunds() {
   const client = useClient();
+
   // todo: fetch vaults and sort by criteria using PropShopClient
-  const funds = mockFundOverviews();
+  const vaults = mockFundOverviews();
+
+  // const [vaults, setVaults] = React.useState<FundOverview[]>([]);
+  // React.useEffect(() => {
+  //   async function fetchVaults() {
+  //     if (!client) {
+  //       console.log("CLIENT UNINIT");
+  //     } else {
+  //       console.log("fetch vaults...");
+  //       const vaults = await client!.fundOverviews();
+  //       console.log("vaults:", vaults.length);
+  //       setVaults(vaults);
+  //     }
+  //   }
+  //
+  //   fetchVaults();
+  // }, []);
+
   return (
     <Box
       sx={{
@@ -44,13 +63,13 @@ export function TopFunds() {
           flexDirection: "row",
         }}
       >
-        {funds.map((fund) => {
+        {vaults.map((vault) => {
           return (
             <FundOverviewCard
-              title={fund.title}
-              investors={fund.investors}
-              aum={fund.aum}
-              data={fund.data}
+              title={vault.title}
+              investors={vault.investors}
+              aum={vault.aum}
+              data={vault.data}
             />
           );
         })}

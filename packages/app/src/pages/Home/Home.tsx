@@ -1,8 +1,10 @@
 import * as React from "react";
 import { Box } from "@mui/material";
 import { Header, TopFunds } from ".";
+import { useClient } from "../../lib";
 
 export function Home() {
+  const client = useClient();
   return (
     <Box
       sx={{
@@ -14,7 +16,7 @@ export function Home() {
       }}
     >
       <Header />
-      <TopFunds />
+      {client && <TopFunds />}
     </Box>
   );
 }

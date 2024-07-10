@@ -3,28 +3,39 @@ import react from "@vitejs/plugin-react";
 import { NodeGlobalsPolyfillPlugin } from "@esbuild-plugins/node-globals-polyfill";
 import rollupNodePolyFill from "rollup-plugin-node-polyfills";
 import inject from "@rollup/plugin-inject";
+import * as path from "path";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
+  let alias: Record<any, any> = {
+    // note: do not uncomment this or vercel says "process is not defined" stack tracing to dependency.
+    // crypto: "crypto-browserify",
+    buffer: "buffer",
+    stream: "stream-browserify",
+    assert: "assert",
+    http: "stream-http",
+    https: "https-browserify",
+    url: "url",
+    util: "util",
+    fs: "fs",
+    zlib: "zlib",
+  };
+  if (env.ENV === "dev") {
+    console.log("using @cosmic-lab/prop-shop-sdk from source");
+    alias["@cosmic-lab/prop-shop-sdk"] = path.resolve(
+      __dirname,
+      "../sdk/src/index.ts",
+    );
+  }
+
   return {
     resolve: {
-      alias: {
-        // note: do not uncomment this or vercel says "process is not defined" stack tracing to dependency.
-        // crypto: "crypto-browserify",
-        buffer: "buffer",
-        stream: "stream-browserify",
-        assert: "assert",
-        http: "stream-http",
-        https: "https-browserify",
-        url: "url",
-        util: "util",
-        fs: "fs",
-        zlib: "zlib",
-      },
+      alias,
     },
     define: {
       "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
+      "process.env.ENV": JSON.stringify(env.ENV),
       global: "globalThis",
     },
     plugins: [react()],

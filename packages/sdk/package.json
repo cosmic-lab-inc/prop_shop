@@ -5,8 +5,7 @@
   "description": "Frontend client for Prop Shop",
   "license": "Apache-2.0",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "src/index.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cosmic-lab-inc/prop_shop.git"
