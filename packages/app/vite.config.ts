@@ -4,6 +4,7 @@ import { NodeGlobalsPolyfillPlugin } from "@esbuild-plugins/node-globals-polyfil
 import rollupNodePolyFill from "rollup-plugin-node-polyfills";
 import inject from "@rollup/plugin-inject";
 import * as path from "path";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -20,9 +21,10 @@ export default defineConfig(({ mode }) => {
     util: "util",
     fs: "fs",
     zlib: "zlib",
+    events: "events",
   };
   if (env.ENV === "dev") {
-    console.log("using @cosmic-lab/prop-shop-sdk from source");
+    console.log("using @cosmic-lab/prop-shop-sdk symlink for development");
     alias["@cosmic-lab/prop-shop-sdk"] = path.resolve(
       __dirname,
       "../sdk/src/index.ts",
@@ -38,7 +40,7 @@ export default defineConfig(({ mode }) => {
       "process.env.ENV": JSON.stringify(env.ENV),
       global: "globalThis",
     },
-    plugins: [react()],
+    plugins: [react(), nodePolyfills()],
     optimizeDeps: {
       esbuildOptions: {
         define: {
@@ -53,6 +55,8 @@ export default defineConfig(({ mode }) => {
       },
       // https://vitejs.dev/guide/dep-pre-bundling.html#monorepos-and-linked-dependencies
       include: ["@cosmic-lab/prop-shop-sdk"],
+      // restart of app will recompile symlinks
+      force: true,
     },
     build: {
       rollupOptions: {

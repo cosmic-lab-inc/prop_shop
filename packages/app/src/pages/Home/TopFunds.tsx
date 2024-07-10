@@ -2,30 +2,21 @@ import React from "react";
 import { customTheme } from "../../styles";
 import { Box, Typography } from "@mui/material";
 import { FundOverviewCard } from "../../components";
-// import { FundOverview } from "@cosmic-lab/prop-shop-sdk";
-import { mockFundOverviews, useClient } from "../../lib";
+import { FundOverview, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 
-export function TopFunds() {
-  const client = useClient();
-
+export function TopFunds({ client }: { client: PropShopClient }) {
   // todo: fetch vaults and sort by criteria using PropShopClient
-  const vaults = mockFundOverviews();
+  // const vaults = mockFundOverviews();
 
-  // const [vaults, setVaults] = React.useState<FundOverview[]>([]);
-  // React.useEffect(() => {
-  //   async function fetchVaults() {
-  //     if (!client) {
-  //       console.log("CLIENT UNINIT");
-  //     } else {
-  //       console.log("fetch vaults...");
-  //       const vaults = await client!.fundOverviews();
-  //       console.log("vaults:", vaults.length);
-  //       setVaults(vaults);
-  //     }
-  //   }
-  //
-  //   fetchVaults();
-  // }, []);
+  const [vaults, setVaults] = React.useState<FundOverview[]>([]);
+  React.useEffect(() => {
+    async function fetchVaults() {
+      const vaults = await client!.fundOverviews();
+      setVaults(vaults);
+    }
+
+    fetchVaults();
+  }, []);
 
   return (
     <Box

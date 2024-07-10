@@ -16,7 +16,7 @@ export function Home() {
       }}
     >
       <Header />
-      {client && <TopFunds />}
+      {client && <TopFunds client={client} />}
     </Box>
   );
 }

@@ -26,13 +26,13 @@
     "start": "vite"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "0.28.0",
     "@cosmic-lab/data-source": "^0.7.4",
     "@cosmic-lab/prop-shop-sdk": "^0.2.10",
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.11.16",
     "@mui/material": "^5.13.5",
-    "@coral-xyz/anchor": "0.28.0",
     "@scure/bip32": "^1.3.3",
     "@solana-mobile/wallet-adapter-mobile": "^2.0.0",
     "@solana/spl-token": "^0.3.7",
@@ -133,6 +133,7 @@
     "typescript": "^5",
     "url": "^0.11.0",
     "util": "^0.12.3",
-    "vite": "4.3.9"
+    "vite": "4.3.9",
+    "vite-plugin-node-polyfills": "^0.22.0"
   }
 }

@@ -1,5 +1,6 @@
 import {
   Connection,
+  GetProgramAccountsFilter,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -132,12 +133,11 @@ export class PropShopClient {
    * Call this upon connecting a wallet.
    */
   public async initialize(): Promise<void> {
-    console.log("inside init");
     if (!this.wallet) {
       throw new Error("Wallet not connected during initialization");
     }
+    const now = new Date().getTime();
     this.loading = true;
-    console.log("loading...");
     const config: Omit<DriftClientConfig, "wallet"> = {
       connection: this.connection,
       accountSubscription: {
@@ -213,7 +213,7 @@ export class PropShopClient {
 
     this.vaultClient = vaultClient;
     this.loading = false;
-    console.log("done initializing");
+    console.log(`loaded client in ${new Date().getTime() - now}ms`);
   }
 
   get publicKey(): PublicKey {
@@ -286,7 +286,9 @@ export class PropShopClient {
   // Read only methods to aggregate data
   //
 
-  public async allVaults(protocolsOnly?: boolean): Promise<Vault[]> {
+  public async allVaults(
+    protocolsOnly?: boolean,
+  ): Promise<ProgramAccount<Vault>[]> {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
@@ -294,25 +296,26 @@ export class PropShopClient {
     const vaults: ProgramAccount<Vault>[] =
       await this.vaultClient.program.account.vault.all();
     if (protocolsOnly) {
-      return vaults
-        .filter((v) => {
-          return v.account.vaultProtocol !== SystemProgram.programId;
-        })
-        .map((v) => v.account);
+      return vaults.filter((v) => {
+        return v.account.vaultProtocol !== SystemProgram.programId;
+      });
     } else {
-      return vaults.map((v) => v.account);
+      return vaults;
     }
   }
 
   /**
    * VaultDepositors the connected wallet is the authority of.
    */
-  public async vaultDepositors(): Promise<ProgramAccount<VaultDepositor>[]> {
+  public async vaultDepositors(
+    filterByAuthority?: boolean,
+  ): Promise<ProgramAccount<VaultDepositor>[]> {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    const vds: ProgramAccount<VaultDepositor>[] =
-      await this.vaultClient.program.account.vaultDepositor.all([
+    let filters: GetProgramAccountsFilter[] | undefined = undefined;
+    if (filterByAuthority) {
+      filters = [
         {
           memcmp: {
             // "authority" field offset
@@ -321,7 +324,10 @@ export class PropShopClient {
             bytes: this.publicKey.toBase58(),
           },
         },
-      ]);
+      ];
+    }
+    const vds: ProgramAccount<VaultDepositor>[] =
+      await this.vaultClient.program.account.vaultDepositor.all(filters);
     return vds;
   }
 
@@ -338,30 +344,37 @@ export class PropShopClient {
     const vds = await this.vaultDepositors();
     console.log(`fetched ${vds.length} vds in ${new Date().getTime() - now}ms`);
     // get count of vds per vault
-    const vaultVds = new Map<PublicKey, ProgramAccount<VaultDepositor>[]>();
+    const vaultVds = new Map<string, ProgramAccount<VaultDepositor>[]>();
     for (const vd of vds) {
-      if (vaultVds.has(vd.account.vault)) {
-        vaultVds.set(vd.account.vault, [
-          ...vaultVds.get(vd.account.vault)!,
+      if (
+        !vaults.find(
+          (v) => v.account.pubkey.toString() === vd.account.vault.toString(),
+        )
+      ) {
+        console.warn("vault not found for vd");
+        console.log("vd vault:", vd.account.vault.toString());
+      }
+      if (vaultVds.has(vd.account.vault.toString())) {
+        vaultVds.set(vd.account.vault.toString(), [
+          ...vaultVds.get(vd.account.vault.toString())!,
           vd,
         ]);
       } else {
-        vaultVds.set(vd.account.vault, [vd]);
+        vaultVds.set(vd.account.vault.toString(), [vd]);
       }
     }
     const fundOverviews: FundOverview[] = [];
     for (const vault of vaults) {
-      const investors = vaultVds.get(vault.pubkey) ?? [];
-      const aum = await this.aggregateTVL(investors);
+      const investors = vaultVds.get(vault.account.pubkey.toString()) ?? [];
+      const aum = await this.aggregateTVL(investors, vaults);
       fundOverviews.push({
-        title: decodeName(vault.name),
+        title: decodeName(vault.account.name),
         investors: investors.length,
         aum,
         // todo: get vault pnl history from API
         data: [],
       });
     }
-    console.log("fund overviews:", fundOverviews.length);
     return fundOverviews;
   }
 
@@ -387,17 +400,7 @@ export class PropShopClient {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    const vds: ProgramAccount<VaultDepositor>[] =
-      await this.vaultClient.program.account.vaultDepositor.all([
-        {
-          memcmp: {
-            // "authority" field offset
-            offset: 64,
-            // this wallet must be the authority of the VaultDepositor to be the investor
-            bytes: this.publicKey.toBase58(),
-          },
-        },
-      ]);
+    const vds = await this.vaultDepositors(true);
     return vds.map((vd) => vd.account.vault);
   }
 
@@ -406,6 +409,7 @@ export class PropShopClient {
    */
   public async aggregateTVL(
     vaultDepositors?: ProgramAccount<VaultDepositor>[],
+    preFetchedVaults?: ProgramAccount<Vault>[],
   ): Promise<number> {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
@@ -418,9 +422,23 @@ export class PropShopClient {
     }
     let usdc = 0;
     for (const vd of vds) {
-      const vault = await this.vaultClient.program.account.vault.fetch(
-        vd.account.vault,
-      );
+      let vault: Vault;
+      if (preFetchedVaults) {
+        const match = preFetchedVaults.find((v) =>
+          v.account.pubkey.equals(vd.account.vault),
+        );
+        if (match) {
+          vault = match.account;
+        } else {
+          vault = await this.vaultClient.program.account.vault.fetch(
+            vd.account.vault,
+          );
+        }
+      } else {
+        vault = await this.vaultClient.program.account.vault.fetch(
+          vd.account.vault,
+        );
+      }
       const amount =
         await this.vaultClient.calculateWithdrawableVaultDepositorEquityInDepositAsset(
           {
