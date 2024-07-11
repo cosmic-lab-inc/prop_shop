@@ -1,8 +1,20 @@
 import React from "react";
 import { customTheme } from "../../styles";
-import { Box, Typography } from "@mui/material";
+import { Box, styled, Typography } from "@mui/material";
 import { FundOverviewCard } from "../../components";
 import { FundOverview, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
+
+const GridContainer = styled("div")(({ theme }) => ({
+  gridTemplateColumns: "33% 33% 33%",
+  gap: "10px",
+  width: "100%",
+  height: "100%",
+  marginTop: "30px",
+  display: "grid",
+  gridAutoRows: "auto",
+  justifyContent: "center",
+  flexDirection: "column",
+}));
 
 export function TopFunds({ client }: { client: PropShopClient }) {
   // todo: fetch vaults and sort by criteria using PropShopClient
@@ -54,16 +66,19 @@ export function TopFunds({ client }: { client: PropShopClient }) {
           flexDirection: "row",
         }}
       >
-        {vaults.map((vault) => {
-          return (
-            <FundOverviewCard
-              title={vault.title}
-              investors={vault.investors}
-              aum={vault.aum}
-              data={vault.data}
-            />
-          );
-        })}
+        <GridContainer>
+          {vaults.map((vault, i) => {
+            return (
+              <FundOverviewCard
+                key={i}
+                title={vault.title}
+                investors={vault.investors}
+                aum={vault.aum}
+                data={vault.data}
+              />
+            );
+          })}
+        </GridContainer>
       </Box>
     </Box>
   );

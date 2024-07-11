@@ -16,7 +16,6 @@ export function useClient(): PropShopClient | undefined {
       const client = new PropShopClient(wallet, connection.connection);
       if (!client.vaultClient && !client.loading) {
         await client.initialize();
-        console.log("initialized");
         setClient(client);
       }
     };

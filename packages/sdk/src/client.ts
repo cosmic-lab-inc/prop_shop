@@ -32,7 +32,7 @@ import { getAssociatedTokenAddress } from "./programs";
 import { IDL as DRIFT_IDL } from "./idl/drift";
 import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
-import { FundOverview, SnackInfo } from "./types";
+import { FundOverview, HistoricalSettlePNL, SnackInfo } from "./types";
 import {
   getVaultAddressSync,
   getVaultDepositorAddressSync,
@@ -203,7 +203,9 @@ export class PropShopClient {
       // spotMarketIndexes,
       // oracleInfos,
     });
+    const preSub = new Date().getTime();
     await driftClient.subscribe();
+    console.log(`DriftClient subscribed in ${new Date().getTime() - preSub}ms`);
 
     const vaultClient = new VaultClient({
       // @ts-ignore
@@ -213,7 +215,7 @@ export class PropShopClient {
 
     this.vaultClient = vaultClient;
     this.loading = false;
-    console.log(`loaded client in ${new Date().getTime() - now}ms`);
+    console.log(`initialized client in ${new Date().getTime() - now}ms`);
   }
 
   get publicKey(): PublicKey {
@@ -331,6 +333,33 @@ export class PropShopClient {
     return vds;
   }
 
+  async fetchHistoricalPNL(
+    vault: Vault,
+    daysBack: number,
+  ): Promise<HistoricalSettlePNL[]> {
+    try {
+      const name = decodeName(vault.name);
+      console.log(`fetch pnl for ${name} and user: ${vault.user}`);
+      const url = "/api/performance";
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          vaultName: name,
+          vaultUser: vault.user.toString(),
+          daysBack,
+        }),
+      });
+      const data: HistoricalSettlePNL[] = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      throw new Error("Error fetching data");
+    }
+  }
+
   public async fundOverviews(protocolsOnly?: boolean): Promise<FundOverview[]> {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
@@ -346,14 +375,6 @@ export class PropShopClient {
     // get count of vds per vault
     const vaultVds = new Map<string, ProgramAccount<VaultDepositor>[]>();
     for (const vd of vds) {
-      if (
-        !vaults.find(
-          (v) => v.account.pubkey.toString() === vd.account.vault.toString(),
-        )
-      ) {
-        console.warn("vault not found for vd");
-        console.log("vd vault:", vd.account.vault.toString());
-      }
       if (vaultVds.has(vd.account.vault.toString())) {
         vaultVds.set(vd.account.vault.toString(), [
           ...vaultVds.get(vd.account.vault.toString())!,
@@ -365,16 +386,20 @@ export class PropShopClient {
     }
     const fundOverviews: FundOverview[] = [];
     for (const vault of vaults) {
-      const investors = vaultVds.get(vault.account.pubkey.toString()) ?? [];
-      const aum = await this.aggregateTVL(investors, vaults);
-      fundOverviews.push({
-        title: decodeName(vault.account.name),
-        investors: investors.length,
-        aum,
-        // todo: get vault pnl history from API
-        data: [],
-      });
+      if (decodeName(vault.account.name) === "Supercharger Vault") {
+        const investors = vaultVds.get(vault.account.pubkey.toString()) ?? [];
+        const aum = await this.aggregateTVL(investors, vaults);
+        const pnlData = await this.fetchHistoricalPNL(vault.account, 10);
+        const data = pnlData.map((d) => d.pnl / QUOTE_PRECISION.toNumber());
+        fundOverviews.push({
+          title: decodeName(vault.account.name),
+          investors: investors.length,
+          aum,
+          data,
+        });
+      }
     }
+    console.log("fund overviews:", fundOverviews.length);
     return fundOverviews;
   }
 

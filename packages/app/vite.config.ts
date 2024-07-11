@@ -8,6 +8,7 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const appPort = env.PORT ?? 3001;
 
   let alias: Record<any, any> = {
     // note: do not uncomment this or vercel says "process is not defined" stack tracing to dependency.
@@ -25,19 +26,25 @@ export default defineConfig(({ mode }) => {
   };
   if (env.ENV === "dev") {
     console.log("using @cosmic-lab/prop-shop-sdk symlink for development");
-    alias["@cosmic-lab/prop-shop-sdk"] = path.resolve(
-      __dirname,
-      "../sdk/src/index.ts",
-    );
+    alias["@cosmic-lab/prop-shop-sdk"] = path.resolve(__dirname, "../sdk");
   }
 
   return {
     resolve: {
       alias,
     },
+    server: {
+      proxy: {
+        "/api": "http://localhost:5173",
+      },
+      cors: true,
+      strictPort: true,
+      port: 5173,
+    },
     define: {
       "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
       "process.env.ENV": JSON.stringify(env.ENV),
+      "process.env.PORT": JSON.stringify(appPort),
       global: "globalThis",
     },
     plugins: [react(), nodePolyfills()],
@@ -55,7 +62,7 @@ export default defineConfig(({ mode }) => {
       },
       // https://vitejs.dev/guide/dep-pre-bundling.html#monorepos-and-linked-dependencies
       include: ["@cosmic-lab/prop-shop-sdk"],
-      // restart of app will recompile symlinks
+      // restart of app will recompile deps
       force: true,
     },
     build: {

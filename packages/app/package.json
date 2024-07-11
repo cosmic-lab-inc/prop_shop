@@ -23,7 +23,7 @@
     "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint && yarn run check",
     "test": "jest",
     "build": "vite build --force",
-    "start": "vite"
+    "start": "vite --force --port 3001"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",

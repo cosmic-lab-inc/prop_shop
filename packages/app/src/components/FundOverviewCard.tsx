@@ -2,8 +2,11 @@ import React, { ReactNode } from "react";
 import { Box, styled, Typography } from "@mui/material";
 import { customTheme } from "../styles";
 import { Line, LineChart, XAxis, YAxis } from "recharts";
-import { formatNumber, truncateNumber } from "@cosmic-lab/prop-shop-sdk";
-import { FundOverview } from "../lib";
+import {
+  formatNumber,
+  FundOverview,
+  truncateNumber,
+} from "@cosmic-lab/prop-shop-sdk";
 
 export function FundOverviewCard({
   title,
@@ -83,7 +86,7 @@ function Container({ children }: { children: ReactNode }) {
   return (
     <Box
       sx={{
-        width: "33.3%",
+        width: "100%",
         height: "400px",
         bgcolor: customTheme.dark,
         borderRadius: "3px",
