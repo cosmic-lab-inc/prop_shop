@@ -19,7 +19,6 @@ export function randomName(words: number = 2): string {
     dictionaries: [adjectives, animals, colors],
     length: words,
   });
-  // replace _ with -
   return id.replace("_", "-");
 }
 

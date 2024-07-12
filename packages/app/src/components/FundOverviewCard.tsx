@@ -6,7 +6,26 @@ import {
   formatNumber,
   FundOverview,
   truncateNumber,
+  truncateString,
 } from "@cosmic-lab/prop-shop-sdk";
+
+function calcMaxDrawdown(values: number[]): number {
+  let maxDrawdown = 0;
+  let peak = values[0];
+
+  for (const value of values) {
+    if (value > peak) {
+      peak = value;
+    }
+    const drawdown = ((value - peak) / peak) * 100;
+    if (drawdown < maxDrawdown) {
+      maxDrawdown = drawdown;
+    }
+  }
+
+  // Convert to percentage
+  return maxDrawdown * 100; // Return max drawdown as a percentage
+}
 
 export function FundOverviewCard({
   title,
@@ -14,8 +33,8 @@ export function FundOverviewCard({
   aum,
   data,
 }: FundOverview) {
-  const roi = ((data[data.length - 1] - data[0]) / data[0]) * 100;
-  const drawdown = Math.min(...data.map((d) => (d - data[0]) / data[0]));
+  const roi = data[data.length - 1] - data[0];
+  const drawdown = calcMaxDrawdown(data);
   const _data = data.map((d) => ({ y: d }));
   return (
     <Container>
@@ -33,51 +52,47 @@ export function FundOverviewCard({
           <Line
             type="monotone"
             dataKey="y"
-            stroke={roi > 0 ? customTheme.success : customTheme.error}
+            stroke={roi > 0 ? customTheme.secondary : customTheme.error}
             strokeWidth={5}
             dot={{
               r: 0,
             }}
           />
-          <XAxis dataKey="name" />
-          <YAxis />
+          <XAxis dataKey="name" hide />
+          <YAxis hide />
         </LineChart>
       </Box>
-      <tbody style={{ width: "100%" }}>
+      <Box
+        sx={{
+          width: "100%",
+          flexDirection: "column",
+          display: "flex",
+        }}
+      >
         <TableRow hover>
-          <TH>
-            <Typography variant="body1">ROI</Typography>
-          </TH>
-          <TH>
-            <Typography
-              variant="h2"
-              sx={{ color: roi > 0 ? customTheme.success : customTheme.error }}
-            >
-              {formatNumber(truncateNumber(roi, 2))}%
-            </Typography>
-          </TH>
+          <Typography variant="body1">ROI</Typography>
+          <Typography
+            variant="h3"
+            sx={{
+              color: roi > 0 ? customTheme.secondary : customTheme.error,
+            }}
+          >
+            ${formatNumber(truncateNumber(roi, 2))}
+          </Typography>
         </TableRow>
         <TableRow hover>
-          <TH>
-            <Typography variant="body1">Drawdown</Typography>
-          </TH>
-          <TH>
-            <Typography variant="body1">
-              {truncateNumber(drawdown, 2)}%
-            </Typography>
-          </TH>
+          <Typography variant="body1">Drawdown</Typography>
+          <Typography variant="body1">
+            {truncateNumber(drawdown, 2)}%
+          </Typography>
         </TableRow>
         <TableRow hover>
-          <TH>
-            <Typography variant="body1">AUM</Typography>
-          </TH>
-          <TH>
-            <Typography variant="body1">
-              ${formatNumber(truncateNumber(aum, 2))}
-            </Typography>
-          </TH>
+          <Typography variant="body1">AUM</Typography>
+          <Typography variant="body1">
+            ${formatNumber(truncateNumber(aum, 2))}
+          </Typography>
         </TableRow>
-      </tbody>
+      </Box>
     </Container>
   );
 }
@@ -102,41 +117,35 @@ function Container({ children }: { children: ReactNode }) {
 
 function Header({ title, investors }: { title: string; investors: number }) {
   return (
-    <thead style={{ width: "100%" }}>
+    <Box sx={{ width: "100%" }}>
       <TableRow
         header
         style={{
-          paddingTop: "20px",
-          paddingBottom: "20px",
+          paddingTop: "10px",
+          paddingBottom: "10px",
+          flexDirection: "column",
+          display: "flex",
         }}
       >
-        <TH>
-          <Typography variant="h2">{title}</Typography>
-        </TH>
-        <TH>
-          <Typography variant="body1">
-            {formatNumber(investors)} investors
-          </Typography>
-        </TH>
+        <Typography variant="h3">{truncateString(title, 25)}</Typography>
+
+        <Typography variant="body1">
+          {formatNumber(investors)} investors
+        </Typography>
       </TableRow>
-    </thead>
+    </Box>
   );
 }
 
-const TH = styled("th")({
-  display: "flex",
-  flexDirection: "row",
-});
-
-const TableRow = styled("tr")<{ hover?: boolean; header?: boolean }>(
+const TableRow = styled("div")<{ hover?: boolean; header?: boolean }>(
   ({ theme, hover, header }) => ({
     display: "flex",
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingLeft: "15px",
-    paddingRight: "15px",
+    paddingLeft: "10px",
+    paddingRight: "10px",
     "&:hover": {
-      backgroundColor: `${hover ? customTheme.secondary : "transparent"}`,
+      backgroundColor: `${hover ? customTheme.grey : "transparent"}`,
     },
 
     ...(header && {

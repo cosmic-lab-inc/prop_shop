@@ -3,24 +3,23 @@ import {
   mockData,
   randomName,
   randomNumber,
-  truncateString,
 } from "@cosmic-lab/prop-shop-sdk";
 
 export function mockFundOverviews(quantity: number = 10): FundOverview[] {
   const one: FundOverview = {
-    title: truncateString(randomName(2)),
-    investors: randomNumber(1000, 2000),
-    aum: randomNumber(1_500_000, 2_000_000),
-    data: mockData(1_000, 350),
+    title: randomName(2),
+    investors: randomNumber(3_000, 5_000),
+    aum: randomNumber(1_500_000, 3_000_000),
+    data: mockData(100, 3050),
   };
   const two: FundOverview = {
-    title: truncateString(randomName(3)),
+    title: randomName(3),
     investors: randomNumber(10, 30),
     aum: randomNumber(300_000, 400_000),
     data: mockData(100, 230),
   };
   const three: FundOverview = {
-    title: truncateString(randomName(1)),
+    title: randomName(1),
     investors: randomNumber(500, 600),
     aum: randomNumber(100_00, 150_000),
     data: mockData(1_000, 198),

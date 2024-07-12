@@ -2,7 +2,8 @@ import React from "react";
 import { customTheme } from "../../styles";
 import { Box, styled, Typography } from "@mui/material";
 import { FundOverviewCard } from "../../components";
-import { FundOverview, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
+import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
+import { mockFundOverviews } from "../../lib";
 
 const GridContainer = styled("div")(({ theme }) => ({
   gridTemplateColumns: "33% 33% 33%",
@@ -16,19 +17,18 @@ const GridContainer = styled("div")(({ theme }) => ({
   flexDirection: "column",
 }));
 
-export function TopFunds({ client }: { client: PropShopClient }) {
+export function Funds({ client }: { client: PropShopClient }) {
   // todo: fetch vaults and sort by criteria using PropShopClient
-  // const vaults = mockFundOverviews();
-
-  const [vaults, setVaults] = React.useState<FundOverview[]>([]);
-  React.useEffect(() => {
-    async function fetchVaults() {
-      const vaults = await client!.fundOverviews();
-      setVaults(vaults);
-    }
-
-    fetchVaults();
-  }, []);
+  const vaults = mockFundOverviews();
+  // const [vaults, setVaults] = React.useState<FundOverview[]>([]);
+  // React.useEffect(() => {
+  //   async function fetchVaults() {
+  //     const vaults = await client!.fundOverviews();
+  //     setVaults(vaults);
+  //   }
+  //
+  //   fetchVaults();
+  // }, []);
 
   return (
     <Box

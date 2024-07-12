@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Box } from "@mui/material";
-import { Header, TopFunds } from ".";
+import { Funds, Header } from ".";
 import { useClient } from "../../lib";
 
 export function Home() {
@@ -16,7 +16,7 @@ export function Home() {
       }}
     >
       <Header />
-      {client && <TopFunds client={client} />}
+      {client && <Funds client={client} />}
     </Box>
   );
 }
