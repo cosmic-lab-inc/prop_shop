@@ -8,6 +8,7 @@ import {
   truncateNumber,
   truncateString,
 } from "@cosmic-lab/prop-shop-sdk";
+import { FundDialog } from "../pages";
 
 function calcMaxDrawdown(values: number[]): number {
   let maxDrawdown = 0;
@@ -35,68 +36,82 @@ export function FundOverviewCard({
   const roi = data[data.length - 1] - data[0];
   const drawdown = calcMaxDrawdown(data);
   const _data = data.map((d) => ({ y: d }));
+
+  const [open, setOpen] = React.useState(false);
+  const onClose = () => setOpen(false);
+  const onOpen = () => setOpen(true);
+
   return (
-    <Container>
-      <Header title={title} investors={investors} />
-      <Box
-        sx={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          p: 1,
-        }}
-      >
-        <LineChart width={350} height={200} data={_data} compact>
-          <Line
-            type="monotone"
-            dataKey="y"
-            stroke={roi > 0 ? customTheme.secondary : customTheme.error}
-            strokeWidth={5}
-            dot={{
-              r: 0,
-            }}
-          />
-          <XAxis dataKey="name" hide />
-          <YAxis hide />
-        </LineChart>
-      </Box>
-      <Box
-        sx={{
-          width: "100%",
-          flexDirection: "column",
-          display: "flex",
-        }}
-      >
-        <TableRow hover>
-          <Typography variant="body1">ROI</Typography>
-          <Typography
-            variant="h3"
-            sx={{
-              color: roi > 0 ? customTheme.secondary : customTheme.error,
-            }}
-          >
-            ${formatNumber(truncateNumber(roi, 2))}
-          </Typography>
-        </TableRow>
-        <TableRow hover>
-          <Typography variant="body1">Drawdown</Typography>
-          <Typography variant="body1">
-            {truncateNumber(drawdown, 2)}%
-          </Typography>
-        </TableRow>
-        <TableRow hover>
-          <Typography variant="body1">AUM</Typography>
-          <Typography variant="body1">
-            ${formatNumber(truncateNumber(aum, 2))}
-          </Typography>
-        </TableRow>
-      </Box>
-    </Container>
+    <>
+      <FundDialog open={open} onClose={onClose} />
+      <Container onClick={onOpen}>
+        <Header title={title} investors={investors} />
+        <Box
+          sx={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            p: 1,
+          }}
+        >
+          <LineChart width={350} height={200} data={_data} compact>
+            <Line
+              type="monotone"
+              dataKey="y"
+              stroke={roi > 0 ? customTheme.secondary : customTheme.error}
+              strokeWidth={5}
+              dot={{
+                r: 0,
+              }}
+            />
+            <XAxis dataKey="name" hide />
+            <YAxis hide />
+          </LineChart>
+        </Box>
+        <Box
+          sx={{
+            width: "100%",
+            flexDirection: "column",
+            display: "flex",
+          }}
+        >
+          <TableRow hover>
+            <Typography variant="body1">ROI</Typography>
+            <Typography
+              variant="h3"
+              sx={{
+                color: roi > 0 ? customTheme.secondary : customTheme.error,
+              }}
+            >
+              ${formatNumber(truncateNumber(roi, 2))}
+            </Typography>
+          </TableRow>
+          <TableRow hover>
+            <Typography variant="body1">Drawdown</Typography>
+            <Typography variant="body1">
+              {truncateNumber(drawdown, 2)}%
+            </Typography>
+          </TableRow>
+          <TableRow hover>
+            <Typography variant="body1">AUM</Typography>
+            <Typography variant="body1">
+              ${formatNumber(truncateNumber(aum, 2))}
+            </Typography>
+          </TableRow>
+        </Box>
+      </Container>
+    </>
   );
 }
 
-function Container({ children }: { children: ReactNode }) {
+function Container({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
     <Box
       sx={{
@@ -108,6 +123,7 @@ function Container({ children }: { children: ReactNode }) {
         alignItems: "center",
         flexDirection: "column",
       }}
+      onClick={onClick}
     >
       {children}
     </Box>
