@@ -44,6 +44,7 @@ import {
   WithdrawUnit,
 } from "@drift-labs/vaults-sdk";
 
+// todo: cache vds, vaults, and historical pnl data in maps
 export class PropShopClient {
   connection: Connection;
   wallet: WalletContextState;

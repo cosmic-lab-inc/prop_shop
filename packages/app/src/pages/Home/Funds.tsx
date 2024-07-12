@@ -2,7 +2,7 @@ import React from "react";
 import { customTheme } from "../../styles";
 import { Box, styled, Typography } from "@mui/material";
 import { FundOverviewCard } from "../../components";
-import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
+import { FundOverview, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import { mockFundOverviews } from "../../lib";
 
 const GridContainer = styled("div")(({ theme }) => ({

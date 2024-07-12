@@ -1,6 +1,7 @@
 import React from "react";
-import { customTheme } from "../../styles";
-import { Box, Dialog, Typography } from "@mui/material";
+import { customTheme } from "../../../styles";
+import { Box, Dialog } from "@mui/material";
+import { InvestorStats } from "./InvestorStats";
 
 export function FundDialog({
   open,
@@ -26,7 +27,7 @@ export function FundDialog({
           style: {
             background: customTheme.light,
             borderRadius: "3px",
-            height: "500px",
+            height: "300px",
           },
         }}
         sx={{
@@ -43,9 +44,7 @@ export function FundDialog({
             justifyContent: "center",
           }}
         >
-          <Typography variant="h3" sx={{ color: customTheme.dark }}>
-            Hey hey hey
-          </Typography>
+          <InvestorStats />
         </Box>
       </Dialog>
     </>
