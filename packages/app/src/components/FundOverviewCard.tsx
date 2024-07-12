@@ -23,8 +23,7 @@ function calcMaxDrawdown(values: number[]): number {
     }
   }
 
-  // Convert to percentage
-  return maxDrawdown * 100; // Return max drawdown as a percentage
+  return maxDrawdown;
 }
 
 export function FundOverviewCard({
@@ -127,7 +126,7 @@ function Header({ title, investors }: { title: string; investors: number }) {
           display: "flex",
         }}
       >
-        <Typography variant="h3">{truncateString(title, 25)}</Typography>
+        <Typography variant="h2">{truncateString(title, 24)}</Typography>
 
         <Typography variant="body1">
           {formatNumber(investors)} investors

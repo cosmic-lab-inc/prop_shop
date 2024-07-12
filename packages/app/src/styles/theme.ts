@@ -65,7 +65,7 @@ export const theme: Theme = createTheme({
     },
     h3: {
       fontSize: 24,
-      fontWeight: 600,
+      fontWeight: 700,
       lineHeight: "2rem",
       letterSpacing: "2px",
       fontFamily: customTheme.font.titillium,
@@ -74,11 +74,11 @@ export const theme: Theme = createTheme({
       fontSize: 20,
       lineHeight: "2rem",
       letterSpacing: "2px",
-      fontWeight: 500,
+      fontWeight: 700,
     },
     button: {
       fontSize: 24,
-      fontWeight: 600,
+      fontWeight: 700,
       textTransform: "none",
       lineHeight: "2rem",
       letterSpacing: "1px",

@@ -11,24 +11,28 @@ const GridContainer = styled("div")(({ theme }) => ({
   width: "100%",
   height: "100%",
   marginTop: "30px",
+  marginBottom: "30px",
   display: "grid",
   gridAutoRows: "auto",
   justifyContent: "center",
   flexDirection: "column",
 }));
 
+// todo: fetch vaults and sort by criteria using PropShopClient
 export function Funds({ client }: { client: PropShopClient }) {
-  // todo: fetch vaults and sort by criteria using PropShopClient
-  const vaults = mockFundOverviews();
-  // const [vaults, setVaults] = React.useState<FundOverview[]>([]);
-  // React.useEffect(() => {
-  //   async function fetchVaults() {
-  //     const vaults = await client!.fundOverviews();
-  //     setVaults(vaults);
-  //   }
-  //
-  //   fetchVaults();
-  // }, []);
+  const [vaults, setVaults] = React.useState<FundOverview[]>([]);
+  React.useEffect(() => {
+    async function fetchVaults() {
+      if (process.env.ENV === "dev") {
+        setVaults(mockFundOverviews());
+      } else {
+        const vaults = await client!.fundOverviews();
+        setVaults(vaults);
+      }
+    }
+
+    fetchVaults();
+  }, []);
 
   return (
     <Box

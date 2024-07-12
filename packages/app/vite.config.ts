@@ -12,7 +12,8 @@ function hash() {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const appPort = env.PORT ?? 3001;
+  env.PORT = env.PORT ? env.PORT : "3001";
+  env.ENV = env.ENV ? env.ENV : "dev";
 
   let alias: Record<any, any> = {
     // note: do not uncomment this or vercel says "process is not defined" stack tracing to dependency.
@@ -48,7 +49,7 @@ export default defineConfig(({ mode }) => {
     define: {
       "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
       "process.env.ENV": JSON.stringify(env.ENV),
-      "process.env.PORT": JSON.stringify(appPort),
+      "process.env.PORT": JSON.stringify(env.PORT),
       global: "globalThis",
     },
     plugins: [react(), nodePolyfills()],
