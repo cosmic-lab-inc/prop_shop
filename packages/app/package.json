@@ -6,24 +6,14 @@
   "publishConfig": {
     "access": "public"
   },
-  "files": [
-    "src",
-    ".editorconfig",
-    ".env",
-    ".gitignore",
-    ".prettierignore",
-    ".prettierrc",
-    "LICENSE",
-    "package.json",
-    "tsconfig.json"
-  ],
   "scripts": {
     "clean": "yes | rm -rf dist && rm -rf node_modules",
     "check": "tsc --noEmit",
     "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint && yarn run check",
     "test": "jest",
-    "build": "vite build --force",
-    "start": "vite --force --port 3001"
+    "build": "yarn generate-meta-tag && vite build --debug --force",
+    "start": "vite --port 3001 --host 0.0.0.0 --open",
+    "generate-meta-tag": "node ../../node_modules/react-cache-buster/dist/generate-meta-tag.js"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",
@@ -64,6 +54,7 @@
     "notistack": "^3.0.1",
     "openai": "^4.28.4",
     "react": "^18.2.0",
+    "react-cache-buster": "^0.1.8",
     "react-dom": "^18.2.0",
     "react-json-view": "^1.21.3",
     "react-markdown": "^9.0.1",

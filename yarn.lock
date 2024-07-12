@@ -5295,6 +5295,11 @@ compare-func@^2.0.0:
     array-ify "^1.0.0"
     dot-prop "^5.1.0"
 
+compare-versions@^4.1.2:
+  version "4.1.4"
+  resolved "https://registry.yarnpkg.com/compare-versions/-/compare-versions-4.1.4.tgz#3571f4d610924d4414846a4183d386c8f3d51112"
+  integrity sha512-FemMreK9xNyL8gQevsdRMrvO4lFCkQP7qbuktn1q8ndcNk1+0mz7lgE7b/sNvbhVgY4w6tMN1FDp6aADjqw2rw==
+
 concat-map@0.0.1:
   version "0.0.1"
   resolved "https://registry.npmjs.org/concat-map/-/concat-map-0.0.1.tgz"
@@ -11238,6 +11243,13 @@ react-base16-styling@^0.6.0:
     lodash.curry "^4.0.1"
     lodash.flow "^3.3.0"
     pure-color "^1.2.0"
+
+react-cache-buster@^0.1.8:
+  version "0.1.8"
+  resolved "https://registry.yarnpkg.com/react-cache-buster/-/react-cache-buster-0.1.8.tgz#5245e09fb69c246682e86eb4ddf47f925cd1bdaa"
+  integrity sha512-N7BMnz2MUC++oXUzcYXsGn0WsIBDe5rRyT8W6O7L32CjcbgnuxhxNjc9T+Y56zdlSdY5nde3PTmZSktFv3V9IQ==
+  dependencies:
+    compare-versions "^4.1.2"
 
 react-dom@16.13.1:
   version "16.13.1"

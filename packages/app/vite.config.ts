@@ -6,6 +6,10 @@ import inject from "@rollup/plugin-inject";
 import * as path from "path";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 
+function hash() {
+  return Math.floor(Math.random() * 90000) + 10000;
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const appPort = env.PORT ?? 3001;
@@ -78,6 +82,11 @@ export default defineConfig(({ mode }) => {
           "@drift-labs/vaults-sdk",
           "@cosmic-lab/prop-shop-sdk",
         ],
+        output: {
+          entryFileNames: `[name]` + hash() + `.js`,
+          chunkFileNames: `[name]` + hash() + `.js`,
+          assetFileNames: `[name]` + hash() + `.[ext]`,
+        },
       },
       commonjsOptions: {
         transformMixedEsModules: true,

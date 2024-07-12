@@ -4,7 +4,6 @@ import axios, {
   AxiosResponseHeaders,
   RawAxiosResponseHeaders,
 } from "axios";
-import { createGunzip } from "zlib";
 import { Readable } from "stream";
 import { parse } from "csv-parse";
 import { DRIFT_API_PREFIX } from "./constants";
@@ -28,11 +27,9 @@ export async function handleHistoricalPnl(
   user: string,
   daysBack: number,
 ): Promise<HistoricalSettlePNL[]> {
-  const today = new Date();
+  const date = new Date();
   const data: HistoricalSettlePNL[] = [];
   for (let i = 0; i <= daysBack; i++) {
-    const pastDate = today;
-    const date = new Date(pastDate.setDate(pastDate.getDate() - i));
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
     const monthStr = month < 10 ? `0${month}` : `${month}`;
@@ -48,11 +45,12 @@ export async function handleHistoricalPnl(
       });
       const bytes = res.data;
 
-      console.log("headers:", res.headers);
       const validHeaders: RawAxiosResponseHeaders | AxiosResponseHeaders = {
-        "Accept-Ranges": "bytes",
-        "Content-Type": "text/csv",
-        "Content-Encoding": "gzip",
+        "accept-ranges": "bytes",
+        "content-type": "text/csv",
+        // axios already decoded gzip data and repackaged the response,
+        // so this header is removed, and we don't need to use zlib to decode the data
+        // "content-encoding": "gzip",
       };
       const resHeadersValid = (
         resHeaders: RawAxiosResponseHeaders | AxiosResponseHeaders,
@@ -67,26 +65,19 @@ export async function handleHistoricalPnl(
 
       if (resHeadersValid(res.headers)) {
         // Assuming `bytes` is a Buffer containing your GZIP compressed data
-        const gunzip = createGunzip();
-        const decoder = Readable.from(bytes).pipe(gunzip);
+        const decoder = Readable.from(bytes);
 
-        const onRecord = (record: any) => {
-          console.log("onRecord:", record);
-        };
         // Create a CSV parser stream
         const parser = decoder.pipe(
           parse({
             columns: true,
-            // onRecord: onRecord,
           }),
         );
 
         // Usage example: Log each parsed record
         parser.on("data", (record) => {
-          console.log("data:", record);
           // deserialize record into HistoricalSettlePNL
           const pnlRecord: HistoricalSettlePNL = record as HistoricalSettlePNL;
-          console.log("pnlRecord:", pnlRecord);
           data.push(pnlRecord);
         });
       }
@@ -99,6 +90,7 @@ export async function handleHistoricalPnl(
         throw new Error(e);
       }
     }
+    date.setDate(date.getDate() - 1);
   }
   return data;
 }

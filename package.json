@@ -18,7 +18,7 @@
     "build:app": "lerna run build --scope prop-shop-app",
     "build": "lerna run build",
     "rebuild": "yarn clean && yarn && yarn build",
-    "rebuild:dev": "yarn clean && yarn link-sdk && yarn link-drift-vaults && yarn && yarn build",
+    "rebuild:dev": "yarn clean && yarn && yarn link-sdk && yarn link-drift-vaults && yarn && yarn build",
     "start:app": "lerna run start --scope prop-shop-app --stream",
     "start:server": "lerna run start --scope prop-shop-server --stream",
     "start": "concurrently \"yarn start:server\" \"yarn start:app\"",

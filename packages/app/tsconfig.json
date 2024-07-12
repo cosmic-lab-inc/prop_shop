@@ -15,6 +15,12 @@
     "moduleResolution": "node",
     "outDir": "dist",
     "strictNullChecks": true,
-    "noImplicitAny": true
-  }
+    "noImplicitAny": true,
+    "resolveJsonModule": true
+  },
+    "include": [
+      "src/**/*",
+      "package.json",
+      "dist/**/*"
+    ],
 }

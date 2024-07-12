@@ -333,6 +333,11 @@ export class PropShopClient {
     return vds;
   }
 
+  /**
+   * Returns historical pnl data from most recent to oldest
+   * @param vault
+   * @param daysBack
+   */
   async fetchHistoricalPNL(
     vault: Vault,
     daysBack: number,
@@ -364,14 +369,16 @@ export class PropShopClient {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    let now = new Date().getTime();
+    const preVaults = new Date().getTime();
     const vaults = await this.allVaults(protocolsOnly);
     console.log(
-      `fetched ${vaults.length} vaults in ${new Date().getTime() - now}ms`,
+      `fetched ${vaults.length} vaults in ${new Date().getTime() - preVaults}ms`,
     );
-    now = new Date().getTime();
+    const preVd = new Date().getTime();
     const vds = await this.vaultDepositors();
-    console.log(`fetched ${vds.length} vds in ${new Date().getTime() - now}ms`);
+    console.log(
+      `fetched ${vds.length} vds in ${new Date().getTime() - preVd}ms`,
+    );
     // get count of vds per vault
     const vaultVds = new Map<string, ProgramAccount<VaultDepositor>[]>();
     for (const vd of vds) {
@@ -389,8 +396,16 @@ export class PropShopClient {
       if (decodeName(vault.account.name) === "Supercharger Vault") {
         const investors = vaultVds.get(vault.account.pubkey.toString()) ?? [];
         const aum = await this.aggregateTVL(investors, vaults);
-        const pnlData = await this.fetchHistoricalPNL(vault.account, 10);
-        const data = pnlData.map((d) => d.pnl / QUOTE_PRECISION.toNumber());
+        const pnlData = await this.fetchHistoricalPNL(vault.account, 60);
+        // cum sum the "pnl" field
+        let cumSum: number = 0;
+        const data: number[] = [];
+        for (const entry of pnlData.reverse()) {
+          cumSum += Number(entry.pnl);
+          data.push(cumSum);
+        }
+        console.log("first:", data[0]);
+        console.log("last:", data[data.length - 1]);
         fundOverviews.push({
           title: decodeName(vault.account.name),
           investors: investors.length,
@@ -399,7 +414,6 @@ export class PropShopClient {
         });
       }
     }
-    console.log("fund overviews:", fundOverviews.length);
     return fundOverviews;
   }
 
