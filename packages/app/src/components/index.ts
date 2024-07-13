@@ -6,4 +6,3 @@ export * from "./Toolbar";
 export * from "./Typing";
 export * from "./CodeSnippet";
 export * from "./HttpDisplay";
-export * from "./FundOverviewCard";

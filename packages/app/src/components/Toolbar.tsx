@@ -13,7 +13,8 @@ export function Toolbar() {
           alignItems: "center",
           flexDirection: "row",
           height: TOOLBAR_HEIGHT,
-          width: "100%",
+          width: "70%",
+          borderRadius: "3px",
           p: 1,
         }}
       >

@@ -2,11 +2,12 @@ import "./globals.css";
 import { createTheme, Theme } from "@mui/material";
 
 export const customTheme = {
-  light: "#EBE0D7FF",
+  light: "#e5f1f1",
+  grey: "#c7c7c7",
   dark: "#0e0907",
-  grey: "#0a1a16",
 
   secondary: "#348771",
+  secondaryDark: "#0a1a16",
 
   success: "#38aa28",
   error: "#b62b2b",
@@ -20,12 +21,12 @@ export const customTheme = {
 export const theme: Theme = createTheme({
   palette: {
     background: {
-      default: customTheme.light,
-      paper: customTheme.light,
+      default: customTheme.grey,
+      paper: customTheme.grey,
     },
     primary: {
       light: customTheme.light,
-      main: customTheme.light,
+      main: customTheme.grey,
       contrastText: customTheme.light,
       dark: customTheme.dark,
     },

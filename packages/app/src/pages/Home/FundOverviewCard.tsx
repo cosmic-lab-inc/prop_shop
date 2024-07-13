@@ -1,6 +1,6 @@
 import React, { ReactNode } from "react";
 import { Box, styled, Typography } from "@mui/material";
-import { customTheme } from "../styles";
+import { customTheme } from "../../styles";
 import { Line, LineChart, XAxis, YAxis } from "recharts";
 import {
   formatNumber,
@@ -8,7 +8,7 @@ import {
   truncateNumber,
   truncateString,
 } from "@cosmic-lab/prop-shop-sdk";
-import { FundDialog } from "../pages";
+import { FundDialog } from "./FundDialog";
 
 function calcMaxDrawdown(values: number[]): number {
   let maxDrawdown = 0;

@@ -1,7 +1,7 @@
 import React from "react";
 import { customTheme } from "../../styles";
 import { Box, styled, Typography } from "@mui/material";
-import { FundOverviewCard } from "../../components";
+import { FundOverviewCard } from "./FundOverviewCard";
 import { FundOverview, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import { mockFundOverviews } from "../../lib";
 
@@ -38,7 +38,6 @@ export function Funds({ client }: { client: PropShopClient }) {
     <Box
       sx={{
         width: "70%",
-        bgcolor: customTheme.light,
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
