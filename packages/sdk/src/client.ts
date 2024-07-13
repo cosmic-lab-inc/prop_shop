@@ -48,15 +48,21 @@ import {
 import { EventEmitter } from "events";
 import bs58 from "bs58";
 import { PropShopAccountSubscriber } from "./accountSubscriber";
+import StrictEventEmitter from "strict-event-emitter-types";
 
-// todo: cache vds, vaults, and historical pnl data in maps
-// todo: account subscriber replicate for program accounts (websocket preferred)
+export interface PropShopAccountEvents {
+  vaultUpdate: (payload: Vault) => void;
+  vaultDepositorUpdate: (payload: VaultDepositor) => void;
+  update: void;
+  error: (e: Error) => void;
+}
+
 export class PropShopClient {
   connection: Connection;
   wallet: WalletContextState;
   vaultClient: VaultClient | undefined;
   loading: boolean;
-  eventEmitter: EventEmitter;
+  eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>;
 
   _fundOverviews: Map<string, FundOverview>;
   _vaultSubs: Map<string, PropShopAccountSubscriber<Vault>>;
@@ -328,6 +334,10 @@ export class PropShopClient {
   //
   // Account cache and fetching
   //
+
+  private triggerEvent(eventName: keyof PropShopAccountEvents, data?: any) {
+    this.eventEmitter.emit(eventName, data);
+  }
 
   async subscribe() {
     if (!this.vaultClient) {
