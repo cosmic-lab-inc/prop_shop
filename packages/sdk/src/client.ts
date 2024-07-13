@@ -18,7 +18,9 @@ import {
   DriftClientConfig,
   encodeName,
   IWallet,
+  OracleInfo,
   QUOTE_PRECISION,
+  SpotMarketAccount,
   User,
 } from "@drift-labs/sdk";
 import {
@@ -29,7 +31,7 @@ import {
   PROP_SHOP_PROTOCOL,
 } from "./constants";
 import { getAssociatedTokenAddress } from "./programs";
-import { IDL as DRIFT_IDL } from "./idl/drift";
+import { Drift, IDL as DRIFT_IDL } from "./idl/drift";
 import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
 import { FundOverview, HistoricalSettlePNL, SnackInfo } from "./types";
@@ -43,24 +45,55 @@ import {
   VaultProtocolParams,
   WithdrawUnit,
 } from "@drift-labs/vaults-sdk";
+import { EventEmitter } from "events";
+import bs58 from "bs58";
+import { PropShopAccountSubscriber } from "./accountSubscriber";
 
 // todo: cache vds, vaults, and historical pnl data in maps
+// todo: account subscriber replicate for program accounts (websocket preferred)
 export class PropShopClient {
   connection: Connection;
   wallet: WalletContextState;
   vaultClient: VaultClient | undefined;
   loading: boolean;
+  eventEmitter: EventEmitter;
+
+  _fundOverviews: Map<string, FundOverview>;
+  _vaultSubs: Map<string, PropShopAccountSubscriber<Vault>>;
+  _vdSubs: Map<string, PropShopAccountSubscriber<VaultDepositor>>;
 
   constructor(wallet: WalletContextState, connection: Connection) {
     makeObservable(this);
-    this.allVaults = this.allVaults.bind(this);
-    this.managedVaults = this.managedVaults.bind(this);
-    this.investedVaults = this.investedVaults.bind(this);
+
+    // init
+    this.initialize = this.initialize.bind(this);
+    this.subscribe = this.subscribe.bind(this);
+    this.unsubscribe = this.unsubscribe.bind(this);
+    this.initUser = this.initUser.bind(this);
+    this.userInitialized = this.userInitialized.bind(this);
+
+    // read, fetch, and aggregate data
+    this.spotMarketByIndex = this.spotMarketByIndex.bind(this);
     this.aggregateTVL = this.aggregateTVL.bind(this);
     this.aggregateDeposits = this.aggregateDeposits.bind(this);
     this.aggregatePNL = this.aggregatePNL.bind(this);
-    this.initUser = this.initUser.bind(this);
-    this.userInitialized = this.userInitialized.bind(this);
+    //
+    this.fetchVaults = this.fetchVaults.bind(this);
+    this.vault = this.vault.bind(this);
+    this.vaults = this.vaults.bind(this);
+    this.managedVaults = this.managedVaults.bind(this);
+    this.investedVaults = this.investedVaults.bind(this);
+    //
+    this.fetchVaultDepositors = this.fetchVaultDepositors.bind(this);
+    this.vaultDepositor = this.vaultDepositor.bind(this);
+    this.vaultDepositors = this.vaultDepositors.bind(this);
+    //
+    this.fetchHistoricalPNL = this.fetchHistoricalPNL.bind(this);
+    this.fundOverview = this.fundOverview.bind(this);
+    this.fetchFundOverview = this.fetchFundOverview.bind(this);
+    this.fetchFundOverviews = this.fetchFundOverviews.bind(this);
+
+    // actions
     this.joinVault = this.joinVault.bind(this);
     this.deposit = this.deposit.bind(this);
     this.requestWithdraw = this.requestWithdraw.bind(this);
@@ -77,6 +110,10 @@ export class PropShopClient {
     this.wallet = wallet;
     this.connection = connection;
     this.loading = false;
+    this._vaultSubs = new Map();
+    this._vdSubs = new Map();
+    this._fundOverviews = new Map();
+    this.eventEmitter = new EventEmitter();
   }
 
   public static walletAdapterToIWallet(wallet: WalletContextState): IWallet {
@@ -178,19 +215,17 @@ export class PropShopClient {
       provider,
     );
 
-    // // Perp/Spot market account types do not define padding so eslint errors, but it is safe.
-    // const perpMarkets =
-    //   (await driftProgram.account.perpMarket.all()) as unknown as ProgramAccount<PerpMarketAccount>[];
-    // const perpMarketIndexes = perpMarkets.map((m) => m.account.marketIndex);
-    // const spotMarkets =
-    //   (await driftProgram.account.spotMarket.all()) as unknown as ProgramAccount<SpotMarketAccount>[];
-    // const spotMarketIndexes = spotMarkets.map((m) => m.account.marketIndex);
-    // const oracleInfos: OracleInfo[] = perpMarkets.map((m) => {
-    //   return {
-    //     publicKey: m.account.amm.oracle,
-    //     source: m.account.amm.oracleSource,
-    //   };
-    // });
+    const usdcMarketIndex = 0;
+    const usdcSpotMarket = await this.spotMarketByIndex(
+      driftProgram,
+      usdcMarketIndex,
+    );
+    const oracleInfos: OracleInfo[] = [
+      {
+        publicKey: usdcSpotMarket.account.oracle,
+        source: usdcSpotMarket.account.oracleSource,
+      },
+    ];
 
     const driftClient = new DriftClient({
       connection,
@@ -200,13 +235,18 @@ export class PropShopClient {
       },
       activeSubAccountId,
       accountSubscription,
-      // perpMarketIndexes,
-      // spotMarketIndexes,
+      // spotMarketIndexes: [usdcMarketIndex],
       // oracleInfos,
     });
-    const preSub = new Date().getTime();
+    const preDriftSub = new Date().getTime();
     await driftClient.subscribe();
-    console.log(`DriftClient subscribed in ${new Date().getTime() - preSub}ms`);
+    console.log(
+      `DriftClient subscribed in ${new Date().getTime() - preDriftSub}ms`,
+    );
+    const preSub = new Date().getTime();
+    console.log(
+      `Subscribed to DriftVaults accounts in ${new Date().getTime() - preSub}ms`,
+    );
 
     const vaultClient = new VaultClient({
       // @ts-ignore
@@ -286,10 +326,201 @@ export class PropShopClient {
   }
 
   //
-  // Read only methods to aggregate data
+  // Account cache and fetching
   //
 
-  public async allVaults(
+  async subscribe() {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const slot = await this.connection.getSlot();
+    const vaults = await this.fetchVaults();
+    const vds = await this.fetchVaultDepositors();
+    for (const vault of vaults) {
+      const sub = new PropShopAccountSubscriber<Vault>(
+        "vault",
+        this.vaultClient.program as any as anchor.Program<anchor.Idl>,
+        vault.publicKey,
+        undefined,
+        {
+          resubTimeoutMs: 30_000,
+        },
+        "processed",
+      );
+      sub.setData(vault.account, slot);
+      await sub.subscribe((data: Vault) => {
+        this.eventEmitter.emit("vaultUpdate", data);
+        this.eventEmitter.emit("update");
+      });
+      this._vaultSubs.set(vault.publicKey.toString(), sub);
+    }
+
+    for (const vd of vds) {
+      const sub = new PropShopAccountSubscriber<VaultDepositor>(
+        "vaultDepositor",
+        this.vaultClient.program as any as anchor.Program<anchor.Idl>,
+        vd.publicKey,
+        undefined,
+        {
+          resubTimeoutMs: 30_000,
+        },
+        "processed",
+      );
+      sub.setData(vd.account, slot);
+      await sub.subscribe((data: VaultDepositor) => {
+        this.eventEmitter.emit("vaultDepositorUpdate", data);
+        this.eventEmitter.emit("update");
+      });
+      this._vdSubs.set(vd.publicKey.toString(), sub);
+    }
+  }
+
+  async unsubscribe(): Promise<void> {
+    const unSubVaults = Array.from(this._vaultSubs.values()).map((sub) =>
+      sub.unsubscribe(),
+    );
+    const unSubVds = Array.from(this._vdSubs.values()).map((sub) =>
+      sub.unsubscribe(),
+    );
+    await Promise.all([...unSubVaults, ...unSubVds]);
+  }
+
+  public vault(key: PublicKey): ProgramAccount<Vault> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const v = this._vaultSubs.get(key.toString())?.dataAndSlot;
+    if (!v) {
+      throw new Error("Vault not subscribed");
+    } else {
+      return {
+        publicKey: key,
+        account: v.data,
+      };
+    }
+  }
+
+  async spotMarketByIndex(
+    program: anchor.Program<Drift>,
+    index: number,
+  ): Promise<ProgramAccount<SpotMarketAccount>> {
+    const filters: GetProgramAccountsFilter[] = [
+      {
+        memcmp: {
+          // offset of "market_index" field in "SpotMarket" account
+          offset: 684,
+          bytes: bs58.encode(Uint8Array.from([index])),
+        },
+      },
+    ];
+    // @ts-ignore
+    const res: ProgramAccount<SpotMarketAccount>[] =
+      await program.account.spotMarket.all(filters);
+    if (res.length > 0) {
+      return res[0];
+    } else {
+      throw new Error(`Spot market not found for index ${index}`);
+    }
+  }
+
+  public vaults(protocolsOnly?: boolean): ProgramAccount<Vault>[] {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    // account subscriber fetches upon subscription, so these should never be undefined
+    const vaults: ProgramAccount<Vault>[] = Array.from(
+      this._vaultSubs.entries(),
+    )
+      .filter((entry) => {
+        const dataAndSlot = entry[1].dataAndSlot;
+        if (dataAndSlot) {
+          if (protocolsOnly) {
+            return dataAndSlot.data.vaultProtocol !== SystemProgram.programId;
+          } else {
+            return true;
+          }
+        } else {
+          return false;
+        }
+      })
+      .map((entry) => {
+        return {
+          publicKey: new PublicKey(entry[0]),
+          account: entry[1].dataAndSlot!.data,
+        };
+      });
+    return vaults;
+  }
+
+  public vaultDepositor(key: PublicKey): ProgramAccount<VaultDepositor> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vd = this._vdSubs.get(key.toString())?.dataAndSlot;
+    if (!vd) {
+      throw new Error("VaultDepositor not subscribed");
+    } else {
+      return {
+        publicKey: key,
+        account: vd.data,
+      };
+    }
+  }
+
+  public vaultDepositors(
+    filterByAuthority?: boolean,
+  ): ProgramAccount<VaultDepositor>[] {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    // account subscriber fetches upon subscription, so these should never be undefined
+    const vds: ProgramAccount<VaultDepositor>[] = Array.from(
+      this._vdSubs.entries(),
+    )
+      .filter((entry) => {
+        const dataAndSlot = entry[1].dataAndSlot;
+        if (dataAndSlot) {
+          if (filterByAuthority) {
+            return dataAndSlot.data.authority.equals(this.publicKey);
+          } else {
+            return true;
+          }
+        } else {
+          return false;
+        }
+      })
+      .map((entry) => {
+        return {
+          publicKey: new PublicKey(entry[0]),
+          account: entry[1].dataAndSlot!.data,
+        };
+      });
+    return vds;
+  }
+
+  public async fundOverview(key: PublicKey): Promise<FundOverview> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    let v = this._fundOverviews.get(key.toString());
+    if (!v) {
+      v = await this.fetchFundOverview(key);
+    }
+    return v!;
+  }
+
+  public async fundOverviews(protocolsOnly?: boolean): Promise<FundOverview[]> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    let res = Array.from(this._fundOverviews.values());
+    if (res.length === 0) {
+      res = await this.fetchFundOverviews(protocolsOnly);
+    }
+    return res;
+  }
+
+  public async fetchVaults(
     protocolsOnly?: boolean,
   ): Promise<ProgramAccount<Vault>[]> {
     if (!this.vaultClient) {
@@ -298,6 +529,13 @@ export class PropShopClient {
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
     const vaults: ProgramAccount<Vault>[] =
       await this.vaultClient.program.account.vault.all();
+    const slot = await this.connection.getSlot();
+    for (const vault of vaults) {
+      const sub = this._vaultSubs.get(vault.publicKey.toString());
+      if (sub) {
+        sub.setData(vault.account, slot);
+      }
+    }
     if (protocolsOnly) {
       return vaults.filter((v) => {
         return v.account.vaultProtocol !== SystemProgram.programId;
@@ -310,7 +548,7 @@ export class PropShopClient {
   /**
    * VaultDepositors the connected wallet is the authority of.
    */
-  public async vaultDepositors(
+  public async fetchVaultDepositors(
     filterByAuthority?: boolean,
   ): Promise<ProgramAccount<VaultDepositor>[]> {
     if (!this.vaultClient) {
@@ -331,8 +569,19 @@ export class PropShopClient {
     }
     const vds: ProgramAccount<VaultDepositor>[] =
       await this.vaultClient.program.account.vaultDepositor.all(filters);
+    const slot = await this.connection.getSlot();
+    for (const vd of vds) {
+      const sub = this._vdSubs.get(vd.publicKey.toString());
+      if (sub) {
+        sub.setData(vd.account, slot);
+      }
+    }
     return vds;
   }
+
+  //
+  // Read only methods to aggregate data
+  //
 
   /**
    * Returns historical pnl data from most recent to oldest
@@ -366,12 +615,63 @@ export class PropShopClient {
     }
   }
 
-  public async fundOverviews(protocolsOnly?: boolean): Promise<FundOverview[]> {
+  // todo: fetch from server to speed up load time
+  public async fetchFundOverview(vaultKey: PublicKey): Promise<FundOverview> {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
     const preVaults = new Date().getTime();
-    const vaults = await this.allVaults(protocolsOnly);
+    const vault = await this.vault(vaultKey);
+    console.log(`fetched vault in ${new Date().getTime() - preVaults}ms`);
+    const preVd = new Date().getTime();
+    const vds = await this.vaultDepositors();
+    console.log(
+      `fetched ${vds.length} vds in ${new Date().getTime() - preVd}ms`,
+    );
+    // get count of vds per vault
+    const vaultVds = new Map<string, ProgramAccount<VaultDepositor>[]>();
+    for (const vd of vds) {
+      if (vaultVds.has(vd.account.vault.toString())) {
+        vaultVds.set(vd.account.vault.toString(), [
+          ...vaultVds.get(vd.account.vault.toString())!,
+          vd,
+        ]);
+      } else {
+        vaultVds.set(vd.account.vault.toString(), [vd]);
+      }
+    }
+
+    const investors = vaultVds.get(vault.account.pubkey.toString()) ?? [];
+    const aum = await this.aggregateTVL(investors, [vault]);
+    const pnlData = await this.fetchHistoricalPNL(vault.account, 100);
+    // cum sum the "pnl" field
+    let cumSum: number = 0;
+    const data: number[] = [];
+    for (const entry of pnlData.reverse()) {
+      cumSum += Number(entry.pnl);
+      data.push(cumSum);
+    }
+    console.log("first:", data[0]);
+    console.log("last:", data[data.length - 1]);
+    const fo: FundOverview = {
+      title: decodeName(vault.account.name),
+      investors: investors.length,
+      aum,
+      data,
+    };
+    this._fundOverviews.set(vault.publicKey.toString(), fo);
+    return fo;
+  }
+
+  // todo: fetch from server to speed up load time
+  public async fetchFundOverviews(
+    protocolsOnly?: boolean,
+  ): Promise<FundOverview[]> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const preVaults = new Date().getTime();
+    const vaults = await this.vaults(protocolsOnly);
     console.log(
       `fetched ${vaults.length} vaults in ${new Date().getTime() - preVaults}ms`,
     );
@@ -394,26 +694,26 @@ export class PropShopClient {
     }
     const fundOverviews: FundOverview[] = [];
     for (const vault of vaults) {
-      if (decodeName(vault.account.name) === "Supercharger Vault") {
-        const investors = vaultVds.get(vault.account.pubkey.toString()) ?? [];
-        const aum = await this.aggregateTVL(investors, vaults);
-        const pnlData = await this.fetchHistoricalPNL(vault.account, 60);
-        // cum sum the "pnl" field
-        let cumSum: number = 0;
-        const data: number[] = [];
-        for (const entry of pnlData.reverse()) {
-          cumSum += Number(entry.pnl);
-          data.push(cumSum);
-        }
-        console.log("first:", data[0]);
-        console.log("last:", data[data.length - 1]);
-        fundOverviews.push({
-          title: decodeName(vault.account.name),
-          investors: investors.length,
-          aum,
-          data,
-        });
+      const investors = vaultVds.get(vault.account.pubkey.toString()) ?? [];
+      const aum = await this.aggregateTVL(investors, vaults);
+      const pnlData = await this.fetchHistoricalPNL(vault.account, 100);
+      // cum sum the "pnl" field
+      let cumSum: number = 0;
+      const data: number[] = [];
+      for (const entry of pnlData.reverse()) {
+        cumSum += Number(entry.pnl);
+        data.push(cumSum);
       }
+      console.log("first:", data[0]);
+      console.log("last:", data[data.length - 1]);
+      const fo: FundOverview = {
+        title: decodeName(vault.account.name),
+        investors: investors.length,
+        aum,
+        data,
+      };
+      fundOverviews.push(fo);
+      this._fundOverviews.set(vault.publicKey.toString(), fo);
     }
     return fundOverviews;
   }
@@ -421,13 +721,14 @@ export class PropShopClient {
   /**
    * Vaults the connected wallet manages.
    */
-  public async managedVaults(): Promise<ProgramAccount<Vault>[]> {
+  public async managedVaults(
+    protocolsOnly?: boolean,
+  ): Promise<ProgramAccount<Vault>[]> {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
-    const vaults: ProgramAccount<Vault>[] =
-      await this.vaultClient.program.account.vault.all();
+    const vaults = await this.vaults(protocolsOnly);
     return vaults.filter((v) => {
       return v.account.manager === this.wallet.publicKey;
     });

@@ -142,7 +142,7 @@ function Header({ title, investors }: { title: string; investors: number }) {
           display: "flex",
         }}
       >
-        <Typography variant="h2">{truncateString(title, 24)}</Typography>
+        <Typography variant="h2">{truncateString(title, 20)}</Typography>
 
         <Typography variant="body1">
           {formatNumber(investors)} investors

@@ -25,3 +25,7 @@ export function randomName(words: number = 2): string {
 export function truncateString(str: string, length: number = 10): string {
   return str.length > length ? `${str.slice(0, length)}...` : str;
 }
+
+export function capitalize(value: string): string {
+  return value[0].toUpperCase() + value.slice(1);
+}
