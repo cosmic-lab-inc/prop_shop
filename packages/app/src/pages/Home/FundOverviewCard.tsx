@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react";
+import React from "react";
 import { Box, styled, Typography } from "@mui/material";
 import { customTheme } from "../../styles";
 import { Line, LineChart, XAxis, YAxis } from "recharts";
@@ -105,31 +105,52 @@ export function FundOverviewCard({
   );
 }
 
-function Container({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <Box
-      sx={{
-        width: "100%",
-        height: "400px",
-        bgcolor: customTheme.grey,
-        borderRadius: "10px",
-        border: `2px solid ${customTheme.light}`,
-        display: "flex",
-        alignItems: "center",
-        flexDirection: "column",
-      }}
-      onClick={onClick}
-    >
-      {children}
-    </Box>
-  );
-}
+const Container = styled("div")<{ hover?: boolean; header?: boolean }>(
+  ({ theme, hover, header }) => ({
+    width: "100%",
+    height: "400px",
+    backgroundColor: customTheme.grey,
+    borderRadius: "10px",
+    border: `2px solid ${customTheme.light}`,
+    display: "flex",
+    alignItems: "center",
+    flexDirection: "column",
+
+    transform: "scale(1)",
+    transition: "transform 0.1s ease",
+
+    "&:hover": {
+      transform: "scale(1.05)",
+      transition: "transform 0.1s ease",
+    },
+  }),
+);
+
+// function Container({
+//   onClick,
+//   children,
+// }: {
+//   onClick: () => void;
+//   children: ReactNode;
+// }) {
+//   return (
+//     <Box
+//       sx={{
+//         width: "100%",
+//         height: "400px",
+//         bgcolor: customTheme.grey,
+//         borderRadius: "10px",
+//         border: `2px solid ${customTheme.light}`,
+//         display: "flex",
+//         alignItems: "center",
+//         flexDirection: "column",
+//       }}
+//       onClick={onClick}
+//     >
+//       {children}
+//     </Box>
+//   );
+// }
 
 function Header({ title, investors }: { title: string; investors: number }) {
   return (

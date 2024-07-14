@@ -7,7 +7,7 @@ import { mockFundOverviews } from "../../lib";
 
 const GridContainer = styled("div")(({ theme }) => ({
   gridTemplateColumns: "33% 33% 33%",
-  gap: "10px",
+  gap: "20px",
   width: "100%",
   height: "100%",
   marginTop: "30px",
