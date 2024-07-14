@@ -36,7 +36,6 @@ import { Drift, IDL as DRIFT_IDL } from "./idl/drift";
 import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
 import {
-  AccountSubscription,
   DriftVaultsSubscriber,
   FundOverview,
   HistoricalSettlePNL,
@@ -57,7 +56,7 @@ import { EventEmitter } from "events";
 import bs58 from "bs58";
 import StrictEventEmitter from "strict-event-emitter-types";
 import { AccountLoader } from "./accountLoader";
-import { WebSocketSubscriber } from "./websocketSubscriber";
+import { PollingSubscriber } from "./pollingSubscriber";
 
 export interface PropShopAccountEvents {
   vaultUpdate: (payload: Vault) => void;
@@ -265,10 +264,7 @@ export class PropShopClient {
 
     const preSub = new Date().getTime();
     await this.subscribe(driftVaultsProgram as any);
-    // todo: reduce this, it takes about 30s
-    console.log(
-      `Subscribed to DriftVaults accounts in ${new Date().getTime() - preSub}ms`,
-    );
+    console.log(`subscribed in ${new Date().getTime() - preSub}ms`);
 
     this.loading = false;
     // todo: reduce this, it takes about 7s
@@ -276,70 +272,24 @@ export class PropShopClient {
   }
 
   async subscribe(program: anchor.Program<DriftVaults>) {
-    const slot = await this.connection.getSlot();
-    const vaults = await this.fetchVaults();
-    const vds = await this.fetchVaultDepositors();
     const loader = new AccountLoader(
       program.provider.connection,
       "confirmed",
       30_000,
     );
-    const pre = new Date().getTime();
-    const vaultSubs = vaults.map((v) => {
-      const sub: AccountSubscription = {
-        accountName: "vault",
-        publicKey: v.publicKey,
-        eventType: "vaultUpdate",
-        dataAndSlot: {
-          data: v.account,
-          slot,
+    this._cache = new PollingSubscriber(program, loader, {
+      filters: [
+        {
+          accountName: "vault",
+          eventType: "vaultDepositorUpdate",
         },
-      };
-      return sub;
-    });
-    const vdSubs = vds.map((v) => {
-      const sub: AccountSubscription = {
-        accountName: "vaultDepositor",
-        publicKey: v.publicKey,
-        eventType: "vaultDepositorUpdate",
-        dataAndSlot: {
-          data: v.account,
-          slot,
+        {
+          accountName: "vaultDepositor",
+          eventType: "vaultDepositorUpdate",
         },
-      };
-      return sub;
+      ],
     });
-    console.log(`got subscription accounts in ${new Date().getTime() - pre}ms`);
-    // this._cache = new PollingSubscriber(program, loader, {
-    //   accounts: vaultSubs,
-    //   filters: [
-    //     {
-    //       accountName: "vaultDepositor",
-    //       eventType: "vaultDepositorUpdate",
-    //     },
-    //   ],
-    // });
-    const preInit = new Date().getTime();
-    this._cache = new WebSocketSubscriber(
-      program,
-      [...vaultSubs.map((e) => e.publicKey), ...vdSubs.map((e) => e.publicKey)],
-      {
-        keys: vaultSubs.map((e) => e.publicKey),
-        filters: [
-          {
-            accountName: "vaultDepositor",
-            eventType: "vaultDepositorUpdate",
-          },
-        ],
-      },
-      {
-        resubTimeoutMs: 30_000,
-      },
-    );
-    console.log(`init subscriber in ${new Date().getTime() - preInit}ms`);
-    const preSub = new Date().getTime();
     await this._cache.subscribe();
-    console.log(`subscriber subscribed in ${new Date().getTime() - preSub}ms`);
   }
 
   async unsubscribe(): Promise<void> {
@@ -550,7 +500,7 @@ export class PropShopClient {
     const vaults: ProgramAccount<Vault>[] =
       await this.vaultClient.program.account.vault.all();
     console.log(
-      `fetched ${vaults.length} vds in ${new Date().getTime() - preFetch}ms`,
+      `fetched ${vaults.length} vaults in ${new Date().getTime() - preFetch}ms`,
     );
     if (protocolsOnly) {
       return vaults.filter((v) => {

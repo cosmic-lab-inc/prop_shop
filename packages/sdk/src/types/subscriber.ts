@@ -22,17 +22,17 @@ export interface DriftVaultsSubscriber {
   unsubscribe(): Promise<any>;
 }
 
-export type AccountSubscription = AccountToPoll & {
-  accountInfo?: AccountInfo<Buffer>;
-  dataAndSlot?: DataAndSlot<any>;
-};
-
 export interface AccountToPoll {
   accountName: keyof AccountNamespace<DriftVaults>;
   publicKey: PublicKey;
   eventType: keyof PropShopAccountEvents;
   callbackId?: string;
 }
+
+export type AccountSubscription = AccountToPoll & {
+  accountInfo?: AccountInfo<Buffer>;
+  dataAndSlot?: DataAndSlot<any>;
+};
 
 export interface AccountGpaFilter {
   accountName: keyof AccountNamespace<DriftVaults>;

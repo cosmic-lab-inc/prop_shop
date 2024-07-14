@@ -53,12 +53,8 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     this.accountLoader = accountLoader;
     this.subscriptions = new Map();
     this._subscriptionConfig = subscriptionConfig;
-    // for (const sub of subscriptions) {
-    //   this.subscriptions.set(sub.publicKey.toString(), sub);
-    // }
   }
 
-  // todo: vds are too many accounts for getMultiple, so we need a GPA filter as an arg to the constructor
   async subscribe(): Promise<void> {
     const subs: AccountSubscription[] = [];
 
@@ -100,7 +96,8 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         ).flat();
         accountInfos.forEach((accountInfo, index) => {
           if (accountInfo) {
-            const value = this._subscriptionConfig.accounts![index];
+            const value: Omit<AccountToPoll, "callbackId"> =
+              this._subscriptionConfig.accounts![index];
             const sub: AccountSubscription = {
               ...value,
               accountInfo,
@@ -168,12 +165,12 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     await this.updateAccountsToPoll(subs);
     await this.addToAccountLoader();
 
-    let retries = 0;
-    while (!this.isSubscribed && retries < 5) {
-      await this.fetch();
-      this.isSubscribed = true;
-      retries++;
-    }
+    // let retries = 0;
+    // while (!this.isSubscribed && retries < 5) {
+    //   await this.fetch();
+    //   this.isSubscribed = true;
+    //   retries++;
+    // }
     this.eventEmitter.emit("update");
     this.isSubscribing = false;
     this.isSubscribed = true;
@@ -184,63 +181,45 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
       return;
     }
     for (const account of accounts) {
-      this.addAccountToPoll(account);
+      this.accountsToPoll.set(account.publicKey.toString(), account);
     }
-  }
-
-  private addAccountToPoll(account: AccountSubscription): void {
-    this.accountsToPoll.set(account.publicKey.toString(), account);
   }
 
   private async addToAccountLoader(): Promise<void> {
     for (const [_, accountToPoll] of this.accountsToPoll) {
-      await this.addAccountToAccountLoader(accountToPoll);
+      accountToPoll.callbackId = await this.accountLoader.addAccount(
+        accountToPoll.publicKey,
+        (buffer: Buffer, slot: number) => {
+          if (!buffer) return;
+
+          const account = this.program.account[
+            accountToPoll.accountName
+          ].coder.accounts.decodeUnchecked(
+            capitalize(accountToPoll.accountName),
+            buffer,
+          );
+          const dataAndSlot = {
+            data: account,
+            slot,
+          };
+          this.subscriptions.set(accountToPoll.publicKey.toString(), {
+            ...accountToPoll,
+            dataAndSlot,
+          });
+
+          this.eventEmitter.emit(accountToPoll.eventType, account);
+          this.eventEmitter.emit("update");
+
+          if (!this.isSubscribed) {
+            this.isSubscribed = true;
+          }
+        },
+      );
     }
 
     this.errorCallbackId = this.accountLoader.addErrorCallbacks((error) => {
       this.eventEmitter.emit("error", error);
     });
-  }
-
-  /**
-   * Account loader will run callback with each poll which updates `this.subscriptions`
-   */
-  private async addAccountToAccountLoader(
-    accountToPoll: AccountToPoll,
-  ): Promise<void> {
-    accountToPoll.callbackId = await this.accountLoader.addAccount(
-      accountToPoll.publicKey,
-      (buffer: Buffer, slot: number) => {
-        if (!buffer) return;
-
-        const account = this.program.account[
-          accountToPoll.accountName
-        ].coder.accounts.decodeUnchecked(
-          capitalize(accountToPoll.accountName),
-          buffer,
-        );
-        const dataAndSlot = {
-          data: account,
-          slot,
-        };
-        this.subscriptions.set(accountToPoll.publicKey.toString(), {
-          ...accountToPoll,
-          dataAndSlot,
-        });
-        this.subscriptions.set(accountToPoll.publicKey.toString(), {
-          ...accountToPoll,
-          dataAndSlot,
-        });
-
-        // @ts-ignore
-        this.eventEmitter.emit(accountToPoll.eventType, account);
-        this.eventEmitter.emit("update");
-
-        if (!this.isSubscribed) {
-          this.isSubscribed = true;
-        }
-      },
-    );
   }
 
   public async fetch(): Promise<void> {
@@ -295,19 +274,6 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
 
     this.accountsToPoll.clear();
     this.isSubscribed = false;
-  }
-
-  async addAccount(sub: AccountSubscription): Promise<boolean> {
-    if (this.accountsToPoll.has(sub.publicKey.toString())) {
-      return true;
-    }
-    this.addAccountToPoll(sub);
-    const accountToPoll = this.accountsToPoll.get(sub.publicKey.toString());
-    if (!accountToPoll) {
-      throw new Error("Failed to add to account poll");
-    }
-    await this.addAccountToAccountLoader(accountToPoll);
-    return true;
   }
 
   assertIsSubscribed(): void {
