@@ -4,7 +4,6 @@ import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 
 export function useClient(): PropShopClient | undefined {
   const wallet = useWallet();
-  if (!wallet.connected) return;
   const connection = useConnection();
 
   const [client, setClient] = React.useState<PropShopClient | undefined>(
@@ -13,14 +12,16 @@ export function useClient(): PropShopClient | undefined {
 
   React.useEffect(() => {
     const run = async () => {
-      const client = new PropShopClient(wallet, connection.connection);
-      if (!client.vaultClient && !client.loading) {
-        await client.initialize();
+      if (!client && wallet.publicKey) {
+        const _client = new PropShopClient(wallet, connection.connection);
+        if (!_client.vaultClient && !_client.loading) {
+          await _client.initialize();
+          setClient(_client);
+        }
       }
-      setClient(client);
     };
     run();
-  }, [wallet]);
+  }, [wallet.publicKey]);
 
   return client;
 }

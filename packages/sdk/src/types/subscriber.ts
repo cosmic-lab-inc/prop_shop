@@ -33,3 +33,18 @@ export interface AccountToPoll {
   eventType: keyof PropShopAccountEvents;
   callbackId?: string;
 }
+
+export interface AccountGpaFilter {
+  accountName: keyof AccountNamespace<DriftVaults>;
+  eventType: keyof PropShopAccountEvents;
+}
+
+export interface WebSocketAccountFetchConfig {
+  keys?: PublicKey[];
+  filters?: AccountGpaFilter[];
+}
+
+export interface PollingSubscriptionConfig {
+  accounts?: Omit<AccountToPoll, "callbackId">[];
+  filters?: AccountGpaFilter[];
+}

@@ -1,21 +1,31 @@
+import { DataAndSlot, NotSubscribedError } from "@drift-labs/sdk";
 import {
-  BulkAccountLoader,
-  DataAndSlot,
-  NotSubscribedError,
-} from "@drift-labs/sdk";
-import { AccountNamespace, Program, ProgramAccount } from "@coral-xyz/anchor";
+  AccountNamespace,
+  BorshAccountsCoder,
+  Program,
+  ProgramAccount,
+} from "@coral-xyz/anchor";
 import StrictEventEmitter from "strict-event-emitter-types";
 import { EventEmitter } from "events";
 import { capitalize } from "./utils";
-import { PublicKey } from "@solana/web3.js";
-import { DriftVaults, Vault, VaultDepositor } from "@drift-labs/vaults-sdk";
+import {
+  AccountInfo,
+  GetProgramAccountsConfig,
+  GetProgramAccountsResponse,
+  PublicKey,
+} from "@solana/web3.js";
+import { DriftVaults } from "@drift-labs/vaults-sdk";
 import { PropShopAccountEvents } from "./client";
 import { Buffer } from "buffer";
 import {
+  AccountGpaFilter,
   AccountSubscription,
   AccountToPoll,
   DriftVaultsSubscriber,
+  PollingSubscriptionConfig,
 } from "./types";
+import bs58 from "bs58";
+import { AccountLoader } from "./accountLoader";
 
 export class PollingSubscriber implements DriftVaultsSubscriber {
   isSubscribed: boolean;
@@ -23,50 +33,139 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
 
   eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>;
 
-  accountLoader: BulkAccountLoader;
+  accountLoader: AccountLoader;
   accountsToPoll = new Map<string, AccountToPoll>();
   errorCallbackId?: string;
 
+  _subscriptionConfig: PollingSubscriptionConfig;
   subscriptions: Map<string, AccountSubscription>;
 
   private isSubscribing = false;
 
   public constructor(
     program: Program<DriftVaults>,
-    accountLoader: BulkAccountLoader,
-    subscriptions: Omit<AccountToPoll, "callbackId">[],
+    accountLoader: AccountLoader,
+    subscriptionConfig: PollingSubscriptionConfig,
   ) {
     this.isSubscribed = false;
     this.program = program;
     this.eventEmitter = new EventEmitter();
     this.accountLoader = accountLoader;
     this.subscriptions = new Map();
-    for (const sub of subscriptions) {
-      this.subscriptions.set(sub.publicKey.toString(), sub);
-    }
+    this._subscriptionConfig = subscriptionConfig;
+    // for (const sub of subscriptions) {
+    //   this.subscriptions.set(sub.publicKey.toString(), sub);
+    // }
   }
 
+  // todo: vds are too many accounts for getMultiple, so we need a GPA filter as an arg to the constructor
   async subscribe(): Promise<void> {
-    const keys: PublicKey[] = Array.from(this.subscriptions.keys()).map(
-      (key) => new PublicKey(key),
-    );
-    const accountInfos =
-      await this.program.provider.connection.getMultipleAccountsInfo(keys);
-    const accounts = accountInfos
-      .map((accountInfo, index) => {
-        return {
-          ...this.subscriptions.get(keys[index].toString()),
-          accountInfo,
-        };
-      })
-      .filter((value) => value.accountInfo !== null) as AccountSubscription[];
+    const subs: AccountSubscription[] = [];
+
+    if (this._subscriptionConfig.accounts) {
+      const keys: PublicKey[] = this._subscriptionConfig.accounts.map(
+        (key) => new PublicKey(key),
+      );
+      if (keys.length > 0) {
+        const chunks = [];
+        const chunkSize = 99;
+        if (keys.length > chunkSize) {
+          // chunk keys into PublicKey[][]
+          let i = 0;
+          while (i < keys.length) {
+            let end;
+            if (i + chunkSize < keys.length) {
+              end = i + chunkSize;
+            } else {
+              end = keys.length;
+            }
+            const chunk = keys.slice(i, end);
+            console.log(`chunk from [${i}, ${end}), length: ${chunk.length}`);
+            chunks.push(chunk);
+            i += chunkSize;
+          }
+        } else {
+          console.log("single chunk:", keys.length);
+          chunks.push(keys);
+        }
+
+        const accountInfos: (AccountInfo<Buffer> | null)[] = (
+          await Promise.all(
+            chunks.map((keys) => {
+              return this.program.provider.connection.getMultipleAccountsInfo(
+                keys,
+              );
+            }),
+          )
+        ).flat();
+        accountInfos.forEach((accountInfo, index) => {
+          if (accountInfo) {
+            const value = this._subscriptionConfig.accounts![index];
+            const sub: AccountSubscription = {
+              ...value,
+              accountInfo,
+            };
+            this.subscriptions.set(value.publicKey.toString(), sub);
+            subs.push(sub);
+          }
+        });
+      }
+    }
+
+    if (this._subscriptionConfig.filters) {
+      const gpaConfig: GetProgramAccountsConfig = {
+        filters: this._subscriptionConfig.filters.map((filter) => {
+          return {
+            memcmp: {
+              offset: 0,
+              bytes: bs58.encode(
+                BorshAccountsCoder.accountDiscriminator(
+                  capitalize(filter.accountName),
+                ),
+              ),
+            },
+          };
+        }),
+      };
+      const gpa: GetProgramAccountsResponse =
+        await this.program.provider.connection.getProgramAccounts(
+          this.program.programId,
+          gpaConfig,
+        );
+      const discrims: Map<string, AccountGpaFilter> = new Map();
+      for (const filter of this._subscriptionConfig.filters) {
+        const discrim = bs58.encode(
+          BorshAccountsCoder.accountDiscriminator(
+            capitalize(filter.accountName),
+          ),
+        );
+        discrims.set(discrim, filter);
+      }
+      gpa.forEach((value) => {
+        // get first 8 bytes of data
+        const discrim = bs58.encode(value.account.data.subarray(0, 8));
+        const filter = discrims.get(discrim);
+        if (!filter) {
+          throw new Error(`No filter found for discriminator: ${discrim}`);
+        } else {
+          const sub: AccountSubscription = {
+            accountName: filter.accountName,
+            eventType: filter.eventType,
+            publicKey: value.pubkey,
+            accountInfo: value.account,
+          };
+          this.subscriptions.set(sub.publicKey.toString(), sub);
+          subs.push(sub);
+        }
+      });
+    }
 
     if (this.isSubscribed || this.isSubscribing) {
       return;
     }
     this.isSubscribing = true;
 
-    await this.updateAccountsToPoll(accounts);
+    await this.updateAccountsToPoll(subs);
     await this.addToAccountLoader();
 
     let retries = 0;
@@ -103,6 +202,9 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     });
   }
 
+  /**
+   * Account loader will run callback with each poll which updates `this.subscriptions`
+   */
   private async addAccountToAccountLoader(
     accountToPoll: AccountToPoll,
   ): Promise<void> {
@@ -221,7 +323,18 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     key: PublicKey,
   ): DataAndSlot<any> | undefined {
     this.assertIsSubscribed();
-    return this.subscriptions.get(key.toString())?.dataAndSlot;
+    const value = this.subscriptions.get(key.toString());
+    if (value) {
+      if (value.accountName !== accountName) {
+        throw new Error(
+          `Account name mismatch: expected ${accountName}, got ${value.accountName}`,
+        );
+      } else {
+        return value.dataAndSlot;
+      }
+    } else {
+      return undefined;
+    }
   }
 
   getAccounts(
@@ -240,42 +353,6 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         };
         return pa;
       }) as ProgramAccount<DataAndSlot<any>>[];
-  }
-
-  public getVault(key: PublicKey): DataAndSlot<Vault> | undefined {
-    const value = this.subscriptions.get(key.toString())?.dataAndSlot;
-    if (value) {
-      return value as DataAndSlot<Vault>;
-    } else {
-      return undefined;
-    }
-  }
-
-  public getVaults(): DataAndSlot<Vault>[] {
-    return Array.from(this.subscriptions.values())
-      .filter((sub) => {
-        return sub.accountName === "vault";
-      })
-      .map((sub) => sub.dataAndSlot as DataAndSlot<Vault>);
-  }
-
-  public getVaultDepositor(
-    key: PublicKey,
-  ): DataAndSlot<VaultDepositor> | undefined {
-    const value = this.subscriptions.get(key.toString())?.dataAndSlot;
-    if (value) {
-      return value as DataAndSlot<VaultDepositor>;
-    } else {
-      return undefined;
-    }
-  }
-
-  public getVaultDepositors(): DataAndSlot<VaultDepositor>[] {
-    return Array.from(this.subscriptions.values())
-      .filter((sub) => {
-        return sub.accountName === "vaultDepositor";
-      })
-      .map((sub) => sub.dataAndSlot as DataAndSlot<VaultDepositor>);
   }
 
   public updateAccountLoaderPollingFrequency(pollingFrequency: number): void {

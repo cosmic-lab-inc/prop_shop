@@ -12,7 +12,6 @@ import * as anchor from "@coral-xyz/anchor";
 import { BN, ProgramAccount } from "@coral-xyz/anchor";
 import { Wallet as AnchorWallet } from "@coral-xyz/anchor/dist/cjs/provider";
 import {
-  BulkAccountLoader,
   DataAndSlot,
   decodeName,
   DRIFT_PROGRAM_ID,
@@ -57,7 +56,8 @@ import {
 import { EventEmitter } from "events";
 import bs58 from "bs58";
 import StrictEventEmitter from "strict-event-emitter-types";
-import { PollingSubscriber } from "./pollingSubscriber";
+import { AccountLoader } from "./accountLoader";
+import { WebSocketSubscriber } from "./websocketSubscriber";
 
 export interface PropShopAccountEvents {
   vaultUpdate: (payload: Vault) => void;
@@ -265,7 +265,7 @@ export class PropShopClient {
 
     const preSub = new Date().getTime();
     await this.subscribe(driftVaultsProgram as any);
-    // todo: reduce this, it takes about 4s
+    // todo: reduce this, it takes about 30s
     console.log(
       `Subscribed to DriftVaults accounts in ${new Date().getTime() - preSub}ms`,
     );
@@ -279,11 +279,12 @@ export class PropShopClient {
     const slot = await this.connection.getSlot();
     const vaults = await this.fetchVaults();
     const vds = await this.fetchVaultDepositors();
-    const loader = new BulkAccountLoader(
+    const loader = new AccountLoader(
       program.provider.connection,
       "confirmed",
-      10_000,
+      30_000,
     );
+    const pre = new Date().getTime();
     const vaultSubs = vaults.map((v) => {
       const sub: AccountSubscription = {
         accountName: "vault",
@@ -308,11 +309,37 @@ export class PropShopClient {
       };
       return sub;
     });
-    this._cache = new PollingSubscriber(program, loader, [
-      ...vaultSubs,
-      ...vdSubs,
-    ]);
+    console.log(`got subscription accounts in ${new Date().getTime() - pre}ms`);
+    // this._cache = new PollingSubscriber(program, loader, {
+    //   accounts: vaultSubs,
+    //   filters: [
+    //     {
+    //       accountName: "vaultDepositor",
+    //       eventType: "vaultDepositorUpdate",
+    //     },
+    //   ],
+    // });
+    const preInit = new Date().getTime();
+    this._cache = new WebSocketSubscriber(
+      program,
+      [...vaultSubs.map((e) => e.publicKey), ...vdSubs.map((e) => e.publicKey)],
+      {
+        keys: vaultSubs.map((e) => e.publicKey),
+        filters: [
+          {
+            accountName: "vaultDepositor",
+            eventType: "vaultDepositorUpdate",
+          },
+        ],
+      },
+      {
+        resubTimeoutMs: 30_000,
+      },
+    );
+    console.log(`init subscriber in ${new Date().getTime() - preInit}ms`);
+    const preSub = new Date().getTime();
     await this._cache.subscribe();
+    console.log(`subscriber subscribed in ${new Date().getTime() - preSub}ms`);
   }
 
   async unsubscribe(): Promise<void> {

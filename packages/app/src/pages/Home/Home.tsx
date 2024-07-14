@@ -1,9 +1,10 @@
 import * as React from "react";
 import { Box } from "@mui/material";
 import { Funds } from "./Funds";
+import { observer } from "mobx-react";
 import { useClient } from "../../lib";
 
-export function Home() {
+export const Home = observer(() => {
   const client = useClient();
   return (
     <Box
@@ -15,8 +16,7 @@ export function Home() {
         gap: 2,
       }}
     >
-      {/*<Header />*/}
       {client && <Funds client={client} />}
     </Box>
   );
-}
+});

@@ -18,7 +18,7 @@ export const IconButton: React.FC<IconButtonProps<React.FC<ChildProps>>> = ({
   iconSize,
   ...rest
 }) => {
-  const [iconColor, setIconColor] = React.useState(customTheme.light);
+  const [iconColor, setIconColor] = React.useState(customTheme.grey);
 
   useEffect(() => {
     if (disabled) {
