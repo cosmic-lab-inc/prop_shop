@@ -160,6 +160,7 @@ const TableRow = styled("div")<{ hover?: boolean; header?: boolean }>(
     justifyContent: "space-between",
     paddingLeft: "10px",
     paddingRight: "10px",
+    borderRadius: "10px",
     "&:hover": {
       backgroundColor: `${hover ? customTheme.grey2 : "transparent"}`,
     },

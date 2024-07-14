@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { customTheme } from "../../styles";
 import { alpha, Button, ButtonProps } from "@mui/material";
+import { darken } from "@mui/system/colorManipulator";
 
 type IconButtonProps<T extends React.ElementType> = {
   component: T;
@@ -44,19 +45,10 @@ export const IconButton: React.FC<IconButtonProps<React.FC<ChildProps>>> = ({
         bgcolor: disabled ? customTheme.grey : customTheme.secondary,
         color: disabled ? customTheme.dark : customTheme.light,
         "&:hover": {
-          bgcolor: disabled ? customTheme.grey : customTheme.light,
-          color: disabled ? customTheme.light : customTheme.secondary,
+          bgcolor: disabled
+            ? customTheme.grey
+            : darken(customTheme.secondary, 0.2),
         },
-      }}
-      onMouseEnter={() => {
-        if (!disabled) {
-          setIconColor(customTheme.secondary);
-        }
-      }}
-      onMouseLeave={() => {
-        if (!disabled) {
-          setIconColor(customTheme.light);
-        }
       }}
     >
       <Component color={iconColor} size={iconSize} />

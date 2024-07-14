@@ -37,7 +37,7 @@ export function Toolbar() {
             display: "flex",
             width: "15%",
             height: "100%",
-            p: 2,
+            p: 1,
           }}
         >
           <WalletButton />

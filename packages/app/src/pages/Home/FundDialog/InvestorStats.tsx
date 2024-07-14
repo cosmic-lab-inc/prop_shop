@@ -165,13 +165,8 @@ export const InvestorStats = observer(() => {
           gap: 1,
         }}
       >
-        <IconButton
-          component={AirdropIcon}
-          iconSize={50}
-          disabled={false}
-          onClick={() => console.log("clicked button")}
-        />
-        <IconButton component={PlusIcon} iconSize={50} disabled={false} />
+        <IconButton component={AirdropIcon} iconSize={50} disabled={false} />
+        <IconButton component={PlusIcon} iconSize={50} disabled={true} />
         <IconButton component={MinusIcon} iconSize={50} disabled={false} />
       </Box>
     </Box>
