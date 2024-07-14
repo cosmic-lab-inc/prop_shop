@@ -165,12 +165,6 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     await this.updateAccountsToPoll(subs);
     await this.addToAccountLoader();
 
-    // let retries = 0;
-    // while (!this.isSubscribed && retries < 5) {
-    //   await this.fetch();
-    //   this.isSubscribed = true;
-    //   retries++;
-    // }
     this.eventEmitter.emit("update");
     this.isSubscribing = false;
     this.isSubscribed = true;

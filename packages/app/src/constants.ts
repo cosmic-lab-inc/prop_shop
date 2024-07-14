@@ -1,2 +1,2 @@
 export const DRAWER_WIDTH = 230;
-export const TOOLBAR_HEIGHT = 80;
+export const TOOLBAR_HEIGHT = 120;

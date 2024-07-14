@@ -27,7 +27,7 @@ export function ResetButton(props: IconButtonProps) {
     <IconButton
       color="primary"
       sx={{
-        borderRadius: "3px",
+        borderRadius: "10px",
         width: "100%",
         height: "100%",
         display: "flex",

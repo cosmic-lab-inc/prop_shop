@@ -25,8 +25,8 @@ export function FundDialog({
         onClose={handleClose}
         PaperProps={{
           style: {
-            background: customTheme.light,
-            borderRadius: "3px",
+            background: customTheme.grey2,
+            borderRadius: "10px",
             height: "300px",
           },
         }}

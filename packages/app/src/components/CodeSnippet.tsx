@@ -22,7 +22,7 @@ export function CodeSnippet({ code }: { code: string }) {
         justifyContent: "center",
         alignItems: "center",
         bgcolor: customTheme.light,
-        borderRadius: "3px",
+        borderRadius: "10px",
         flexGrow: 1,
       }}
     >

@@ -267,7 +267,6 @@ export class PropShopClient {
     console.log(`subscribed in ${new Date().getTime() - preSub}ms`);
 
     this.loading = false;
-    // todo: reduce this, it takes about 7s
     console.log(`initialized client in ${new Date().getTime() - now}ms`);
   }
 

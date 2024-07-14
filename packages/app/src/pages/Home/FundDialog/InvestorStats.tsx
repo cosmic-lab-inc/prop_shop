@@ -40,10 +40,9 @@ const Stats = observer(() => {
       sx={{
         display: "flex",
         flexDirection: "column",
-        bgcolor: customTheme.grey,
-        borderRadius: "3px",
+        // bgcolor: customTheme.dark,
+        borderRadius: "10px",
         width: "100%",
-        p: 1,
       }}
     >
       <Container>
@@ -75,8 +74,8 @@ function Container({ children }: { children: ReactNode }) {
     <Box
       sx={{
         flexGrow: 1,
-        bgcolor: customTheme.light,
-        borderRadius: "3px",
+        bgcolor: customTheme.grey,
+        borderRadius: "10px",
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
@@ -126,11 +125,10 @@ const TableRow = styled("div")<{ hover?: boolean; header?: boolean }>(
     flexDirection: "row",
     justifyContent: "space-between",
     padding: "10px",
-    borderRadius: "3px",
+    borderRadius: "10px",
     color: customTheme.dark,
     "&:hover": {
-      backgroundColor: `${hover ? customTheme.secondary : "transparent"}`,
-      color: customTheme.light,
+      backgroundColor: `${hover ? customTheme.grey2 : "transparent"}`,
     },
 
     ...(header && {
@@ -147,19 +145,20 @@ export const InvestorStats = observer(() => {
     <Box
       sx={{
         width: "100%",
-        borderRadius: "3px",
+        borderRadius: "10px",
         display: "flex",
         flexDirection: "row",
         flexGrow: 1,
-        p: 1,
         gap: 1,
+        p: 1,
+        bgcolor: customTheme.light,
       }}
     >
       <Stats />
 
       <Box
         sx={{
-          borderRadius: "3px",
+          borderRadius: "10px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",

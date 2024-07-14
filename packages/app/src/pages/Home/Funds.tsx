@@ -49,7 +49,7 @@ export function Funds({ client }: { client: PropShopClient }) {
           width: "100%",
           height: "100%",
           display: "flex",
-          borderRadius: "3px",
+          borderRadius: "10px",
           alignItems: "center",
           flexDirection: "row",
         }}
@@ -64,7 +64,7 @@ export function Funds({ client }: { client: PropShopClient }) {
           height: "100%",
           display: "flex",
           gap: 2,
-          borderRadius: "3px",
+          borderRadius: "10px",
           alignItems: "center",
           flexDirection: "row",
         }}

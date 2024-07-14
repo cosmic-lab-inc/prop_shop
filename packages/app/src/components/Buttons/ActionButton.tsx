@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
-import { alpha, Button, ButtonProps } from "@mui/material";
+import { Button, ButtonProps } from "@mui/material";
 import { customTheme } from "../../styles";
+import { darken } from "@mui/system/colorManipulator";
 
 export function ActionButton(props: ButtonProps) {
   const { children, disabled } = props;
@@ -8,7 +9,7 @@ export function ActionButton(props: ButtonProps) {
   const [color, setColor] = React.useState(customTheme.secondary);
   useEffect(() => {
     if (disabled) {
-      setColor(alpha(customTheme.secondary, 0.7));
+      setColor(darken(customTheme.secondary, 0.2));
     } else {
       setColor(customTheme.secondary);
     }
@@ -22,10 +23,10 @@ export function ActionButton(props: ButtonProps) {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        borderRadius: "3px",
+        borderRadius: "10px",
         bgcolor: color,
         "&:hover": {
-          bgcolor: alpha(color, 0.7),
+          bgcolor: darken(color, 0.2),
         },
       }}
       {...props}

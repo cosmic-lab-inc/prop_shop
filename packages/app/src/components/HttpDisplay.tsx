@@ -26,7 +26,7 @@ export const HttpDisplay = observer((props: ReactJsonViewProps) => {
         style={{
           padding: "10px",
           fontSize: 14,
-          borderRadius: "3px",
+          borderRadius: "10px",
           display: "flex",
           flexDirection: "column",
           flexGrow: 1,

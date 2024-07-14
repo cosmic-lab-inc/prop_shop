@@ -56,7 +56,7 @@ function Context({ children }: { children: ReactNode }) {
   return (
     <ConnectionProvider endpoint={endpoint}>
       <SnackbarProvider>
-        <WalletProvider wallets={wallets} onError={onError}>
+        <WalletProvider wallets={wallets} onError={onError} autoConnect>
           <WalletDialogProvider>{children}</WalletDialogProvider>
         </WalletProvider>
       </SnackbarProvider>

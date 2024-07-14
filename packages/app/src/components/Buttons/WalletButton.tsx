@@ -1,7 +1,7 @@
 import { BaseWalletMultiButton } from "@solana/wallet-adapter-material-ui";
 import React from "react";
 import { customTheme } from "../../styles";
-import { alpha } from "@mui/material";
+import { darken } from "@mui/system/colorManipulator";
 
 const LABELS = {
   "change-wallet": "Switch Wallet",
@@ -20,16 +20,16 @@ export function WalletButton() {
       sx={{
         width: "100%",
         height: "100%",
-        display: "flex",
-        flexDirection: "row",
-        justifyContent: "center",
+        // display: "flex",
+        // flexDirection: "row",
+        // justifyContent: "center",
+        // alignItems: "center",
         fontSize: 20,
-        alignItems: "center",
         fontWeight: 600,
         bgcolor: customTheme.secondary,
-        borderRadius: "2px",
+        borderRadius: "10px",
         "&:hover": {
-          bgcolor: alpha(customTheme.secondary, 0.7),
+          bgcolor: darken(customTheme.secondary, 0.2),
         },
       }}
     />

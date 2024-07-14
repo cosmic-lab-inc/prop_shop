@@ -32,7 +32,7 @@ export const IconButton: React.FC<IconButtonProps<React.FC<ChildProps>>> = ({
     <Button
       {...rest}
       sx={{
-        borderRadius: "3px",
+        borderRadius: "10px",
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",

@@ -117,8 +117,9 @@ function Container({
       sx={{
         width: "100%",
         height: "400px",
-        bgcolor: customTheme.dark,
-        borderRadius: "3px",
+        bgcolor: customTheme.grey,
+        borderRadius: "10px",
+        border: `2px solid ${customTheme.light}`,
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
@@ -142,7 +143,7 @@ function Header({ title, investors }: { title: string; investors: number }) {
           display: "flex",
         }}
       >
-        <Typography variant="h2">{truncateString(title, 20)}</Typography>
+        <Typography variant="h2">{truncateString(title, 18)}</Typography>
 
         <Typography variant="body1">
           {formatNumber(investors)} investors
@@ -160,11 +161,11 @@ const TableRow = styled("div")<{ hover?: boolean; header?: boolean }>(
     paddingLeft: "10px",
     paddingRight: "10px",
     "&:hover": {
-      backgroundColor: `${hover ? customTheme.grey : "transparent"}`,
+      backgroundColor: `${hover ? customTheme.grey2 : "transparent"}`,
     },
 
     ...(header && {
-      borderBottom: `1px solid ${customTheme.light}`,
+      borderBottom: `1px solid ${customTheme.grey}`,
       borderBottomRightRadius: "0",
       borderBottomLeftRadius: "0",
     }),
