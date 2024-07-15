@@ -1,8 +1,8 @@
 {
-  "name": "prop-shop-server",
+  "name": "prop-shop-proxy",
   "version": "0.2.10",
   "author": "Drew Riester <epochsolana@gmail.com>",
-  "description": "Server to fetch, cache, and serve Drift data to the Prop Shop frontend",
+  "description": "Proxy server to fetch data for the frontend",
   "license": "Apache-2.0",
   "main": "src/index.ts",
   "scripts": {
@@ -21,7 +21,6 @@
     "express": "^4.19.2",
     "http-proxy-middleware": "^3.0.0",
     "neverthrow": "^6.0.0",
-    "redis": "^4.6.15",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {

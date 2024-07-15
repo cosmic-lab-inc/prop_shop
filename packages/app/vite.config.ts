@@ -47,10 +47,11 @@ export default defineConfig(({ mode }) => {
       port: 5173,
     },
     define: {
+      global: "globalThis",
       "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
       "process.env.ENV": JSON.stringify(env.ENV),
       "process.env.PORT": JSON.stringify(env.PORT),
-      global: "globalThis",
+      "process.env.REDIS": JSON.stringify(env.REDIS),
     },
     plugins: [react(), nodePolyfills()],
     optimizeDeps: {

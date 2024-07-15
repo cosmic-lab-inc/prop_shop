@@ -166,6 +166,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     await this.addToAccountLoader();
 
     this.eventEmitter.emit("update");
+    this.accountLoader.startPolling();
     this.isSubscribing = false;
     this.isSubscribed = true;
   }
@@ -267,6 +268,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     }
 
     this.accountsToPoll.clear();
+    this.accountLoader.stopPolling();
     this.isSubscribed = false;
   }
 

@@ -1,9 +1,12 @@
 import {
   Connection,
   GetProgramAccountsFilter,
+  Keypair,
   PublicKey,
   SystemProgram,
   Transaction,
+  type TransactionSignature,
+  TransactionVersion,
   VersionedTransaction,
 } from "@solana/web3.js";
 import { WalletContextState } from "@solana/wallet-adapter-react";
@@ -57,6 +60,18 @@ import bs58 from "bs58";
 import StrictEventEmitter from "strict-event-emitter-types";
 import { AccountLoader } from "./accountLoader";
 import { PollingSubscriber } from "./pollingSubscriber";
+import type { WalletName } from "@solana/wallet-adapter-base";
+import {
+  EventEmitter as WalletAdapterEventEmitter,
+  WalletAdapter,
+  WalletAdapterEvents,
+  WalletAdapterProps,
+} from "@solana/wallet-adapter-base";
+import { Wallet } from "@solana/wallet-adapter-react/src/useWallet";
+import {
+  SendTransactionOptions,
+  WalletReadyState,
+} from "@solana/wallet-adapter-base/src/adapter";
 
 export interface PropShopAccountEvents {
   vaultUpdate: (payload: Vault) => void;
@@ -125,6 +140,83 @@ export class PropShopClient {
     this.loading = false;
     this._fundOverviews = new Map();
     this.eventEmitter = new EventEmitter();
+  }
+
+  public static keypairToWalletContextState(
+    kp: Keypair,
+    connection: Connection,
+  ): WalletContextState {
+    const eventEmitter = new WalletAdapterEventEmitter<WalletAdapterEvents>();
+    const adapterProps: WalletAdapterProps = {
+      name: "DevKeypairWallet" as WalletName<"DevKeypairWallet">,
+      url: "",
+      icon: "",
+      readyState: WalletReadyState.Installed,
+      publicKey: kp.publicKey,
+      connecting: false,
+      connected: true,
+      supportedTransactionVersions: new Set(["legacy" as TransactionVersion]),
+
+      autoConnect(): Promise<void> {
+        return Promise.resolve();
+      },
+      connect(): Promise<void> {
+        return Promise.resolve();
+      },
+      disconnect(): Promise<void> {
+        return Promise.resolve();
+      },
+      sendTransaction(
+        transaction: Transaction,
+        connection: Connection,
+        options?: SendTransactionOptions,
+      ): Promise<TransactionSignature> {
+        return connection.sendTransaction(transaction, [kp], options);
+      },
+    };
+    const adapter = {
+      ...adapterProps,
+      ...eventEmitter,
+    } as unknown as WalletAdapter;
+
+    const wallet: Wallet = {
+      adapter,
+      readyState: WalletReadyState.Installed,
+    };
+
+    const walletCtx: WalletContextState = {
+      autoConnect: false,
+      wallets: [wallet],
+      wallet,
+      publicKey: kp.publicKey,
+      connecting: false,
+      connected: true,
+      disconnecting: false,
+
+      select(walletName: WalletName | null) {
+        return;
+      },
+      connect(): Promise<void> {
+        return Promise.resolve();
+      },
+      disconnect(): Promise<void> {
+        return Promise.resolve();
+      },
+
+      sendTransaction(
+        transaction: Transaction,
+        connection: Connection,
+        options?: SendTransactionOptions,
+      ): Promise<TransactionSignature> {
+        return connection.sendTransaction(transaction, [kp], options);
+      },
+
+      signTransaction: undefined,
+      signAllTransactions: undefined,
+      signMessage: undefined,
+      signIn: undefined,
+    };
+    return walletCtx;
   }
 
   public static walletAdapterToIWallet(wallet: WalletContextState): IWallet {
