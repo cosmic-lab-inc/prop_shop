@@ -5,9 +5,10 @@ const startCommand = "yarn start";
 function start() {
   console.log("Starting React app and proxy server...");
   exec(startCommand, (error, stdout, stderr) => {
-    console.log(`stdout: ${stdout}`);
-    console.error(`stderr: ${stderr}`);
-    if (error || stderr) {
+    if (stdout.length > 0) {
+      console.log(`stdout: ${stdout}`);
+    }
+    if (error || stderr.length > 0) {
       console.error(`exec error: ${error || stderr}`);
       return;
     }
@@ -17,9 +18,10 @@ function start() {
 function stop() {
   console.log("Stopping React app and proxy server...");
   exec(`pgrep -f '${startCommand}'`, (error, stdout, stderr) => {
-    console.log(`stdout: ${stdout}`);
-    console.error(`stderr: ${stderr}`);
-    if (error || stderr) {
+    if (stdout.length > 0) {
+      console.log(`stdout: ${stdout}`);
+    }
+    if (error || stderr.length > 0) {
       console.error(
         `Error finding process \"${startCommand}\": ${error || stderr}`,
       );
@@ -28,16 +30,17 @@ function stop() {
     const pid = stdout.trim();
     if (pid) {
       exec(`kill -9 ${pid}`, (killError, killStdout, killStderr) => {
-        console.log(`killStdout: ${killStdout}`);
-        console.error(`killStderr: ${killStderr}`);
-        if (killError || killStderr) {
+        if (killStdout.length > 0) {
+          console.log(`killStdout: ${killStdout}`);
+        }
+        if (killError || killStderr.length > 0) {
           console.error(`Error stopping process: ${killError || killStderr}`);
           return;
         }
-        console.log("React development server stopped successfully.");
+        console.log("Process stopped successfully");
       });
     } else {
-      console.log("No React development server process found.");
+      console.log("No process found");
     }
   });
 }
