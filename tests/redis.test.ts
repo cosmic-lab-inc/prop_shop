@@ -37,7 +37,7 @@ describe("Redis", () => {
     process.exit();
   });
 
-  it("Set & Get", async () => {
+  it("Get Vault PNL", async () => {
     const key = "testKey";
     const value = "testValue";
     await redis.set(key, value);
@@ -46,7 +46,7 @@ describe("Redis", () => {
     console.log("done set & get");
   });
 
-  it("Get Vault PNL", async () => {
+  it("Set & Get Vault PNL", async () => {
     const vaults = await client.fetchVaults();
     console.log(`${vaults.length} vaults`);
     expect(vaults.length).toBeGreaterThan(0);
@@ -61,24 +61,28 @@ describe("Redis", () => {
       throw new Error("No Supercharger Vault found");
     }
 
+    const key = vault.pubkey.toString();
+    const preGet = new Date().getTime();
+    const getBefore = await redis.get(key);
+    console.log(`got pnl from redis in ${new Date().getTime() - preGet}ms`);
+    console.log("vault pnl exists?", !!getBefore);
+
     const daysBack = 30;
     const pnl = await client.fetchHistoricalPNL(vault, daysBack, true);
     console.log(`${pnl.length} pnl entries`);
-    const key = vault.pubkey.toString();
     const value = JSON.stringify(pnl);
     await redis.set(key, value);
     const get = await redis.get(key);
-    console.log("get:", !!get);
     if (!get) {
       throw new Error("Failed to get pnl from redis");
     }
     expect(get).not.toBeNull();
     const hydrated: HistoricalSettlePNL[] = JSON.parse(get);
-    let cumSum = 0;
+    let cumSum: number = 0;
     for (const entry of hydrated) {
-      cumSum += entry.pnl;
+      cumSum += Number(entry.pnl);
     }
-    console.log(`cumulative pnl over ${hydrated.length} days: $${cumSum}`);
+    console.log(`cumulative pnl over ${hydrated.length} trades: $${cumSum}`);
     expect(get).toBe(value);
   });
 });
