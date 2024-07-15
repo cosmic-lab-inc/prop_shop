@@ -5,10 +5,54 @@ import {
   HistoricalSettlePNL,
   PropShopClient,
   RedisClient,
+  VaultPNL,
 } from "@cosmic-lab/prop-shop-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
 import { Vault } from "../../drift-vaults/ts/sdk";
 import { decodeName } from "@drift-labs/sdk";
+import { exec } from "child_process";
+import os from "os";
+
+// Function to get all active PIDs
+function getAllActivePIDs(): Promise<number[]> {
+  return new Promise((resolve, reject) => {
+    const isWindows = os.platform() === "win32";
+    const command = isWindows ? "tasklist" : "ps -A";
+
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        reject(`exec error: ${error}`);
+        return;
+      }
+      if (stderr) {
+        reject(`stderr: ${stderr}`);
+        return;
+      }
+
+      const lines = stdout.split("\n");
+      const pids: number[] = [];
+
+      lines.forEach((line) => {
+        if (isWindows) {
+          // Windows 'tasklist' output, PID is at fixed position
+          const match = line.match(/\d+/);
+          if (match) pids.push(parseInt(match[0], 10));
+        } else {
+          // Unix 'ps -A' output, PID is the second column
+          const parts = line.trim().split(/\s+/);
+          for (const part of parts) {
+            if (part.includes("concurrently")) {
+              console.log(`pid: ${parts[0]}, part: ${part}`);
+            }
+          }
+          const pid = parseInt(parts[0], 10);
+          if (!isNaN(pid)) pids.push(pid);
+        }
+      });
+      resolve(pids);
+    });
+  });
+}
 
 describe("Redis", () => {
   const opts: ConfirmOptions = {
@@ -34,21 +78,18 @@ describe("Redis", () => {
   });
 
   afterAll(async () => {
-    process.exit();
+    process.kill(process.pid, "SIGINT");
   });
 
-  it("Get Vault PNL", async () => {
-    const key = "testKey";
-    const value = "testValue";
-    await redis.set(key, value);
-    const res = await redis.get(key);
-    expect(res).toBe(value);
-    console.log("done set & get");
+  it("PIDs", async () => {
+    const pids = await getAllActivePIDs();
+    // for (const pid of pids) {
+    //   console.log(pid);
+    // }
   });
 
   it("Set & Get Vault PNL", async () => {
     const vaults = await client.fetchVaults();
-    console.log(`${vaults.length} vaults`);
     expect(vaults.length).toBeGreaterThan(0);
 
     let vault: Vault | undefined;
@@ -63,9 +104,9 @@ describe("Redis", () => {
 
     const key = vault.pubkey.toString();
     const preGet = new Date().getTime();
-    const getBefore = await redis.get(key);
+    await redis.get(key);
+    // takes about 250ms
     console.log(`got pnl from redis in ${new Date().getTime() - preGet}ms`);
-    console.log("vault pnl exists?", !!getBefore);
 
     const daysBack = 30;
     const pnl = await client.fetchHistoricalPNL(vault, daysBack, true);
@@ -77,12 +118,16 @@ describe("Redis", () => {
       throw new Error("Failed to get pnl from redis");
     }
     expect(get).not.toBeNull();
-    const hydrated: HistoricalSettlePNL[] = JSON.parse(get);
-    let cumSum: number = 0;
-    for (const entry of hydrated) {
-      cumSum += Number(entry.pnl);
-    }
-    console.log(`cumulative pnl over ${hydrated.length} trades: $${cumSum}`);
     expect(get).toBe(value);
+
+    const data: HistoricalSettlePNL[] = JSON.parse(get);
+    if (data.length > 0) {
+      const hydrated = new VaultPNL(data);
+      console.log("pnl start date:", hydrated.dateString(hydrated.startDate()));
+      console.log("pnl end date:", hydrated.dateString(hydrated.endDate()));
+      console.log(
+        `cumulative pnl over ${data.length} trades: $${hydrated.cumulativePNL()}`,
+      );
+    }
   });
 });
