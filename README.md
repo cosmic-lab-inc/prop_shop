@@ -7,4 +7,10 @@ Invest in winning traders and earn passively, while they take a small profit sha
 ## Development
 
 To run tests, create a directory and file `.jest/env.ts`.
-In it put `export const REDIS = "redis://your-redis-server"`.
+In it put:
+
+```typescript
+export const REDIS_ENDPOINT = "redis://your-redis-server"
+export const REDIS_PASSWORD = "your-redis-password"
+export const RPC_URL = "https://your-solana-rpc"
+```

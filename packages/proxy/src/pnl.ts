@@ -84,9 +84,10 @@ export async function handleHistoricalPnl(
     } catch (e: any) {
       const error: AxiosError = e as any;
       console.warn(
-        `Error for date ${year}/${monthStr}/${dayStr} and user ${user}: ${e}`,
+        `Historical PNL missing for ${year}/${monthStr}/${dayStr} and user ${user}: ${e}`,
       );
       if (!error.message.includes("403")) {
+        console.error("Fetch historical PNL error:", e);
         throw new Error(e);
       }
     }

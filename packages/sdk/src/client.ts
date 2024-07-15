@@ -9,7 +9,6 @@ import {
   TransactionVersion,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { WalletContextState } from "@solana/wallet-adapter-react";
 import { makeObservable } from "mobx";
 import * as anchor from "@coral-xyz/anchor";
 import { BN, ProgramAccount } from "@coral-xyz/anchor";
@@ -60,18 +59,16 @@ import bs58 from "bs58";
 import StrictEventEmitter from "strict-event-emitter-types";
 import { AccountLoader } from "./accountLoader";
 import { PollingSubscriber } from "./pollingSubscriber";
-import type { WalletName } from "@solana/wallet-adapter-base";
 import {
   EventEmitter as WalletAdapterEventEmitter,
+  SendTransactionOptions,
   WalletAdapter,
   WalletAdapterEvents,
   WalletAdapterProps,
-} from "@solana/wallet-adapter-base";
-import { Wallet } from "@solana/wallet-adapter-react/src/useWallet";
-import {
-  SendTransactionOptions,
+  WalletName,
   WalletReadyState,
-} from "@solana/wallet-adapter-base/src/adapter";
+} from "@solana/wallet-adapter-base";
+import { Wallet, WalletContextState } from "@solana/wallet-adapter-react";
 
 export interface PropShopAccountEvents {
   vaultUpdate: (payload: Vault) => void;
@@ -142,10 +139,7 @@ export class PropShopClient {
     this.eventEmitter = new EventEmitter();
   }
 
-  public static keypairToWalletContextState(
-    kp: Keypair,
-    connection: Connection,
-  ): WalletContextState {
+  public static keypairToWalletContextState(kp: Keypair): WalletContextState {
     const eventEmitter = new WalletAdapterEventEmitter<WalletAdapterEvents>();
     const adapterProps: WalletAdapterProps = {
       name: "DevKeypairWallet" as WalletName<"DevKeypairWallet">,
@@ -211,9 +205,22 @@ export class PropShopClient {
         return connection.sendTransaction(transaction, [kp], options);
       },
 
-      signTransaction: undefined,
-      signAllTransactions: undefined,
-      signMessage: undefined,
+      signTransaction<T = Transaction>(transaction: T): Promise<T> {
+        (transaction as Transaction).partialSign(kp);
+        return Promise.resolve(transaction);
+      },
+      signAllTransactions<T = Transaction>(transactions: T[]): Promise<T[]> {
+        for (const transaction of transactions) {
+          (transaction as Transaction).partialSign(kp);
+        }
+        return Promise.resolve(transactions);
+      },
+
+      signMessage(message: Uint8Array): Promise<Uint8Array> {
+        const tx = Transaction.from(message);
+        tx.partialSign(kp);
+        return Promise.resolve(tx.serializeMessage());
+      },
       signIn: undefined,
     };
     return walletCtx;
@@ -641,15 +648,20 @@ export class PropShopClient {
    * Returns historical pnl data from most recent to oldest
    * @param vault
    * @param daysBack
+   * @param usePrefix set to true if used outside the vite app
    */
   async fetchHistoricalPNL(
     vault: Vault,
     daysBack: number,
+    usePrefix?: boolean,
   ): Promise<HistoricalSettlePNL[]> {
     try {
       const name = decodeName(vault.name);
       console.log(`fetch pnl for ${name} and user: ${vault.user}`);
-      const url = "/api/performance";
+      let url = "/api/performance";
+      if (usePrefix) {
+        url = `http://localhost:5173${url}`;
+      }
       const response = await fetch(url, {
         method: "POST",
         headers: {

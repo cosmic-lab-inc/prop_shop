@@ -1,7 +1,17 @@
-import { createClient, RedisClientType, RedisDefaultModules } from "redis";
+import {
+  createClient,
+  RedisClientOptions,
+  RedisClientType,
+  RedisDefaultModules,
+} from "redis";
 import { RedisFunctions, RedisModules, RedisScripts } from "@redis/client";
 
 type Client = RedisClientType<
+  RedisDefaultModules & RedisModules,
+  RedisFunctions,
+  RedisScripts
+>;
+type Options = RedisClientOptions<
   RedisDefaultModules & RedisModules,
   RedisFunctions,
   RedisScripts
@@ -43,35 +53,37 @@ export class RedisClient {
     url: string,
     password?: string,
   ): Promise<RedisClient> {
+    let cfg: Options;
     if (password) {
-      // split port from url by delimiting the last colon
-      const [host, port] = url.split(":").slice(-1);
-      const client = createClient({
+      const [host, port] = url.split(":").slice();
+      cfg = {
         password,
         socket: {
           host,
           port: Number(port),
         },
-      });
-      return new RedisClient(url, client);
+      };
     } else {
-      const client: Client = await createClient({
+      cfg = {
         url,
-      })
-        .on("error", (err) => console.log("Redis Client Error", err))
-        .connect();
-      return new RedisClient(url, client);
+      };
     }
+    const client = await createClient(cfg)
+      .on("error", (err) => console.error("Redis Client Error", err))
+      .connect();
+    return new RedisClient(url, client);
   }
 
   public async set(key: string, value: string): Promise<void> {
     const res = await this.client.set(key, value);
-    console.log("set result:", res);
+    if (res && res === "OK") {
+      return;
+    } else {
+      throw new Error("Failed to set key");
+    }
   }
 
   public async get(key: string): Promise<string | null> {
-    const res = await this.client.get(key);
-    console.log("get result:", res);
-    return res;
+    return await this.client.get(key);
   }
 }

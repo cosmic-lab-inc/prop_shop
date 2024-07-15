@@ -1,6 +1,7 @@
 import * as driftVaults from "@drift-labs/vaults-sdk";
 
 export { driftVaults };
+
 export * from "./types";
 export * from "./utils";
 export * from "./constants";
@@ -10,3 +11,4 @@ export * from "./client";
 export * from "./websocketSubscriber";
 export * from "./pollingSubscriber";
 export * from "./accountLoader";
+export * from "./redisClient";
