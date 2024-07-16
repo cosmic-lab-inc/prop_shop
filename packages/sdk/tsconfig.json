@@ -3,8 +3,8 @@
     "allowJs": true,
     "checkJs": true,
     "strict": true,
-    "target": "esnext",
-    "module": "esnext",
+    "target": "es2020",
+    "module": "commonjs",
     "moduleResolution": "node",
     "noEmit": false,
     "esModuleInterop": true,
@@ -17,5 +17,12 @@
     "strictNullChecks": true,
     "strictPropertyInitialization": true,
     "outDir": "dist"
-  }
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules"
+  ]
 }
