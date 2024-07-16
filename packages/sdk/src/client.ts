@@ -321,6 +321,7 @@ export class PropShopClient {
       provider,
     );
 
+    // todo: use redis to speed up this process
     const usdcMarketIndex = 0;
     const usdcSpotMarket = await this.spotMarketByIndex(
       driftProgram,
@@ -362,6 +363,7 @@ export class PropShopClient {
     console.log(`subscribed in ${new Date().getTime() - preSub}ms`);
 
     this.loading = false;
+    // 3-4s
     console.log(
       `initialized PropShopClient in ${new Date().getTime() - now}ms`,
     );

@@ -7,7 +7,7 @@
   ],
   "installCommand": "yarn install",
   "buildCommand": "yarn build",
-  "devCommand": "yarn execute",
+  "devCommand": "yarn start",
   "framework": "vite",
   "outputDirectory": "packages/app/dist",
   "public": true

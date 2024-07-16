@@ -1,6 +1,6 @@
 import { exec } from "child_process";
 
-const startCommand = "yarn start";
+const startCommand = "yarn execute";
 
 function start() {
   console.log("Starting React app and proxy server...");
