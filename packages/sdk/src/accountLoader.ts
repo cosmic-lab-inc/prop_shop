@@ -147,6 +147,8 @@ export class AccountLoader {
     }
   }
 
+  // todo: take "PollingSubscriptionConfig" to use GPA
+  //  this is throwing error 429 because 8100 accounts / 100 per chunk are blasting 81 getMultipleAccounts calls
   async loadChunk(accountsToLoadChunks: AccountToLoad[][]): Promise<void> {
     if (accountsToLoadChunks.length === 0) {
       return;
@@ -245,7 +247,7 @@ export class AccountLoader {
         callback(buffer, slot);
       } catch (e) {
         console.debug("Bulk account load: error in account callback");
-        console.debug("accounto to load", accountToLoad.publicKey.toString());
+        console.debug("account to load", accountToLoad.publicKey.toString());
         console.debug("buffer", buffer.toString("base64"));
         for (const callback of accountToLoad.callbacks.values()) {
           console.debug("account to load cb", callback);

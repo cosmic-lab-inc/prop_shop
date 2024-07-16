@@ -20,9 +20,8 @@ import { Buffer } from "buffer";
 import {
   AccountGpaFilter,
   AccountSubscription,
-  AccountToPoll,
   DriftVaultsSubscriber,
-  PollingSubscriptionConfig,
+  SubscriptionConfig,
 } from "./types";
 import bs58 from "bs58";
 import { AccountLoader } from "./accountLoader";
@@ -34,10 +33,10 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
   eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>;
 
   accountLoader: AccountLoader;
-  accountsToPoll = new Map<string, AccountToPoll>();
+  accountsToPoll = new Map<string, AccountSubscription>();
   errorCallbackId?: string;
 
-  _subscriptionConfig: PollingSubscriptionConfig;
+  _subscriptionConfig: SubscriptionConfig;
   subscriptions: Map<string, AccountSubscription>;
 
   private isSubscribing = false;
@@ -45,7 +44,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
   public constructor(
     program: Program<DriftVaults>,
     accountLoader: AccountLoader,
-    subscriptionConfig: PollingSubscriptionConfig,
+    subscriptionConfig: SubscriptionConfig,
   ) {
     this.isSubscribed = false;
     this.program = program;
@@ -94,10 +93,12 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
             }),
           )
         ).flat();
-        console.log(`polling "accounts" returned ${accountInfos.length} items`);
+        console.log(
+          `polling config "accounts" returned ${accountInfos.length} items`,
+        );
         accountInfos.forEach((accountInfo, index) => {
           if (accountInfo) {
-            const value: Omit<AccountToPoll, "callbackId"> =
+            const value: AccountSubscription =
               this._subscriptionConfig.accounts![index];
             const sub: AccountSubscription = {
               ...value,
@@ -204,7 +205,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
 
   private async addToAccountLoader(): Promise<void> {
     for (const [_, accountToPoll] of this.accountsToPoll) {
-      accountToPoll.callbackId = await this.accountLoader.addAccount(
+      accountToPoll.id = await this.accountLoader.addAccount(
         accountToPoll.publicKey,
         (buffer: Buffer, slot: number) => {
           if (!buffer) return;
@@ -268,16 +269,12 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     }
   }
 
-  didSubscriptionSucceed(): boolean {
-    return this.isSubscribed;
-  }
-
   public async unsubscribe(): Promise<void> {
     for (const [_, accountToPoll] of this.accountsToPoll) {
-      if (accountToPoll.callbackId) {
+      if (accountToPoll.id) {
         this.accountLoader.removeAccount(
           accountToPoll.publicKey,
-          accountToPoll.callbackId,
+          accountToPoll.id,
         );
       }
     }
@@ -287,8 +284,8 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
       this.errorCallbackId = undefined;
     }
 
-    this.accountsToPoll.clear();
     this.accountLoader.stopPolling();
+    this.accountsToPoll.clear();
     this.isSubscribed = false;
   }
 

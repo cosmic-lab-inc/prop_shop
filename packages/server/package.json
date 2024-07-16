@@ -1,19 +1,21 @@
 {
   "name": "prop-shop-server",
-  "version": "0.2.10",
+  "version": "0.1.0",
   "author": "Drew Riester <epochsolana@gmail.com>",
-  "description": "Server to fetch, cache, and serve Drift data to the Prop Shop frontend",
+  "description": "Private server to keep Redis cache updated",
   "license": "Apache-2.0",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "scripts": {
     "clean": "yes | rm -rf dist && rm -rf node_modules",
     "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint",
-    "start": "ts-node src/index.ts"
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",
     "@solana/spl-token": "^0.3.7",
     "@solana/web3.js": "^1.77.3",
+    "@cosmic-lab/prop-shop-sdk": "^0.2.10",
     "axios": "^1.7.2",
     "bs58": "4.0.1",
     "cors": "^2.8.5",

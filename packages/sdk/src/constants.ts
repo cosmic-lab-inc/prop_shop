@@ -38,3 +38,6 @@ export const TEST_VAULT_DEPOSITOR = Keypair.fromSecretKey(
     63, 32, 135, 139, 175, 155, 149, 50, 185, 149, 80, 57, 7, 195, 231,
   ]),
 );
+
+export const DRIFT_API_PREFIX =
+  "https://drift-historical-data-v2.s3.eu-west-1.amazonaws.com/program/dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH/";

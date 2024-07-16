@@ -147,7 +147,7 @@ describe("Redis", () => {
   afterAll(async () => {
     await client.shutdown();
     await redis.disconnect();
-    // await killProxy();
+    await killProxy();
     const pid = await getCommandPID("test-redis");
     console.log("redis test pid:", pid);
     await stopProcess(pid);

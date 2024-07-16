@@ -57,8 +57,6 @@ import {
 import { EventEmitter } from "events";
 import bs58 from "bs58";
 import StrictEventEmitter from "strict-event-emitter-types";
-import { AccountLoader } from "./accountLoader";
-import { PollingSubscriber } from "./pollingSubscriber";
 import {
   EventEmitter as WalletAdapterEventEmitter,
   SendTransactionOptions,
@@ -70,6 +68,8 @@ import {
 } from "@solana/wallet-adapter-base";
 import { Wallet, WalletContextState } from "@solana/wallet-adapter-react";
 import { ProxyClient } from "./proxyClient";
+import { AccountLoader } from "./accountLoader";
+import { PollingSubscriber } from "./pollingSubscriber";
 
 export interface PropShopAccountEvents {
   vaultUpdate: (payload: Vault) => void;
@@ -193,7 +193,6 @@ export class PropShopClient {
       provider,
     );
 
-    // todo: use redis to speed up this process
     const usdcMarketIndex = 0;
     const usdcSpotMarket = await this.spotMarketByIndex(
       driftProgram,
@@ -236,13 +235,25 @@ export class PropShopClient {
     console.log(`subscribed in ${new Date().getTime() - preSub}ms`);
 
     this.loading = false;
-    // 3-4s
+    // 3-6s
     console.log(
       `initialized PropShopClient in ${new Date().getTime() - now}ms`,
     );
   }
 
   async subscribe(program: anchor.Program<DriftVaults>) {
+    // this._cache = new WebSocketSubscriber(program, {
+    //   filters: [
+    //     {
+    //       accountName: "vault",
+    //       eventType: "vaultUpdate",
+    //     },
+    //     {
+    //       accountName: "vaultDepositor",
+    //       eventType: "vaultDepositorUpdate",
+    //     },
+    //   ],
+    // });
     const loader = new AccountLoader(
       program.provider.connection,
       "confirmed",
@@ -629,7 +640,7 @@ export class PropShopClient {
     vaults?: ProgramAccount<DataAndSlot<Vault>>[],
     vaultDepositors?: ProgramAccount<DataAndSlot<VaultDepositor>>[],
   ): Promise<number> {
-    if (!this.vaultClient || !this._cache) {
+    if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
 
@@ -637,6 +648,9 @@ export class PropShopClient {
     if (vaults) {
       _vaults = vaults;
     } else {
+      if (!this._cache) {
+        throw new Error("Cache not initialized");
+      }
       _vaults = this.vaults();
     }
 
@@ -644,6 +658,9 @@ export class PropShopClient {
     if (vaultDepositors) {
       _vds = vaultDepositors;
     } else {
+      if (!this._cache) {
+        throw new Error("Cache not initialized");
+      }
       _vds = this.vaultDepositors();
     }
 
@@ -658,6 +675,7 @@ export class PropShopClient {
       } else {
         vault = this.vault(vd.account.data.vault).account.data;
       }
+      // todo: this errors because mainnet vaults have assets for spot markets we aren't subscribed to
       const amount =
         await this.vaultClient.calculateWithdrawableVaultDepositorEquityInDepositAsset(
           {
@@ -682,6 +700,9 @@ export class PropShopClient {
     }
     let vds: ProgramAccount<DataAndSlot<VaultDepositor>>[];
     if (!vaultDepositors) {
+      if (!this._cache) {
+        throw new Error("Cache not initialized");
+      }
       vds = this.vaultDepositors();
     } else {
       vds = vaultDepositors;
@@ -701,8 +722,14 @@ export class PropShopClient {
   public async aggregatePNL(
     vaultDepositors?: ProgramAccount<DataAndSlot<VaultDepositor>>[],
   ): Promise<number> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
     let vds: ProgramAccount<DataAndSlot<VaultDepositor>>[];
     if (!vaultDepositors) {
+      if (!this._cache) {
+        throw new Error("Cache not initialized");
+      }
       vds = this.vaultDepositors();
     } else {
       vds = vaultDepositors;

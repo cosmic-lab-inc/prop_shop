@@ -2,6 +2,7 @@
   "name": "prop-shop-app",
   "version": "0.1.0",
   "author": "Drew Riester <epochsolana@gmail.com>",
+  "description": "Prop Shop web app",
   "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"

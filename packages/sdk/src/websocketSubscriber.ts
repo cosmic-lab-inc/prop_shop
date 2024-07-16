@@ -15,23 +15,19 @@ import {
   PublicKey,
 } from "@solana/web3.js";
 import { capitalize } from "./utils";
-import { DriftVaultsSubscriber, WebSocketAccountFetchConfig } from "./types";
+import {
+  AccountGpaFilter,
+  AccountSubscription,
+  DriftVaultsSubscriber,
+  SubscriptionConfig,
+} from "./types";
 import { Buffer } from "buffer";
 import { DriftVaults } from "@drift-labs/vaults-sdk";
 import bs58 from "bs58";
 
-interface SubscribedAccount {
-  listenerId: number;
-  account?: {
-    buffer: Buffer;
-    slot: number;
-  };
-}
-
 export class WebSocketSubscriber implements DriftVaultsSubscriber {
-  _fetchConfig: WebSocketAccountFetchConfig;
-  subscribedKeys: PublicKey[];
-  subscriptions: Map<string, SubscribedAccount>;
+  _subscriptionConfig: SubscriptionConfig;
+  subscriptions: Map<string, AccountSubscription>;
   program: Program<DriftVaults>;
 
   resubOpts?: ResubOpts;
@@ -48,15 +44,13 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
    */
   public constructor(
     program: Program<DriftVaults>,
-    subscribedKeys: PublicKey[],
-    fetchConfig: WebSocketAccountFetchConfig,
+    subscriptionConfig: SubscriptionConfig,
     resubOpts?: ResubOpts,
     commitment?: Commitment,
   ) {
     this.program = program;
-    this.subscribedKeys = subscribedKeys;
     this.subscriptions = new Map();
-    this._fetchConfig = fetchConfig;
+    this._subscriptionConfig = subscriptionConfig;
     this.resubOpts = resubOpts;
     if (
       this.resubOpts?.resubTimeoutMs &&
@@ -71,72 +65,11 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
       commitment ?? (this.program.provider as AnchorProvider).opts.commitment;
   }
 
-  async subscribe(): Promise<void> {
-    if (this.isUnsubscribing) {
-      return;
-    }
-
-    for (const key of this.subscribedKeys) {
-      const listenerId = this.program.provider.connection.onAccountChange(
-        key,
-        (accountInfo, context) => {
-          if (this.resubOpts?.resubTimeoutMs) {
-            this.receivingData = true;
-            clearTimeout(this.timeoutId);
-            this.handleRpcResponse(context, [
-              {
-                publicKey: key,
-                account: accountInfo,
-              },
-            ]);
-            this.setTimeout();
-          } else {
-            this.handleRpcResponse(context, [
-              {
-                publicKey: key,
-                account: accountInfo,
-              },
-            ]);
-          }
-        },
-        this.commitment,
-      );
-      this.subscriptions.set(key.toString(), {
-        listenerId,
-      });
-    }
-
-    if (this.resubOpts?.resubTimeoutMs) {
-      this.receivingData = true;
-      this.setTimeout();
-    }
-  }
-
-  private setTimeout(): void {
-    this.timeoutId = setTimeout(async () => {
-      if (this.isUnsubscribing) {
-        // If we are in the process of unsubscribing, do not attempt to resubscribe
-        return;
-      }
-
-      if (this.receivingData) {
-        if (this.resubOpts?.logResubMessages) {
-          console.log(
-            `No ws data in ${this.resubOpts.resubTimeoutMs}ms, resubscribing`,
-          );
-        }
-        await this.unsubscribe(true);
-        this.receivingData = false;
-        await this.subscribe();
-      }
-    }, this.resubOpts?.resubTimeoutMs);
-  }
-
   async fetch(): Promise<void> {
     const accounts: ProgramAccount<AccountInfo<Buffer>>[] = [];
 
-    if (this._fetchConfig.keys) {
-      const keys: PublicKey[] = this._fetchConfig.keys.map(
+    if (this._subscriptionConfig.accounts) {
+      const keys: PublicKey[] = this._subscriptionConfig.accounts.map(
         (key) => new PublicKey(key),
       );
       if (keys.length > 0) {
@@ -171,11 +104,16 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
             }),
           )
         ).flat();
+        console.log(
+          `websocket config "accounts" returned ${accountInfos.length} items`,
+        );
         accountInfos.forEach((accountInfo, index) => {
           if (accountInfo) {
-            const key = this._fetchConfig.keys![index];
+            const value: AccountSubscription =
+              this._subscriptionConfig.accounts![index];
+
             accounts.push({
-              publicKey: key,
+              publicKey: value.publicKey,
               account: accountInfo,
             });
           }
@@ -183,36 +121,283 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
       }
     }
 
-    if (this._fetchConfig.filters) {
-      const gpaConfig: GetProgramAccountsConfig = {
-        filters: this._fetchConfig.filters.map((filter) => {
-          return {
-            memcmp: {
-              offset: 0,
-              bytes: bs58.encode(
-                BorshAccountsCoder.accountDiscriminator(
-                  capitalize(filter.accountName),
-                ),
-              ),
-            },
-          };
-        }),
-      };
-      const gpa: GetProgramAccountsResponse =
-        await this.program.provider.connection.getProgramAccounts(
-          this.program.programId,
-          gpaConfig,
+    if (this._subscriptionConfig.filters) {
+      const gpa: GetProgramAccountsResponse = (
+        await Promise.all(
+          this._subscriptionConfig.filters.map((filter) => {
+            const gpaConfig: GetProgramAccountsConfig = {
+              filters: [
+                {
+                  memcmp: {
+                    offset: 0,
+                    bytes: bs58.encode(
+                      BorshAccountsCoder.accountDiscriminator(
+                        capitalize(filter.accountName),
+                      ),
+                    ),
+                  },
+                },
+              ],
+            };
+            return this.program.provider.connection.getProgramAccounts(
+              this.program.programId,
+              gpaConfig,
+            );
+          }),
+        )
+      ).flat();
+
+      const discrims: Map<string, AccountGpaFilter> = new Map();
+      for (const filter of this._subscriptionConfig.filters) {
+        const discrim = bs58.encode(
+          BorshAccountsCoder.accountDiscriminator(
+            capitalize(filter.accountName),
+          ),
         );
+        discrims.set(discrim, filter);
+      }
+      console.log(`websocket config "filters" returned ${gpa.length} items`);
+      const slot = await this.program.provider.connection.getSlot();
       gpa.forEach((value) => {
-        accounts.push({
-          publicKey: value.pubkey,
-          account: value.account,
-        });
+        // get first 8 bytes of data
+        const discrim = bs58.encode(value.account.data.subarray(0, 8));
+        const filter = discrims.get(discrim);
+        if (!filter) {
+          throw new Error(`No filter found for discriminator: ${discrim}`);
+        }
+        try {
+          const accountName =
+            this.program.account[filter.accountName].idlAccount.name;
+          const data = this.program.account[
+            filter.accountName
+          ].coder.accounts.decodeUnchecked(accountName, value.account.data);
+          const dataAndSlot = {
+            data,
+            slot,
+          };
+
+          accounts.push({
+            publicKey: value.pubkey,
+            account: value.account,
+          });
+        } catch (e: any) {
+          throw new Error(e);
+        }
       });
     }
 
     const slot = await this.program.provider.connection.getSlot();
     this.handleRpcResponse({ slot }, accounts);
+  }
+
+  async subscribe() {
+    if (this.isUnsubscribing) {
+      return;
+    }
+
+    const subs: AccountSubscription[] = [];
+
+    if (this._subscriptionConfig.accounts) {
+      const keys: PublicKey[] = this._subscriptionConfig.accounts.map(
+        (key) => new PublicKey(key),
+      );
+      if (keys.length > 0) {
+        const chunks = [];
+        const chunkSize = 99;
+        if (keys.length > chunkSize) {
+          // chunk keys into PublicKey[][]
+          let i = 0;
+          while (i < keys.length) {
+            let end;
+            if (i + chunkSize < keys.length) {
+              end = i + chunkSize;
+            } else {
+              end = keys.length;
+            }
+            const chunk = keys.slice(i, end);
+            console.log(`chunk from [${i}, ${end}), length: ${chunk.length}`);
+            chunks.push(chunk);
+            i += chunkSize;
+          }
+        } else {
+          console.log("single chunk:", keys.length);
+          chunks.push(keys);
+        }
+
+        const accountInfos: (AccountInfo<Buffer> | null)[] = (
+          await Promise.all(
+            chunks.map((keys) => {
+              return this.program.provider.connection.getMultipleAccountsInfo(
+                keys,
+              );
+            }),
+          )
+        ).flat();
+        console.log(
+          `websocket config "accounts" returned ${accountInfos.length} items`,
+        );
+        accountInfos.forEach((accountInfo, index) => {
+          if (accountInfo) {
+            const value: AccountSubscription =
+              this._subscriptionConfig.accounts![index];
+
+            const id = this.program.provider.connection.onAccountChange(
+              value.publicKey,
+              (accountInfo, context) => {
+                if (this.resubOpts?.resubTimeoutMs) {
+                  this.receivingData = true;
+                  clearTimeout(this.timeoutId);
+                  this.handleRpcResponse(context, [
+                    {
+                      publicKey: value.publicKey,
+                      account: accountInfo,
+                    },
+                  ]);
+                  this.setTimeout();
+                } else {
+                  this.handleRpcResponse(context, [
+                    {
+                      publicKey: value.publicKey,
+                      account: accountInfo,
+                    },
+                  ]);
+                }
+              },
+              this.commitment,
+            );
+
+            const sub: AccountSubscription = {
+              ...value,
+              accountInfo,
+              id: id.toString(),
+            };
+            this.subscriptions.set(sub.publicKey.toString(), sub);
+            subs.push(sub);
+          }
+        });
+      }
+    }
+
+    if (this._subscriptionConfig.filters) {
+      const gpa: GetProgramAccountsResponse = (
+        await Promise.all(
+          this._subscriptionConfig.filters.map((filter) => {
+            const gpaConfig: GetProgramAccountsConfig = {
+              filters: [
+                {
+                  memcmp: {
+                    offset: 0,
+                    bytes: bs58.encode(
+                      BorshAccountsCoder.accountDiscriminator(
+                        capitalize(filter.accountName),
+                      ),
+                    ),
+                  },
+                },
+              ],
+            };
+            return this.program.provider.connection.getProgramAccounts(
+              this.program.programId,
+              gpaConfig,
+            );
+          }),
+        )
+      ).flat();
+
+      const discrims: Map<string, AccountGpaFilter> = new Map();
+      for (const filter of this._subscriptionConfig.filters) {
+        const discrim = bs58.encode(
+          BorshAccountsCoder.accountDiscriminator(
+            capitalize(filter.accountName),
+          ),
+        );
+        discrims.set(discrim, filter);
+      }
+      console.log(`websocket config "filters" returned ${gpa.length} items`);
+      const slot = await this.program.provider.connection.getSlot();
+      gpa.forEach((value) => {
+        // get first 8 bytes of data
+        const discrim = bs58.encode(value.account.data.subarray(0, 8));
+        const filter = discrims.get(discrim);
+        if (!filter) {
+          throw new Error(`No filter found for discriminator: ${discrim}`);
+        }
+        try {
+          const accountName =
+            this.program.account[filter.accountName].idlAccount.name;
+          const data = this.program.account[
+            filter.accountName
+          ].coder.accounts.decodeUnchecked(accountName, value.account.data);
+          const dataAndSlot = {
+            data,
+            slot,
+          };
+
+          const id = this.program.provider.connection.onAccountChange(
+            value.pubkey,
+            (accountInfo, context) => {
+              if (this.resubOpts?.resubTimeoutMs) {
+                this.receivingData = true;
+                clearTimeout(this.timeoutId);
+                this.handleRpcResponse(context, [
+                  {
+                    publicKey: value.pubkey,
+                    account: accountInfo,
+                  },
+                ]);
+                this.setTimeout();
+              } else {
+                this.handleRpcResponse(context, [
+                  {
+                    publicKey: value.pubkey,
+                    account: accountInfo,
+                  },
+                ]);
+              }
+            },
+            this.commitment,
+          );
+
+          const sub: AccountSubscription = {
+            accountName: filter.accountName,
+            eventType: filter.eventType,
+            publicKey: value.pubkey,
+            accountInfo: value.account,
+            dataAndSlot,
+            id: id.toString(),
+          };
+          this.subscriptions.set(sub.publicKey.toString(), sub);
+          subs.push(sub);
+        } catch (e: any) {
+          throw new Error(e);
+        }
+      });
+    }
+
+    if (this.resubOpts?.resubTimeoutMs) {
+      this.receivingData = true;
+      this.setTimeout();
+    }
+  }
+
+  private setTimeout(): void {
+    this.timeoutId = setTimeout(async () => {
+      if (this.isUnsubscribing) {
+        // If we are in the process of unsubscribing, do not attempt to resubscribe
+        return;
+      }
+
+      if (this.receivingData) {
+        if (this.resubOpts?.logResubMessages) {
+          console.log(
+            `No ws data in ${this.resubOpts.resubTimeoutMs}ms, resubscribing`,
+          );
+        }
+        await this.unsubscribe(true);
+        this.receivingData = false;
+        await this.subscribe();
+      }
+    }, this.resubOpts?.resubTimeoutMs);
   }
 
   handleRpcResponse(
@@ -224,10 +409,10 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
       // only update accounts that are subscribed
       if (!this.subscriptions.has(key)) {
         const existing = this.subscriptions.get(key)!;
-        const lastSlot = existing.account?.slot ?? 0;
+        const lastSlot = existing.dataAndSlot?.slot ?? 0;
         if (context.slot > lastSlot) {
-          existing.account = {
-            buffer: account.account.data,
+          existing.dataAndSlot = {
+            data: account.account.data,
             slot: context.slot,
           };
         }
@@ -240,10 +425,10 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     key: PublicKey,
   ): DataAndSlot<any> | undefined {
     const entry = this.subscriptions.get(key.toString());
-    if (entry && entry.account) {
+    if (entry && entry.dataAndSlot) {
       return this.program.account[accountName].coder.accounts.decode(
         capitalize(accountName),
-        entry.account.buffer,
+        entry.dataAndSlot.data,
       );
     } else {
       return undefined;
@@ -256,15 +441,18 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     const decoded: ProgramAccount<DataAndSlot<any>>[] = [];
     for (const [key, account] of Array.from(this.subscriptions.entries())) {
       const entry = this.subscriptions.get(key.toString());
-      if (entry && entry.account) {
+      if (entry && entry.dataAndSlot) {
         const decodedAccount = this.program.account[
           accountName
-        ].coder.accounts.decode(capitalize(accountName), entry.account.buffer);
+        ].coder.accounts.decode(
+          capitalize(accountName),
+          entry.dataAndSlot.data,
+        );
         decoded.push({
           publicKey: new PublicKey(key),
           account: {
             data: decodedAccount,
-            slot: entry.account.slot,
+            slot: entry.dataAndSlot.slot,
           },
         });
       }
@@ -285,7 +473,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     for (const [key, value] of Array.from(this.subscriptions.entries())) {
       promises.push(
         this.program.provider.connection
-          .removeAccountChangeListener(value.listenerId)
+          .removeAccountChangeListener(Number(value.id))
           .then(() => {
             keysToRemove.push(key);
           }),

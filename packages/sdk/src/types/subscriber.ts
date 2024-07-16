@@ -22,29 +22,21 @@ export interface DriftVaultsSubscriber {
   unsubscribe(): Promise<any>;
 }
 
-export interface AccountToPoll {
+export interface AccountSubscription {
   accountName: keyof AccountNamespace<DriftVaults>;
   publicKey: PublicKey;
   eventType: keyof PropShopAccountEvents;
-  callbackId?: string;
-}
-
-export type AccountSubscription = AccountToPoll & {
+  id?: string;
   accountInfo?: AccountInfo<Buffer>;
   dataAndSlot?: DataAndSlot<any>;
-};
+}
 
 export interface AccountGpaFilter {
   accountName: keyof AccountNamespace<DriftVaults>;
   eventType: keyof PropShopAccountEvents;
 }
 
-export interface WebSocketAccountFetchConfig {
-  keys?: PublicKey[];
-  filters?: AccountGpaFilter[];
-}
-
-export interface PollingSubscriptionConfig {
-  accounts?: Omit<AccountToPoll, "callbackId">[];
+export interface SubscriptionConfig {
+  accounts?: Omit<AccountSubscription, "id" & "accountInfo" & "dataAndSlot">[];
   filters?: AccountGpaFilter[];
 }

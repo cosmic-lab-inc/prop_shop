@@ -1,8 +1,10 @@
+import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
-import { handleHistoricalPnl } from "./pnl";
-import { RedisClient } from "./redisClient";
-import dotenv from "dotenv";
+import {
+  fetchDriftUserHistoricalPnl,
+  RedisClient,
+} from "@cosmic-lab/prop-shop-sdk";
 
 // env in root of workspace
 dotenv.config({
@@ -42,7 +44,7 @@ app.post("/api/performance", async (req, res) => {
     const { vaultKey, vaultUser, daysBack } = req.body;
     let data = await redis.get(vaultKey);
     if (!data) {
-      const value = await handleHistoricalPnl(vaultUser, daysBack);
+      const value = await fetchDriftUserHistoricalPnl(vaultUser, daysBack);
       console.log(`vault PNL not cached, fetched ${value.length} entries`);
       data = JSON.stringify(value);
       await redis.set(vaultKey, data);
@@ -74,6 +76,11 @@ app.post("/api/get", async (req, res) => {
     console.error(e);
     throw new Error(e);
   }
+});
+
+process.on("SIGINT" || "SIGTERM" || "SIGKILL", async () => {
+  await redis.disconnect();
+  process.exit();
 });
 
 app.listen(port, async () => {
