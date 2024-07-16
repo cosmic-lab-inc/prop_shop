@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { handleHistoricalPnl } from "./pnl";
-import { RedisClient } from "@cosmic-lab/prop-shop-sdk";
+import { RedisClient } from "./redisClient";
 import dotenv from "dotenv";
 
 // env in root of workspace
@@ -30,7 +30,7 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-app.use(async (req, res, next) => {
+app.use(async (_req, _res, next) => {
   if (!redis.connected) {
     await redis.connect();
   }
@@ -41,9 +41,11 @@ app.post("/api/performance", async (req, res) => {
   try {
     const { vaultKey, vaultUser, daysBack } = req.body;
     let data = await redis.get(vaultKey);
-    // let data;
     if (!data) {
-      data = JSON.stringify(await handleHistoricalPnl(vaultUser, daysBack));
+      const value = await handleHistoricalPnl(vaultUser, daysBack);
+      console.log(`vault PNL not cached, fetched ${value.length} entries`);
+      data = JSON.stringify(value);
+      await redis.set(vaultKey, data);
     }
     res.send(data);
   } catch (e: any) {
@@ -75,6 +77,6 @@ app.post("/api/get", async (req, res) => {
 });
 
 app.listen(port, async () => {
-  // await redis.connect();
+  await redis.connect();
   console.log(`Proxy server listening at http://localhost:${port}`);
 });

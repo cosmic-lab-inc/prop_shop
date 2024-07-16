@@ -5,9 +5,7 @@ const startCommand = "yarn execute";
 function start() {
   console.log("Starting React app and proxy server...");
   exec(startCommand, (error, stdout, stderr) => {
-    if (stdout.length > 0) {
-      console.log(`stdout: ${stdout}`);
-    }
+    console.log(`stdout: ${stdout}`);
     if (error || stderr.length > 0) {
       console.error(`exec error: ${error || stderr}`);
       return;

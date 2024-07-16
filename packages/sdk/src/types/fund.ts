@@ -29,7 +29,23 @@ export class VaultPNL {
     if (data.length === 0) {
       throw new Error("No PNL data found");
     }
-    this.data = data;
+    const startTs = Number(data[0].ts);
+    const endTs = Number(data[data.length - 1].ts);
+    let series = data;
+    if (endTs < startTs) {
+      series = data.reverse();
+    }
+    this.data = series;
+  }
+
+  public cumulativeSeriesPNL(): number[] {
+    const data: number[] = [];
+    let cumSum: number = 0;
+    for (const entry of this.data) {
+      cumSum += Number(entry.pnl);
+      data.push(cumSum);
+    }
+    return data;
   }
 
   public cumulativePNL(): number {

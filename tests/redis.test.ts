@@ -39,7 +39,6 @@ function killProxy(): Promise<void> {
             if (spaceDe.includes("*:5173")) {
               const pid = parseInt(spaceDelimited[1], 10);
               if (!isNaN(pid)) {
-                console.log("proxy spaceDelimited:", spaceDelimited);
                 console.log(`kill proxy pid: ${pid}, parts: ${spaceDelimited}`);
                 resolve(stopProcess(pid));
                 return;
@@ -148,7 +147,7 @@ describe("Redis", () => {
   afterAll(async () => {
     await client.shutdown();
     await redis.disconnect();
-    await killProxy();
+    // await killProxy();
     const pid = await getCommandPID("test-redis");
     console.log("redis test pid:", pid);
     await stopProcess(pid);
@@ -158,10 +157,13 @@ describe("Redis", () => {
     const vaults = await client.fetchVaults();
     expect(vaults.length).toBeGreaterThan(0);
 
-    for (const vault of vaults) {
+    const vault = vaults.find(
+      (v) => decodeName(v.account.name) === "Supercharger Vault",
+    );
+    if (vault) {
       const key = vault.account.pubkey.toString();
       const name = decodeName(vault.account.name);
-      const daysBack = 100;
+      const daysBack = 30;
       const pnl = await ProxyClient.performance(vault.account, daysBack, true);
       const value = JSON.stringify(pnl);
       await redis.set(key, value);

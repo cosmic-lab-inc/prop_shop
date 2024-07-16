@@ -13,12 +13,6 @@ export function useClient(): PropShopClient | undefined {
   React.useEffect(() => {
     const run = async () => {
       if (!client && wallet.publicKey) {
-        if (!process.env.REDIS_ENDPOINT) {
-          throw new Error("REDIS_ENDPOINT is not defined");
-        }
-        if (!process.env.REDIS_PASSWORD) {
-          throw new Error("REDIS_PASSWORD is not defined");
-        }
         const _client = new PropShopClient(wallet, connection.connection);
         if (!_client.vaultClient && !_client.loading) {
           await _client.initialize();

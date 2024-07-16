@@ -4,7 +4,8 @@
   "author": "Drew Riester <epochsolana@gmail.com>",
   "description": "Frontend client for Prop Shop",
   "license": "Apache-2.0",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/cosmic-lab-inc/prop_shop.git"
@@ -12,8 +13,8 @@
   "scripts": {
     "clean": "yes | rm -rf dist && rm -rf node_modules",
     "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint",
-    "test": "jest",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "jest"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",

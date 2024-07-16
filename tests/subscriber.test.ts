@@ -36,7 +36,7 @@ describe("Polling Subscriber", () => {
     filters: [
       {
         accountName: "vault",
-        eventType: "vaultDepositorUpdate",
+        eventType: "vaultUpdate",
       },
       {
         accountName: "vaultDepositor",
@@ -45,15 +45,16 @@ describe("Polling Subscriber", () => {
     ],
   });
 
-  // beforeAll(async () => {
-  //     await cache.subscribe();
-  // });
-
   afterAll(async () => {
     await cache.unsubscribe();
   });
 
   it("Subscribe", async () => {
     await cache.subscribe();
+    const vaults = cache.getAccounts("vault");
+    console.log(`cached ${vaults.length} vaults`);
+
+    const vds = cache.getAccounts("vaultDepositor");
+    console.log(`cached ${vds.length} vaults`);
   });
 });

@@ -153,13 +153,13 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         const filter = discrims.get(discrim);
         if (!filter) {
           throw new Error(`No filter found for discriminator: ${discrim}`);
-        } else {
+        }
+        try {
+          const accountName =
+            this.program.account[filter.accountName].idlAccount.name;
           const data = this.program.account[
             filter.accountName
-          ].coder.accounts.decodeUnchecked(
-            capitalize(filter.accountName),
-            value.account.data,
-          );
+          ].coder.accounts.decodeUnchecked(accountName, value.account.data);
           const dataAndSlot = {
             data,
             slot,
@@ -173,6 +173,8 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
           };
           this.subscriptions.set(sub.publicKey.toString(), sub);
           subs.push(sub);
+        } catch (e: any) {
+          throw new Error(e);
         }
       });
     }
@@ -207,12 +209,11 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         (buffer: Buffer, slot: number) => {
           if (!buffer) return;
 
+          const accountName =
+            this.program.account[accountToPoll.accountName].idlAccount.name;
           const account = this.program.account[
             accountToPoll.accountName
-          ].coder.accounts.decodeUnchecked(
-            capitalize(accountToPoll.accountName),
-            buffer,
-          );
+          ].coder.accounts.decodeUnchecked(accountName, buffer);
           const dataAndSlot = {
             data: account,
             slot,
@@ -251,12 +252,11 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
       const { buffer, slot } = bufferAndSlot;
 
       if (buffer) {
+        const accountName =
+          this.program.account[accountToPoll.accountName].idlAccount.name;
         const account = this.program.account[
           accountToPoll.accountName
-        ].coder.accounts.decodeUnchecked(
-          capitalize(accountToPoll.accountName),
-          buffer,
-        );
+        ].coder.accounts.decodeUnchecked(accountName, buffer);
         this.subscriptions.set(accountToPoll.publicKey.toString(), {
           ...accountToPoll,
           dataAndSlot: {
