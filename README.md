@@ -6,6 +6,10 @@ Invest in winning traders and earn passively, while they take a small profit sha
 
 ## Development
 
+See `packages/app/.env.exmaple` and create a `.env` next to it.
+
+## Testing
+
 To run tests, create a directory and file `.jest/env.ts`.
 In it put:
 

@@ -3,7 +3,7 @@
     "allowJs": true,
     "checkJs": true,
     "strict": true,
-    "target": "es2016",
+    "target": "es2020",
     "module": "commonjs",
     "moduleResolution": "node",
     "noEmit": false,
@@ -17,5 +17,8 @@
     "strictNullChecks": true,
     "strictPropertyInitialization": true,
     "outDir": "dist"
-  }
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
 }

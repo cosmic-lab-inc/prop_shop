@@ -50,6 +50,7 @@ import {
   getCompetitorAddressSync,
 } from "@drift-labs/competitions-sdk";
 import { TEST_VAULT_DEPOSITOR } from "@cosmic-lab/prop-shop-sdk";
+import { afterAll, beforeAll, describe, it } from "@jest/globals";
 
 describe("driftProtocolVaults", () => {
   const opts: ConfirmOptions = {

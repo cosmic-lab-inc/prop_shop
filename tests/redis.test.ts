@@ -1,10 +1,58 @@
 import * as anchor from "@coral-xyz/anchor";
 import { ConfirmOptions, Connection, Keypair } from "@solana/web3.js";
 import { REDIS_ENDPOINT, REDIS_PASSWORD, RPC_URL } from "../.jest/env";
-import { PropShopClient, RedisClient } from "@cosmic-lab/prop-shop-sdk";
+import {
+  driftVaults,
+  HistoricalSettlePNL,
+  PropShopClient,
+  ProxyClient,
+  RedisClient,
+  VaultPNL,
+} from "@cosmic-lab/prop-shop-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
 import { exec } from "child_process";
-import { sleep } from "./testHelpers";
+import { decodeName } from "@drift-labs/sdk";
+
+function killProxy(): Promise<void> {
+  // proxy runs on port 5173
+  return new Promise((resolve, reject) => {
+    exec("lsof -i:5173", (error, stdout, stderr) => {
+      if (error) {
+        reject(`exec error: ${error}`);
+        return;
+      }
+      if (stderr) {
+        reject(`stderr: ${stderr}`);
+        return;
+      }
+
+      const lines = stdout.split("\n");
+
+      lines.forEach((line) => {
+        const regexForComma = /,/;
+        const regexForWhitespace = /\s+/;
+        const parts = line.trim().split(regexForComma);
+
+        if (parts.length > 0 && !!parts[0]) {
+          const spaceDelimited = parts[0].trim().split(regexForWhitespace);
+          for (const spaceDe of spaceDelimited) {
+            if (spaceDe.includes("*:5173")) {
+              const pid = parseInt(spaceDelimited[1], 10);
+              if (!isNaN(pid)) {
+                console.log("proxy spaceDelimited:", spaceDelimited);
+                console.log(`kill proxy pid: ${pid}, parts: ${spaceDelimited}`);
+                resolve(stopProcess(pid));
+                return;
+              }
+            }
+          }
+        }
+      });
+
+      resolve();
+    });
+  });
+}
 
 // Function to get all active PIDs
 function getCommandPID(command: string): Promise<number> {
@@ -28,8 +76,8 @@ function getCommandPID(command: string): Promise<number> {
         for (const part of parts) {
           if (part.includes(command)) {
             const pid = parseInt(parts[0], 10);
-            console.log(`pid: ${pid}, parts: ${parts}`);
             if (!isNaN(pid)) {
+              console.log(`\"${command}\" pid: ${pid}, parts: ${parts}`);
               resolve(pid);
             }
           }
@@ -43,7 +91,6 @@ function getCommandPID(command: string): Promise<number> {
 
 async function stopProcess(pid: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    console.log("Stopping redis test...");
     exec(`kill -9 ${pid}`, (killError, killStdout, killStderr) => {
       if (killStdout.length > 0) {
         console.log(`killStdout: ${killStdout}`);
@@ -52,7 +99,7 @@ async function stopProcess(pid: number): Promise<void> {
         reject(new Error(`Error killing process: ${killError || killStderr}`));
         return;
       }
-      console.log("Stopped successfully");
+      console.log("Killed redis test pid");
       resolve();
     });
   });
@@ -86,64 +133,67 @@ describe("Redis", () => {
   const provider = new anchor.AnchorProvider(connection, anchorWallet, opts);
   anchor.setProvider(provider);
 
-  const client = new PropShopClient(wallet, connection);
-  let redis: RedisClient;
-
-  beforeAll(async () => {
-    redis = await RedisClient.new(REDIS_ENDPOINT, REDIS_PASSWORD);
-    await client.initialize();
+  const redis = RedisClient.new({
+    endpoint: REDIS_ENDPOINT,
+    password: REDIS_PASSWORD,
   });
 
-  it("Dummy test", async () => {
-    await sleep(100);
+  const client = new PropShopClient(wallet, connection);
+
+  beforeAll(async () => {
+    await client.initialize();
+    await redis.connect();
   });
 
   afterAll(async () => {
-    await redis.client.quit();
+    await client.shutdown();
+    await redis.disconnect();
+    await killProxy();
     const pid = await getCommandPID("test-redis");
+    console.log("redis test pid:", pid);
     await stopProcess(pid);
   });
 
-  // it("Set & Get Vault PNL", async () => {
-  //   const vaults = await client.fetchVaults();
-  //   expect(vaults.length).toBeGreaterThan(0);
-  //
-  //   let vault: Vault | undefined;
-  //   for (const v of vaults) {
-  //     if (decodeName(v.account.name) === "Supercharger Vault") {
-  //       vault = v.account;
-  //     }
-  //   }
-  //   if (!vault) {
-  //     throw new Error("No Supercharger Vault found");
-  //   }
-  //
-  //   const key = vault.pubkey.toString();
-  //   const preGet = new Date().getTime();
-  //   await redis.get(key);
-  //   // takes about 250ms
-  //   console.log(`got pnl from redis in ${new Date().getTime() - preGet}ms`);
-  //
-  //   const daysBack = 30;
-  //   const pnl = await client.fetchHistoricalPNL(vault, daysBack, true);
-  //   console.log(`${pnl.length} pnl entries`);
-  //   const value = JSON.stringify(pnl);
-  //   await redis.set(key, value);
-  //   const get = await redis.get(key);
-  //   if (!get) {
-  //     throw new Error("Failed to get pnl from redis");
-  //   }
-  //   expect(get).not.toBeNull();
-  //   expect(get).toBe(value);
-  //
-  //   const data: HistoricalSettlePNL[] = JSON.parse(get);
-  //   if (data.length > 0) {
-  //     const hydrated = new VaultPNL(data);
-  //     console.log("pnl start date:", hydrated.dateString(hydrated.startDate()));
-  //     console.log("pnl end date:", hydrated.dateString(hydrated.endDate()));
-  //     console.log(
-  //       `cumulative pnl over ${data.length} trades: $${hydrated.cumulativePNL()}`,
-  //     );
-  //   }
-  // });
+  it("Set & Get Vault PNL", async () => {
+    const vaults = await client.fetchVaults();
+    expect(vaults.length).toBeGreaterThan(0);
+
+    let vault: driftVaults.Vault | undefined;
+    for (const v of vaults) {
+      if (decodeName(v.account.name) === "Supercharger Vault") {
+        vault = v.account;
+      }
+    }
+    if (!vault) {
+      throw new Error("No Supercharger Vault found");
+    }
+
+    const key = vault.pubkey.toString();
+    const preGet = new Date().getTime();
+    await redis.get(key);
+    // takes about 250ms
+    console.log(`got pnl from redis in ${new Date().getTime() - preGet}ms`);
+
+    const daysBack = 30;
+    const pnl = await ProxyClient.performance(vault, daysBack, true);
+    console.log(`${pnl.length} pnl entries`);
+    const value = JSON.stringify(pnl);
+    await redis.set(key, value);
+    const get = await redis.get(key);
+    if (!get) {
+      throw new Error("Failed to get pnl from redis");
+    }
+    expect(get).not.toBeNull();
+    expect(get).toBe(value);
+
+    const data: HistoricalSettlePNL[] = JSON.parse(get);
+    if (data.length > 0) {
+      const hydrated = new VaultPNL(data);
+      console.log("pnl start date:", hydrated.dateString(hydrated.startDate()));
+      console.log("pnl end date:", hydrated.dateString(hydrated.endDate()));
+      console.log(
+        `cumulative pnl over ${data.length} trades: $${hydrated.cumulativePNL()}`,
+      );
+    }
+  });
 });

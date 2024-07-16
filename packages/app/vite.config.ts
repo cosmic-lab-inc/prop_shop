@@ -11,7 +11,9 @@ function hash() {
 }
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), "");
+  // get env from root of workspace
+  const env = loadEnv(mode, `${process.cwd()}/../../`, "");
+  // const env = loadEnv(mode, process.cwd(), "");
   env.PORT = env.PORT ? env.PORT : "3001";
   env.ENV = env.ENV ? env.ENV : "dev";
 
@@ -51,7 +53,8 @@ export default defineConfig(({ mode }) => {
       "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
       "process.env.ENV": JSON.stringify(env.ENV),
       "process.env.PORT": JSON.stringify(env.PORT),
-      "process.env.REDIS": JSON.stringify(env.REDIS),
+      "process.env.REDIS_ENDPOINT": JSON.stringify(env.REDIS_ENDPOINT),
+      "process.env.REDIS_PASSWORD": JSON.stringify(env.REDIS_PASSWORD),
     },
     plugins: [react(), nodePolyfills()],
     optimizeDeps: {

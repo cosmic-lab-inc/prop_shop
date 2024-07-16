@@ -37,12 +37,7 @@ import { getAssociatedTokenAddress } from "./programs";
 import { Drift, IDL as DRIFT_IDL } from "./idl/drift";
 import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
-import {
-  DriftVaultsSubscriber,
-  FundOverview,
-  HistoricalSettlePNL,
-  SnackInfo,
-} from "./types";
+import { DriftVaultsSubscriber, FundOverview, SnackInfo } from "./types";
 import {
   DriftVaults,
   getVaultAddressSync,
@@ -69,6 +64,7 @@ import {
   WalletReadyState,
 } from "@solana/wallet-adapter-base";
 import { Wallet, WalletContextState } from "@solana/wallet-adapter-react";
+import { ProxyClient } from "./proxyClient";
 
 export interface PropShopAccountEvents {
   vaultUpdate: (payload: Vault) => void;
@@ -93,7 +89,7 @@ export class PropShopClient {
     // init
     this.initialize = this.initialize.bind(this);
     this.subscribe = this.subscribe.bind(this);
-    this.unsubscribe = this.unsubscribe.bind(this);
+    this.shutdown = this.shutdown.bind(this);
     this.initUser = this.initUser.bind(this);
     this.userInitialized = this.userInitialized.bind(this);
 
@@ -113,7 +109,6 @@ export class PropShopClient {
     this.vaultDepositor = this.vaultDepositor.bind(this);
     this.vaultDepositors = this.vaultDepositors.bind(this);
     //
-    this.fetchHistoricalPNL = this.fetchHistoricalPNL.bind(this);
     this.fundOverview = this.fundOverview.bind(this);
     this.fetchFundOverview = this.fetchFundOverview.bind(this);
     this.fetchFundOverviews = this.fetchFundOverviews.bind(this);
@@ -134,9 +129,10 @@ export class PropShopClient {
 
     this.wallet = wallet;
     this.connection = connection;
-    this.loading = false;
     this._fundOverviews = new Map();
     this.eventEmitter = new EventEmitter();
+    console.log("constructed PropShopClient");
+    this.loading = false;
   }
 
   public static keypairToWalletContextState(kp: Keypair): WalletContextState {
@@ -366,7 +362,9 @@ export class PropShopClient {
     console.log(`subscribed in ${new Date().getTime() - preSub}ms`);
 
     this.loading = false;
-    console.log(`initialized client in ${new Date().getTime() - now}ms`);
+    console.log(
+      `initialized PropShopClient in ${new Date().getTime() - now}ms`,
+    );
   }
 
   async subscribe(program: anchor.Program<DriftVaults>) {
@@ -390,7 +388,7 @@ export class PropShopClient {
     await this._cache.subscribe();
   }
 
-  async unsubscribe(): Promise<void> {
+  async shutdown(): Promise<void> {
     await this._cache?.unsubscribe();
   }
 
@@ -644,44 +642,6 @@ export class PropShopClient {
   // Read only methods to aggregate data
   //
 
-  /**
-   * Returns historical pnl data from most recent to oldest
-   * @param vault
-   * @param daysBack
-   * @param usePrefix set to true if used outside the vite app
-   */
-  async fetchHistoricalPNL(
-    vault: Vault,
-    daysBack: number,
-    usePrefix?: boolean,
-  ): Promise<HistoricalSettlePNL[]> {
-    try {
-      const name = decodeName(vault.name);
-      console.log(`fetch pnl for ${name} and user: ${vault.user}`);
-      let url = "/api/performance";
-      if (usePrefix) {
-        url = `http://localhost:5173${url}`;
-      }
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          vaultName: name,
-          vaultUser: vault.user.toString(),
-          daysBack,
-        }),
-      });
-      const data: HistoricalSettlePNL[] = await response.json();
-      return data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      throw new Error("Error fetching data");
-    }
-  }
-
-  // todo: fetch from server to speed up load time
   public async fetchFundOverview(vaultKey: PublicKey): Promise<FundOverview> {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
@@ -705,7 +665,7 @@ export class PropShopClient {
 
     const investors = vaultVds.get(vault.account.data.pubkey.toString()) ?? [];
     const aum = await this.aggregateTVL([vault], investors);
-    const pnlData = await this.fetchHistoricalPNL(vault.account.data, 100);
+    const pnlData = await ProxyClient.performance(vault.account.data, 100);
     // cum sum the "pnl" field
     let cumSum: number = 0;
     const data: number[] = [];
@@ -725,7 +685,6 @@ export class PropShopClient {
     return fo;
   }
 
-  // todo: fetch from server to speed up load time
   public async fetchFundOverviews(
     protocolsOnly?: boolean,
   ): Promise<FundOverview[]> {
@@ -761,7 +720,7 @@ export class PropShopClient {
       const investors =
         vaultVds.get(vault.account.data.pubkey.toString()) ?? [];
       const aum = await this.aggregateTVL(vaults, investors);
-      const pnlData = await this.fetchHistoricalPNL(vault.account.data, 100);
+      const pnlData = await ProxyClient.performance(vault.account.data, 100);
       // cum sum the "pnl" field
       let cumSum: number = 0;
       const data: number[] = [];

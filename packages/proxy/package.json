@@ -1,12 +1,13 @@
 {
   "name": "prop-shop-proxy",
-  "version": "0.2.10",
+  "version": "0.1.0",
   "author": "Drew Riester <epochsolana@gmail.com>",
   "description": "Proxy server to fetch data for the frontend",
   "license": "Apache-2.0",
   "main": "src/index.ts",
   "scripts": {
     "clean": "yes | rm -rf dist && rm -rf node_modules",
+    "build": "tsc",
     "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint",
     "start": "ts-node src/index.ts"
   },
@@ -21,7 +22,9 @@
     "express": "^4.19.2",
     "http-proxy-middleware": "^3.0.0",
     "neverthrow": "^6.0.0",
-    "tweetnacl": "^1.0.3"
+    "tweetnacl": "^1.0.3",
+    "redis": "^4.6.15",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@babel/core": "^7.22.1",
