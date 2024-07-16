@@ -94,6 +94,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
             }),
           )
         ).flat();
+        console.log(`polling "accounts" returned ${accountInfos.length} items`);
         accountInfos.forEach((accountInfo, index) => {
           if (accountInfo) {
             const value: Omit<AccountToPoll, "callbackId"> =
@@ -110,25 +111,31 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     }
 
     if (this._subscriptionConfig.filters) {
-      const gpaConfig: GetProgramAccountsConfig = {
-        filters: this._subscriptionConfig.filters.map((filter) => {
-          return {
-            memcmp: {
-              offset: 0,
-              bytes: bs58.encode(
-                BorshAccountsCoder.accountDiscriminator(
-                  capitalize(filter.accountName),
-                ),
-              ),
-            },
-          };
-        }),
-      };
-      const gpa: GetProgramAccountsResponse =
-        await this.program.provider.connection.getProgramAccounts(
-          this.program.programId,
-          gpaConfig,
-        );
+      const gpa: GetProgramAccountsResponse = (
+        await Promise.all(
+          this._subscriptionConfig.filters.map((filter) => {
+            const gpaConfig: GetProgramAccountsConfig = {
+              filters: [
+                {
+                  memcmp: {
+                    offset: 0,
+                    bytes: bs58.encode(
+                      BorshAccountsCoder.accountDiscriminator(
+                        capitalize(filter.accountName),
+                      ),
+                    ),
+                  },
+                },
+              ],
+            };
+            return this.program.provider.connection.getProgramAccounts(
+              this.program.programId,
+              gpaConfig,
+            );
+          }),
+        )
+      ).flat();
+
       const discrims: Map<string, AccountGpaFilter> = new Map();
       for (const filter of this._subscriptionConfig.filters) {
         const discrim = bs58.encode(
@@ -138,6 +145,8 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         );
         discrims.set(discrim, filter);
       }
+      console.log(`polling config "filters" returned ${gpa.length} items`);
+      const slot = await this.program.provider.connection.getSlot();
       gpa.forEach((value) => {
         // get first 8 bytes of data
         const discrim = bs58.encode(value.account.data.subarray(0, 8));
@@ -145,11 +154,22 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         if (!filter) {
           throw new Error(`No filter found for discriminator: ${discrim}`);
         } else {
+          const data = this.program.account[
+            filter.accountName
+          ].coder.accounts.decodeUnchecked(
+            capitalize(filter.accountName),
+            value.account.data,
+          );
+          const dataAndSlot = {
+            data,
+            slot,
+          };
           const sub: AccountSubscription = {
             accountName: filter.accountName,
             eventType: filter.eventType,
             publicKey: value.pubkey,
             accountInfo: value.account,
+            dataAndSlot,
           };
           this.subscriptions.set(sub.publicKey.toString(), sub);
           subs.push(sub);

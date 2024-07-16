@@ -4,11 +4,10 @@
   "author": "Drew Riester <epochsolana@gmail.com>",
   "description": "Frontend client for Prop Shop",
   "license": "Apache-2.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "src/index.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmic-lab-inc/prop_shop.git"
+    "url": "https://github.com/cosmic-lab-inc/prop_shop.git"
   },
   "scripts": {
     "clean": "yes | rm -rf dist && rm -rf node_modules",

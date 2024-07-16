@@ -506,21 +506,21 @@ export class PropShopClient {
     if (!this.vaultClient || !this._cache) {
       throw new Error("PropShopClient not initialized");
     }
+    const preFetch = new Date().getTime();
     // account subscriber fetches upon subscription, so these should never be undefined
     const vaults: ProgramAccount<DataAndSlot<Vault>>[] = this._cache
       .getAccounts("vault")
       .filter((pa) => {
         const dataAndSlot = pa.account as DataAndSlot<Vault>;
-        if (dataAndSlot) {
-          if (protocolsOnly) {
-            return dataAndSlot.data.vaultProtocol !== SystemProgram.programId;
-          } else {
-            return true;
-          }
+        if (protocolsOnly) {
+          return dataAndSlot.data.vaultProtocol !== SystemProgram.programId;
         } else {
-          return false;
+          return true;
         }
       });
+    console.log(
+      `fetched ${vaults.length} cached vaults in ${new Date().getTime() - preFetch}ms`,
+    );
     return vaults;
   }
 
@@ -547,21 +547,21 @@ export class PropShopClient {
     if (!this.vaultClient || !this._cache) {
       throw new Error("PropShopClient not initialized");
     }
+    const preFetch = new Date().getTime();
     // account subscriber fetches upon subscription, so these should never be undefined
     const vds: ProgramAccount<DataAndSlot<VaultDepositor>>[] = this._cache
       .getAccounts("vaultDepositor")
       .filter((pa) => {
         const dataAndSlot = pa.account as DataAndSlot<VaultDepositor>;
-        if (dataAndSlot) {
-          if (filterByAuthority) {
-            return dataAndSlot.data.authority.equals(this.publicKey);
-          } else {
-            return true;
-          }
+        if (filterByAuthority) {
+          return dataAndSlot.data.authority.equals(this.publicKey);
         } else {
-          return false;
+          return true;
         }
       });
+    console.log(
+      `fetched ${vds.length} cached vds in ${new Date().getTime() - preFetch}ms`,
+    );
     return vds;
   }
 
@@ -598,7 +598,7 @@ export class PropShopClient {
     const vaults: ProgramAccount<Vault>[] =
       await this.vaultClient.program.account.vault.all();
     console.log(
-      `fetched ${vaults.length} vaults in ${new Date().getTime() - preFetch}ms`,
+      `fetched ${vaults.length} vaults from RPC in ${new Date().getTime() - preFetch}ms`,
     );
     if (protocolsOnly) {
       return vaults.filter((v) => {
@@ -635,7 +635,7 @@ export class PropShopClient {
     const vds: ProgramAccount<VaultDepositor>[] =
       await this.vaultClient.program.account.vaultDepositor.all(filters);
     console.log(
-      `fetched ${vds.length} vds in ${new Date().getTime() - preFetch}ms`,
+      `fetched ${vds.length} vds from RPC in ${new Date().getTime() - preFetch}ms`,
     );
     return vds;
   }
@@ -675,8 +675,6 @@ export class PropShopClient {
       cumSum += Number(entry.pnl);
       data.push(cumSum);
     }
-    console.log("first:", data[0]);
-    console.log("last:", data[data.length - 1]);
     const fo: FundOverview = {
       title: decodeName(vault.account.data.name),
       investors: investors.length,
@@ -693,16 +691,8 @@ export class PropShopClient {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    const preVaults = new Date().getTime();
-    const vaults = await this.vaults(protocolsOnly);
-    console.log(
-      `fetched ${vaults.length} vaults in ${new Date().getTime() - preVaults}ms`,
-    );
-    const preVd = new Date().getTime();
-    const vds = await this.vaultDepositors();
-    console.log(
-      `fetched ${vds.length} vds in ${new Date().getTime() - preVd}ms`,
-    );
+    const vaults = this.vaults(protocolsOnly);
+    const vds = this.vaultDepositors();
     // get count of vds per vault
     const vaultVds = new Map<
       string,
@@ -730,8 +720,6 @@ export class PropShopClient {
         cumSum += Number(entry.pnl);
         data.push(cumSum);
       }
-      console.log("first:", data[0]);
-      console.log("last:", data[data.length - 1]);
       const fo: FundOverview = {
         title: decodeName(vault.account.data.name),
         investors: investors.length,

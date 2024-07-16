@@ -1,9 +1,10 @@
 import express from "express";
 import cors from "cors";
 import { handleHistoricalPnl } from "./pnl";
-import { RedisClient } from "./redisClient";
+import { RedisClient } from "@cosmic-lab/prop-shop-sdk";
 import dotenv from "dotenv";
 
+// env in root of workspace
 dotenv.config({
   path: "../../.env",
 });

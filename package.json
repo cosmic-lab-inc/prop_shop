@@ -16,7 +16,6 @@
     "link:proxy-to-sdk": "cd packages/sdk && yarn link && cd ../proxy && yarn link @cosmic-lab/prop-shop-sdk && cd ../..",
     "unlink:drift-vaults": "cd packages/sdk && yarn unlink @drift-labs/vaults-sdk && cd ../..",
     "link:drift-vaults": "cd packages/sdk && yarn link @drift-labs/vaults-sdk && cd ../..",
-    "build:sdk": "lerna run build --scope @cosmic-lab/prop-shop-sdk",
     "build:app": "lerna run build --scope prop-shop-app",
     "build": "lerna run build",
     "rebuild": "yarn clean && yarn && yarn build",
@@ -31,7 +30,8 @@
     "update-drift": "cp deps/drift.json target/idl/drift.json && cp deps/drift.so target/deploy/drift.so",
     "update-pyth": "cp deps/pyth.json target/idl/pyth.json && cp deps/pyth.so target/deploy/pyth.so",
     "anchor-tests": "yarn setup-target && yarn update-competitions && yarn update-vaults && yarn update-drift && yarn update-pyth && yarn test",
-    "test-redis": "concurrently \"yarn start:proxy\" \"jest --detectOpenHandles --verbose --testPathPattern tests/redis.test.ts\""
+    "test-redis": "concurrently \"yarn start:proxy\" \"jest --detectOpenHandles --verbose --testPathPattern tests/redis.test.ts\"",
+    "test-subscriber": "jest --detectOpenHandles --verbose --testPathPattern tests/subscriber.test.ts"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
