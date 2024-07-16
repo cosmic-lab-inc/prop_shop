@@ -34,6 +34,9 @@ const redis = RedisClient.new({
 
 // fetch vault PNL from Drift API and store in Redis
 async function update() {
+  if (!redis.connected) {
+    await redis.connect();
+  }
   console.log("begin cache update...");
   const start = new Date().getTime();
   const vaults = await client.fetchVaults();
@@ -58,11 +61,9 @@ async function start() {
   await client.initialize();
   await redis.connect();
 
+  await update();
   setInterval(
     async () => {
-      if (!redis.connected) {
-        await redis.connect();
-      }
       await update();
     },
     30 * 60 * 1000,

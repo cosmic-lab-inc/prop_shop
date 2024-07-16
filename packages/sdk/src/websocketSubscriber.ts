@@ -11,12 +11,12 @@ import {
   Commitment,
   Context,
   GetProgramAccountsConfig,
+  GetProgramAccountsFilter,
   GetProgramAccountsResponse,
   PublicKey,
 } from "@solana/web3.js";
 import { capitalize } from "./utils";
 import {
-  AccountGpaFilter,
   AccountSubscription,
   DriftVaultsSubscriber,
   SubscriptionConfig,
@@ -66,6 +66,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
   }
 
   async fetch(): Promise<void> {
+    const slot = await this.program.provider.connection.getSlot();
     const accounts: ProgramAccount<AccountInfo<Buffer>>[] = [];
 
     if (this._subscriptionConfig.accounts) {
@@ -122,71 +123,81 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     }
 
     if (this._subscriptionConfig.filters) {
-      const gpa: GetProgramAccountsResponse = (
-        await Promise.all(
-          this._subscriptionConfig.filters.map((filter) => {
-            const gpaConfig: GetProgramAccountsConfig = {
-              filters: [
-                {
-                  memcmp: {
-                    offset: 0,
-                    bytes: bs58.encode(
-                      BorshAccountsCoder.accountDiscriminator(
-                        capitalize(filter.accountName),
-                      ),
+      const gpas: GetProgramAccountsResponse[] = await Promise.all(
+        this._subscriptionConfig.filters.map((filter) => {
+          const gpaConfig: GetProgramAccountsConfig = {
+            filters: [
+              {
+                memcmp: {
+                  offset: 0,
+                  bytes: bs58.encode(
+                    BorshAccountsCoder.accountDiscriminator(
+                      capitalize(filter.accountName),
                     ),
-                  },
+                  ),
                 },
-              ],
-            };
-            return this.program.provider.connection.getProgramAccounts(
-              this.program.programId,
-              gpaConfig,
-            );
-          }),
-        )
-      ).flat();
-
-      const discrims: Map<string, AccountGpaFilter> = new Map();
-      for (const filter of this._subscriptionConfig.filters) {
-        const discrim = bs58.encode(
-          BorshAccountsCoder.accountDiscriminator(
-            capitalize(filter.accountName),
-          ),
-        );
-        discrims.set(discrim, filter);
-      }
-      console.log(`websocket config "filters" returned ${gpa.length} items`);
-      const slot = await this.program.provider.connection.getSlot();
-      gpa.forEach((value) => {
-        // get first 8 bytes of data
-        const discrim = bs58.encode(value.account.data.subarray(0, 8));
-        const filter = discrims.get(discrim);
-        if (!filter) {
-          throw new Error(`No filter found for discriminator: ${discrim}`);
-        }
-        try {
-          const accountName =
-            this.program.account[filter.accountName].idlAccount.name;
-          const data = this.program.account[
-            filter.accountName
-          ].coder.accounts.decodeUnchecked(accountName, value.account.data);
-          const dataAndSlot = {
-            data,
-            slot,
+              },
+            ],
           };
+          return this.program.provider.connection.getProgramAccounts(
+            this.program.programId,
+            gpaConfig,
+          );
+        }),
+      );
 
-          accounts.push({
-            publicKey: value.pubkey,
-            account: value.account,
+      gpas.forEach((gpa, index) => {
+        if (this._subscriptionConfig.filters) {
+          const filter = this._subscriptionConfig.filters[index]!;
+          const gpaConfig: GetProgramAccountsFilter[] = [
+            {
+              memcmp: {
+                offset: 0,
+                bytes: bs58.encode(
+                  BorshAccountsCoder.accountDiscriminator(
+                    capitalize(filter.accountName),
+                  ),
+                ),
+              },
+            },
+          ];
+
+          const id = this.program.provider.connection.onProgramAccountChange(
+            this.program.programId,
+            ({ accountId, accountInfo }, context) => {
+              if (this.resubOpts?.resubTimeoutMs) {
+                this.receivingData = true;
+                clearTimeout(this.timeoutId);
+                this.handleRpcResponse(context, [
+                  {
+                    publicKey: accountId,
+                    account: accountInfo,
+                  },
+                ]);
+                this.setTimeout();
+              } else {
+                this.handleRpcResponse(context, [
+                  {
+                    publicKey: accountId,
+                    account: accountInfo,
+                  },
+                ]);
+              }
+            },
+            this.commitment,
+            gpaConfig,
+          );
+
+          gpa.forEach((value) => {
+            accounts.push({
+              publicKey: value.pubkey,
+              account: value.account,
+            });
           });
-        } catch (e: any) {
-          throw new Error(e);
         }
       });
     }
 
-    const slot = await this.program.provider.connection.getSlot();
     this.handleRpcResponse({ slot }, accounts);
   }
 
@@ -279,69 +290,56 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     }
 
     if (this._subscriptionConfig.filters) {
-      const gpa: GetProgramAccountsResponse = (
-        await Promise.all(
-          this._subscriptionConfig.filters.map((filter) => {
-            const gpaConfig: GetProgramAccountsConfig = {
-              filters: [
-                {
-                  memcmp: {
-                    offset: 0,
-                    bytes: bs58.encode(
-                      BorshAccountsCoder.accountDiscriminator(
-                        capitalize(filter.accountName),
-                      ),
-                    ),
-                  },
-                },
-              ],
-            };
-            return this.program.provider.connection.getProgramAccounts(
-              this.program.programId,
-              gpaConfig,
-            );
-          }),
-        )
-      ).flat();
-
-      const discrims: Map<string, AccountGpaFilter> = new Map();
-      for (const filter of this._subscriptionConfig.filters) {
-        const discrim = bs58.encode(
-          BorshAccountsCoder.accountDiscriminator(
-            capitalize(filter.accountName),
-          ),
-        );
-        discrims.set(discrim, filter);
-      }
-      console.log(`websocket config "filters" returned ${gpa.length} items`);
       const slot = await this.program.provider.connection.getSlot();
-      gpa.forEach((value) => {
-        // get first 8 bytes of data
-        const discrim = bs58.encode(value.account.data.subarray(0, 8));
-        const filter = discrims.get(discrim);
-        if (!filter) {
-          throw new Error(`No filter found for discriminator: ${discrim}`);
-        }
-        try {
-          const accountName =
-            this.program.account[filter.accountName].idlAccount.name;
-          const data = this.program.account[
-            filter.accountName
-          ].coder.accounts.decodeUnchecked(accountName, value.account.data);
-          const dataAndSlot = {
-            data,
-            slot,
-          };
 
-          const id = this.program.provider.connection.onAccountChange(
-            value.pubkey,
-            (accountInfo, context) => {
+      const gpas: GetProgramAccountsResponse[] = await Promise.all(
+        this._subscriptionConfig.filters.map((filter) => {
+          const gpaConfig: GetProgramAccountsConfig = {
+            filters: [
+              {
+                memcmp: {
+                  offset: 0,
+                  bytes: bs58.encode(
+                    BorshAccountsCoder.accountDiscriminator(
+                      capitalize(filter.accountName),
+                    ),
+                  ),
+                },
+              },
+            ],
+          };
+          return this.program.provider.connection.getProgramAccounts(
+            this.program.programId,
+            gpaConfig,
+          );
+        }),
+      );
+
+      gpas.forEach((gpa, index) => {
+        if (this._subscriptionConfig.filters) {
+          const filter = this._subscriptionConfig.filters[index]!;
+          const gpaConfig: GetProgramAccountsFilter[] = [
+            {
+              memcmp: {
+                offset: 0,
+                bytes: bs58.encode(
+                  BorshAccountsCoder.accountDiscriminator(
+                    capitalize(filter.accountName),
+                  ),
+                ),
+              },
+            },
+          ];
+
+          const id = this.program.provider.connection.onProgramAccountChange(
+            this.program.programId,
+            ({ accountId, accountInfo }, context) => {
               if (this.resubOpts?.resubTimeoutMs) {
                 this.receivingData = true;
                 clearTimeout(this.timeoutId);
                 this.handleRpcResponse(context, [
                   {
-                    publicKey: value.pubkey,
+                    publicKey: accountId,
                     account: accountInfo,
                   },
                 ]);
@@ -349,29 +347,40 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
               } else {
                 this.handleRpcResponse(context, [
                   {
-                    publicKey: value.pubkey,
+                    publicKey: accountId,
                     account: accountInfo,
                   },
                 ]);
               }
             },
             this.commitment,
+            gpaConfig,
           );
 
-          const sub: AccountSubscription = {
-            accountName: filter.accountName,
-            eventType: filter.eventType,
-            publicKey: value.pubkey,
-            accountInfo: value.account,
-            dataAndSlot,
-            id: id.toString(),
-          };
-          this.subscriptions.set(sub.publicKey.toString(), sub);
-          subs.push(sub);
-        } catch (e: any) {
-          throw new Error(e);
+          gpa.forEach((value) => {
+            const accountName =
+              this.program.account[filter.accountName].idlAccount.name;
+            const data = this.program.account[
+              filter.accountName
+            ].coder.accounts.decodeUnchecked(accountName, value.account.data);
+            const dataAndSlot = {
+              data,
+              slot,
+            };
+            const sub: AccountSubscription = {
+              accountName: filter.accountName,
+              eventType: filter.eventType,
+              publicKey: value.pubkey,
+              accountInfo: value.account,
+              dataAndSlot,
+              id: id.toString(),
+            };
+            this.subscriptions.set(sub.publicKey.toString(), sub);
+            subs.push(sub);
+          });
         }
       });
+      console.log(`websocket config "filters" returned ${subs.length} items`);
     }
 
     if (this.resubOpts?.resubTimeoutMs) {
@@ -470,14 +479,18 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
 
     const keysToRemove: string[] = [];
     const promises = [];
+    const seenIds = new Set<number>();
     for (const [key, value] of Array.from(this.subscriptions.entries())) {
-      promises.push(
-        this.program.provider.connection
-          .removeAccountChangeListener(Number(value.id))
-          .then(() => {
-            keysToRemove.push(key);
-          }),
-      );
+      // program account listener has one ID for many keys, so this is a workaround
+      if (!seenIds.has(Number(value.id))) {
+        promises.push(
+          this.program.provider.connection.removeAccountChangeListener(
+            Number(value.id),
+          ),
+        );
+        seenIds.add(Number(value.id));
+      }
+      keysToRemove.push(key);
     }
     for (const key of keysToRemove) {
       this.subscriptions.delete(key);

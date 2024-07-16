@@ -68,8 +68,7 @@ import {
 } from "@solana/wallet-adapter-base";
 import { Wallet, WalletContextState } from "@solana/wallet-adapter-react";
 import { ProxyClient } from "./proxyClient";
-import { AccountLoader } from "./accountLoader";
-import { PollingSubscriber } from "./pollingSubscriber";
+import { WebSocketSubscriber } from "./websocketSubscriber";
 
 export interface PropShopAccountEvents {
   vaultUpdate: (payload: Vault) => void;
@@ -232,6 +231,7 @@ export class PropShopClient {
 
     const preSub = new Date().getTime();
     await this.subscribe(driftVaultsProgram);
+    // takes about 2s for websocket and 4s for polling
     console.log(`subscribed in ${new Date().getTime() - preSub}ms`);
 
     this.loading = false;
@@ -242,24 +242,7 @@ export class PropShopClient {
   }
 
   async subscribe(program: anchor.Program<DriftVaults>) {
-    // this._cache = new WebSocketSubscriber(program, {
-    //   filters: [
-    //     {
-    //       accountName: "vault",
-    //       eventType: "vaultUpdate",
-    //     },
-    //     {
-    //       accountName: "vaultDepositor",
-    //       eventType: "vaultDepositorUpdate",
-    //     },
-    //   ],
-    // });
-    const loader = new AccountLoader(
-      program.provider.connection,
-      "confirmed",
-      30_000,
-    );
-    this._cache = new PollingSubscriber(program, loader, {
+    this._cache = new WebSocketSubscriber(program, {
       filters: [
         {
           accountName: "vault",
@@ -271,6 +254,23 @@ export class PropShopClient {
         },
       ],
     });
+    // const loader = new AccountLoader(
+    //   program.provider.connection,
+    //   "confirmed",
+    //   30_000,
+    // );
+    // this._cache = new PollingSubscriber(program, loader, {
+    //   filters: [
+    //     {
+    //       accountName: "vault",
+    //       eventType: "vaultUpdate",
+    //     },
+    //     {
+    //       accountName: "vaultDepositor",
+    //       eventType: "vaultDepositorUpdate",
+    //     },
+    //   ],
+    // });
     await this._cache.subscribe();
   }
 
