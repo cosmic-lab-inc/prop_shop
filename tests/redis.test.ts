@@ -2,11 +2,11 @@ import * as anchor from "@coral-xyz/anchor";
 import { ConfirmOptions, Connection, Keypair } from "@solana/web3.js";
 import { REDIS_ENDPOINT, REDIS_PASSWORD, RPC_URL } from "../.jest/env";
 import {
-  driftVaults,
   HistoricalSettlePNL,
   PropShopClient,
   ProxyClient,
   RedisClient,
+  truncateNumber,
   VaultPNL,
 } from "@cosmic-lab/prop-shop-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
@@ -154,46 +154,37 @@ describe("Redis", () => {
     await stopProcess(pid);
   });
 
-  it("Set & Get Vault PNL", async () => {
+  it("Set & Get Vault PNLs", async () => {
     const vaults = await client.fetchVaults();
     expect(vaults.length).toBeGreaterThan(0);
 
-    let vault: driftVaults.Vault | undefined;
-    for (const v of vaults) {
-      if (decodeName(v.account.name) === "Supercharger Vault") {
-        vault = v.account;
+    for (const vault of vaults) {
+      const key = vault.account.pubkey.toString();
+      const name = decodeName(vault.account.name);
+      const daysBack = 100;
+      const pnl = await ProxyClient.performance(vault.account, daysBack, true);
+      const value = JSON.stringify(pnl);
+      await redis.set(key, value);
+      const get = await redis.get(key);
+      if (!get) {
+        throw new Error("Failed to get vault pnl from redis");
       }
-    }
-    if (!vault) {
-      throw new Error("No Supercharger Vault found");
-    }
+      expect(get).not.toBeNull();
+      expect(get).toBe(value);
 
-    const key = vault.pubkey.toString();
-    const preGet = new Date().getTime();
-    await redis.get(key);
-    // takes about 250ms
-    console.log(`got pnl from redis in ${new Date().getTime() - preGet}ms`);
-
-    const daysBack = 30;
-    const pnl = await ProxyClient.performance(vault, daysBack, true);
-    console.log(`${pnl.length} pnl entries`);
-    const value = JSON.stringify(pnl);
-    await redis.set(key, value);
-    const get = await redis.get(key);
-    if (!get) {
-      throw new Error("Failed to get pnl from redis");
-    }
-    expect(get).not.toBeNull();
-    expect(get).toBe(value);
-
-    const data: HistoricalSettlePNL[] = JSON.parse(get);
-    if (data.length > 0) {
-      const hydrated = new VaultPNL(data);
-      console.log("pnl start date:", hydrated.dateString(hydrated.startDate()));
-      console.log("pnl end date:", hydrated.dateString(hydrated.endDate()));
-      console.log(
-        `cumulative pnl over ${data.length} trades: $${hydrated.cumulativePNL()}`,
-      );
+      const data: HistoricalSettlePNL[] = JSON.parse(get);
+      if (data.length > 0) {
+        const hydrated = new VaultPNL(data);
+        console.log(
+          `${name} pnl start date: ${hydrated.dateString(hydrated.startDate())}`,
+        );
+        console.log(
+          `${name} pnl end date: ${hydrated.dateString(hydrated.endDate())}`,
+        );
+        console.log(
+          `${name} pnl over ${data.length} trades: $${truncateNumber(hydrated.cumulativePNL(), 2)}`,
+        );
+      }
     }
   });
 });
