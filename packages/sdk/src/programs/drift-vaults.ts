@@ -70,11 +70,13 @@ export async function fetchDriftUserHistoricalPnl(
       }
     } catch (e: any) {
       const error: AxiosError = e as any;
-      console.warn(
-        `Historical PNL missing for ${year}/${monthStr}/${dayStr} and user ${user}: ${e}`,
-      );
       const is403 = error.message.includes("403");
       const notFound = error.message.includes("ENOTFOUND");
+      if (is403) {
+        console.warn(
+          `Historical PNL missing for ${year}/${monthStr}/${dayStr} and user ${user}: ${error}`,
+        );
+      }
       if (!is403 && !notFound) {
         console.error("Fetch historical PNL error:", e);
         throw new Error(e);

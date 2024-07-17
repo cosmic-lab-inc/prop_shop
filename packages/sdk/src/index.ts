@@ -13,3 +13,4 @@ export * from "./pollingSubscriber";
 export * from "./accountLoader";
 export * from "./redisClient";
 export * from "./proxyClient";
+export * from "./txClient";

@@ -85,9 +85,14 @@ export class PropShopClient {
   eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>;
 
   _fundOverviews: Map<string, FundOverview>;
+  private _disableCache: boolean = false;
   _cache: DriftVaultsSubscriber | undefined = undefined;
 
-  constructor(wallet: WalletContextState, connection: Connection) {
+  constructor(
+    wallet: WalletContextState,
+    connection: Connection,
+    disableCache: boolean = false,
+  ) {
     makeObservable(this);
 
     // init
@@ -134,6 +139,7 @@ export class PropShopClient {
     this.wallet = wallet;
     this.connection = connection;
     this._fundOverviews = new Map();
+    this._disableCache = disableCache;
     this.eventEmitter = new EventEmitter();
     console.log("constructed PropShopClient");
     this.loading = false;
@@ -229,10 +235,12 @@ export class PropShopClient {
       program: driftVaultsProgram,
     });
 
-    const preSub = new Date().getTime();
-    await this.subscribe(driftVaultsProgram);
-    // takes about 2s for websocket and 4s for polling
-    console.log(`subscribed in ${new Date().getTime() - preSub}ms`);
+    if (!this._disableCache) {
+      const preSub = new Date().getTime();
+      await this.subscribe(driftVaultsProgram);
+      // takes about 2s for websocket and 4s for polling
+      console.log(`subscribed in ${new Date().getTime() - preSub}ms`);
+    }
 
     this.loading = false;
     // 3-6s
@@ -242,6 +250,9 @@ export class PropShopClient {
   }
 
   async subscribe(program: anchor.Program<DriftVaults>) {
+    if (this._disableCache) {
+      return;
+    }
     this._cache = new WebSocketSubscriber(program, {
       filters: [
         {

@@ -106,13 +106,13 @@ async function stopProcess(pid: number): Promise<void> {
 
 // Graceful shutdown on SIGINT or SIGTERM
 process.on("SIGINT", () => {
-  console.log("SIGINT signal received: closing app and server");
+  console.log("SIGINT signal received");
   stop();
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
-  console.log("SIGTERM signal received: closing app and server");
+  console.log("SIGTERM signal received");
   stop();
   process.exit(0);
 });

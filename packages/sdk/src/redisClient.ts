@@ -67,6 +67,10 @@ export class RedisClient {
   }
 
   public async connect(): Promise<RedisClient> {
+    if (this.connected) {
+      return this;
+    }
+    console.log("connect RedisClient...");
     await this.client
       .on("error", (err) => console.error("Redis Client Error", err))
       .connect();

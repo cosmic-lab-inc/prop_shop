@@ -17,4 +17,13 @@ In it put:
 export const REDIS_ENDPOINT = "redis://your-redis-server"
 export const REDIS_PASSWORD = "your-redis-password"
 export const RPC_URL = "https://your-solana-rpc"
+export const SHYFT_API_KEY = "api-key";
 ```
+
+## TODO
+
+parse Anchor events from tx logs
+https://solana.stackexchange.com/questions/3463/how-to-parse-event-in-transaction-log-with-anchor
+
+Anchor events docs
+https://book.anchor-lang.com/anchor_in_depth/events.html

@@ -1,11 +1,13 @@
 import dotenv from "dotenv";
-import { decodeName } from "@drift-labs/sdk";
-import { Connection, Keypair } from "@solana/web3.js";
+import express from "express";
+import cors from "cors";
 import {
+  driftVaults,
   fetchDriftUserHistoricalPnl,
   PropShopClient,
   RedisClient,
 } from "@cosmic-lab/prop-shop-sdk";
+import { Connection, Keypair } from "@solana/web3.js";
 
 // env in root of workspace
 dotenv.config({
@@ -25,11 +27,30 @@ const wallet = PropShopClient.keypairToWalletContextState(signer);
 
 const connection = new Connection(process.env.RPC_URL);
 
-const client = new PropShopClient(wallet, connection);
+const client = new PropShopClient(wallet, connection, true);
 
 const redis = RedisClient.new({
   endpoint: process.env.REDIS_ENDPOINT,
   password: process.env.REDIS_PASSWORD,
+});
+
+const app = express();
+const port = 8080;
+
+app.use(express.json());
+app.use(express.raw());
+
+// CORS configuration
+const corsOptions = {
+  origin: "*",
+};
+app.use(cors(corsOptions));
+
+app.use(async (_req, _res, next) => {
+  if (!redis.connected) {
+    await redis.connect();
+  }
+  next();
 });
 
 // fetch vault PNL from Drift API and store in Redis
@@ -43,7 +64,7 @@ async function update() {
 
   for (const vault of vaults) {
     const key = vault.account.pubkey.toString();
-    const name = decodeName(vault.account.name);
+    const name = driftVaults.decodeName(vault.account.name);
     console.log(`cache \"${name}\" PNL`);
     const daysBack = 100;
     const pnl = await fetchDriftUserHistoricalPnl(
@@ -76,6 +97,7 @@ process.on("SIGINT" || "SIGTERM" || "SIGKILL", async () => {
   process.exit();
 });
 
-(async () => {
+app.listen(port, async () => {
   await start();
-})();
+  console.log(`Server listening at http://localhost:${port}`);
+});
