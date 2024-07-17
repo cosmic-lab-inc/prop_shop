@@ -1,13 +1,6 @@
-export function chunkArray<T>(arrayToChunk: T[], chunkSize = 100): T[][] {
-  return arrayToChunk.reduce<T[][]>((resultArray, item, index) => {
-    const chunkIndex = Math.floor(index / chunkSize);
-
-    if (!resultArray[chunkIndex]) {
-      resultArray[chunkIndex] = [];
-    }
-
-    resultArray[chunkIndex].push(item);
-
-    return resultArray;
-  }, []);
+export function chunks<T>(array: readonly T[], size: number): T[][] {
+  return new Array(Math.ceil(array.length / size))
+    .fill(null)
+    .map((_, index) => index * size)
+    .map((begin) => array.slice(begin, begin + size));
 }
