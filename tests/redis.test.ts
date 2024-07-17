@@ -8,6 +8,7 @@ import {
   RedisClient,
   truncateNumber,
   VaultPNL,
+  yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
 import { exec } from "child_process";
@@ -176,13 +177,11 @@ describe("Redis", () => {
 
       const data: HistoricalSettlePNL[] = JSON.parse(get);
       if (data.length > 0) {
-        const hydrated = new VaultPNL(data);
+        const hydrated = VaultPNL.fromHistoricalSettlePNL(data);
         console.log(
-          `${name} pnl start date: ${hydrated.dateString(hydrated.startDate())}`,
+          `${name} pnl start date: ${yyyymmdd(hydrated.startDate())}`,
         );
-        console.log(
-          `${name} pnl end date: ${hydrated.dateString(hydrated.endDate())}`,
-        );
+        console.log(`${name} pnl end date: ${yyyymmdd(hydrated.endDate())}`);
         console.log(
           `${name} pnl over ${data.length} trades: $${truncateNumber(hydrated.cumulativePNL(), 2)}`,
         );

@@ -1,4 +1,5 @@
 import { BN } from "@coral-xyz/anchor";
+import { QUOTE_PRECISION, SettlePnlRecord } from "@drift-labs/sdk";
 
 export interface FundOverview {
   title: string;
@@ -22,10 +23,17 @@ export interface HistoricalSettlePNL {
   program_id: string;
 }
 
-export class VaultPNL {
-  data: HistoricalSettlePNL[];
+export interface PNL {
+  // USDC PNL multiplied by QUOTE_PRECISION (what is returned from RPC)
+  pnl: number;
+  // UNIX seconds since 1970
+  ts: number;
+}
 
-  constructor(data: HistoricalSettlePNL[]) {
+export class VaultPNL {
+  data: PNL[];
+
+  constructor(data: PNL[]) {
     if (data.length === 0) {
       throw new Error("No PNL data found");
     }
@@ -33,9 +41,30 @@ export class VaultPNL {
     const endTs = Number(data[data.length - 1].ts);
     let series = data;
     if (endTs < startTs) {
-      series = data.reverse();
+      // sort data from lowest ts to highest so 0th index is oldest
+      series = data.sort((a, b) => Number(a.ts) - Number(b.ts));
     }
     this.data = series;
+  }
+
+  public static fromHistoricalSettlePNL(data: HistoricalSettlePNL[]): VaultPNL {
+    const series: PNL[] = data.map((d) => {
+      return {
+        pnl: Number(d.pnl) / QUOTE_PRECISION.toNumber(),
+        ts: Number(d.ts),
+      };
+    });
+    return new VaultPNL(series);
+  }
+
+  public static fromSettlePnlRecord(data: SettlePnlRecord[]): VaultPNL {
+    const series: PNL[] = data.map((d) => {
+      return {
+        pnl: Number(d.pnl) / QUOTE_PRECISION.toNumber(),
+        ts: Number(d.ts),
+      };
+    });
+    return new VaultPNL(series);
   }
 
   public cumulativeSeriesPNL(): number[] {
@@ -51,7 +80,7 @@ export class VaultPNL {
   public cumulativePNL(): number {
     let cumSum: number = 0;
     for (const entry of this.data) {
-      cumSum += Number(entry.pnl);
+      cumSum += entry.pnl;
     }
     return cumSum;
   }
@@ -64,14 +93,5 @@ export class VaultPNL {
   public endDate(): Date {
     const last = this.data[this.data.length - 1];
     return new Date(Number(last.ts) * 1000);
-  }
-
-  public dateString(date: Date): string {
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const monthStr = month < 10 ? `0${month}` : `${month}`;
-    const day = date.getDate();
-    const dayStr = day < 10 ? `0${day}` : `${day}`;
-    return `${year}/${monthStr}/${dayStr}`;
   }
 }

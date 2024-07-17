@@ -64,6 +64,7 @@ export interface TxResponse {
   success: boolean;
   message: string;
   result: TxData[];
+  error?: string;
 }
 
 interface Chunk {
@@ -142,22 +143,26 @@ export abstract class TxClient {
       let borderSig: ConfirmedSignatureInfo =
         zerothChunkSigs[zerothChunkSigs.length - 1];
       signatures.push(...zerothChunkSigs);
+      await sleep(1000);
 
       const afterZeroth = chunks.slice(1, chunks.length);
       for (const chunk of afterZeroth) {
-        const config: SignaturesForAddressOptions = {
-          limit: chunk.end - chunk.start,
-          before: borderSig.signature,
-        };
-        const sigsForChunk = await connection.getSignaturesForAddress(
-          key,
-          config,
-        );
-        await sleep(1000);
-        borderSig = sigsForChunk[sigsForChunk.length - 1];
-        signatures.push(...sigsForChunk);
+        try {
+          const config: SignaturesForAddressOptions = {
+            limit: chunk.end - chunk.start,
+            before: borderSig.signature,
+          };
+          const sigsForChunk = await connection.getSignaturesForAddress(
+            key,
+            config,
+          );
+          await sleep(1000);
+          borderSig = sigsForChunk[sigsForChunk.length - 1];
+          signatures.push(...sigsForChunk);
+        } catch (e) {
+          console.error("failed to fetch signatures:", e);
+        }
       }
-
       return signatures;
     }
   }
@@ -170,21 +175,25 @@ export abstract class TxClient {
     limit: number = 1000,
   ): Promise<TxEvent[]> {
     const sigs = await TxClient.chunkedSignatures(key, connection, limit);
-    console.log(`fetch ${sigs.length} signatures`);
+    console.log(`fetched ${sigs.length} signatures`);
     const sigChunks = chunks(sigs, 1000);
 
     const result: ParsedTransactionWithMeta[] = [];
     for (const chunk of sigChunks) {
-      const res = (
-        await connection.getParsedTransactions(
-          chunk.map((c) => c.signature),
-          {
-            maxSupportedTransactionVersion: 0,
-          },
-        )
-      ).filter((t) => !!t) as ParsedTransactionWithMeta[];
-      await sleep(2000);
-      result.push(...res);
+      try {
+        const res = (
+          await connection.getParsedTransactions(
+            chunk.map((c) => c.signature),
+            {
+              maxSupportedTransactionVersion: 0,
+            },
+          )
+        ).filter((t) => t !== null) as ParsedTransactionWithMeta[];
+        await sleep(2000);
+        result.push(...res);
+      } catch (e) {
+        console.error("failed to fetch transactions from RPC:", e);
+      }
     }
 
     const eventParser = new anchor.EventParser(
@@ -218,76 +227,51 @@ export abstract class TxClient {
     limit: number = 1000,
     network: "mainnet-beta" | "devnet" | "testnet" = "mainnet-beta",
   ): Promise<TxResponse[]> {
-    const sigs = await TxClient.chunkedSignatures(key, connection, limit);
+    const unfilteredSigs = await TxClient.chunkedSignatures(
+      key,
+      connection,
+      limit,
+    );
+    const sigs = unfilteredSigs.filter((sig) => sig.err === null);
     const sigChunks = chunks(sigs, SHYFT_TX_LIMIT);
+    console.log(
+      `${sigs.length}/${unfilteredSigs.length} sigs are valid, divided into ${sigChunks.length} chunks`,
+    );
 
-    const result: TxResponse[] = (
-      await Promise.all(
-        sigChunks.map(async (chunk) => {
-          const newestSig = chunk[0];
-          const oldestSig = chunk[chunk.length - 1];
-          const body: SelectTxParams = {
-            network,
-            transaction_signatures: chunk.map((c) => c.signature),
-            enable_raw: true,
-            enable_events: true,
-          };
-          const opts: RequestInit = {
-            method: "POST",
-            headers: {
-              "x-api-key": apiKey,
-            },
-            body: JSON.stringify(body),
-            redirect: "follow",
-          };
+    const results: TxResponse[] = [];
+    for (const chunk of sigChunks) {
+      const transaction_signatures: string[] = chunk.map(
+        (sig) => sig.signature,
+      );
+      const body: SelectTxParams = {
+        network,
+        transaction_signatures,
+        enable_raw: true,
+        enable_events: true,
+      };
+      const opts: RequestInit = {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        redirect: "follow",
+      };
+      try {
+        const response = await fetch(SHYFT_SELECT_TX_ENDPOINT, opts);
+        const text = await response.text();
+        const data = JSON.parse(text) as TxResponse;
+        if (!data.success) {
+          console.error(`failed with error: ${data.error}`);
+        }
+        results.push(data);
+        await sleep(500);
+      } catch (e) {
+        console.error("failed to fetch transaction from Shyft:", e);
+      }
+    }
 
-          return fetch(SHYFT_SELECT_TX_ENDPOINT, opts)
-            .then(async (response) => response.text())
-            .then((result) => JSON.parse(result) as TxResponse);
-        }),
-      )
-    ).flat();
-    return result;
+    return results;
   }
-
-  // public static async _fetch(
-  //   apiKey: string,
-  //   key: PublicKey,
-  //   connection: Connection,
-  //   limit: number = 1000,
-  //   network: "mainnet-beta" | "devnet" | "testnet" = "mainnet-beta",
-  // ): Promise<TxResponse[]> {
-  //   const opts: RequestInit = {
-  //     method: "GET",
-  //     headers: {
-  //       "x-api-key": apiKey,
-  //     },
-  //     redirect: "follow",
-  //   };
-  //
-  //   const sigs = await TxClient.chunkedSignatures(key, connection, limit);
-  //   const sigChunks = chunks(sigs, SHYFT_TX_LIMIT);
-  //
-  //   const result: TxResponse[] = (
-  //     await Promise.all(
-  //       sigChunks.map(async (chunk) => {
-  //         const newestSig = chunk[0];
-  //         const oldestSig = chunk[chunk.length - 1];
-  //         const params: TxQueryParams = {
-  //           account: key,
-  //           tx_num: SHYFT_TX_LIMIT,
-  //           network,
-  //           // before_tx_signature: oldestSig.signature,
-  //           until_tx_signature: oldestSig.signature,
-  //         };
-  //         const url = TxClient.formatQuery(params);
-  //
-  //         return fetch(url, opts)
-  //           .then(async (response) => response.text())
-  //           .then((result) => JSON.parse(result) as TxResponse);
-  //       }),
-  //     )
-  //   ).flat();
-  //   return result;
-  // }
 }

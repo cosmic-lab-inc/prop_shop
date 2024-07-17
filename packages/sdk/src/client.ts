@@ -563,7 +563,7 @@ export class PropShopClient {
     const investors = vaultVds.get(vault.account.data.pubkey.toString()) ?? [];
     const aum = await this.aggregateTVL([vault], investors);
     const pnlData = await ProxyClient.performance(vault.account.data, 100);
-    const vaultPNL = new VaultPNL(pnlData);
+    const vaultPNL = VaultPNL.fromHistoricalSettlePNL(pnlData);
     const data = vaultPNL.cumulativeSeriesPNL();
     const fo: FundOverview = {
       title: decodeName(vault.account.data.name),
@@ -603,7 +603,7 @@ export class PropShopClient {
         vaultVds.get(vault.account.data.pubkey.toString()) ?? [];
       const aum = await this.aggregateTVL(vaults, investors);
       const pnlData = await ProxyClient.performance(vault.account.data, 100);
-      const vaultPNL = new VaultPNL(pnlData);
+      const vaultPNL = VaultPNL.fromHistoricalSettlePNL(pnlData);
       const data = vaultPNL.cumulativeSeriesPNL();
       const fo: FundOverview = {
         title: decodeName(vault.account.data.name),

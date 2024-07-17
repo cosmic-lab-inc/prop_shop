@@ -1,16 +1,18 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { ConfirmOptions, Connection, Keypair } from "@solana/web3.js";
-import { RPC_URL } from "../.jest/env";
+import { RPC_URL, SHYFT_API_KEY } from "../.jest/env";
 import {
   getCommandPID,
   PropShopClient,
   stopProcess,
   TxClient,
+  VaultPNL,
+  yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
 import { DriftVaults } from "@drift-labs/vaults-sdk";
-import { decodeName, QUOTE_PRECISION, SettlePnlRecord } from "@drift-labs/sdk";
+import { decodeName, SettlePnlRecord } from "@drift-labs/sdk";
 
 describe("TxClient", () => {
   const opts: ConfirmOptions = {
@@ -41,7 +43,7 @@ describe("TxClient", () => {
     await stopProcess(pid);
   });
 
-  it("Fetch Transactions", async () => {
+  it("RPC Transactions", async () => {
     const vaults = await client.fetchVaults();
     expect(vaults.length).toBeGreaterThan(0);
 
@@ -56,45 +58,57 @@ describe("TxClient", () => {
         connection,
         5_000,
       );
-      const pnls: {
-        pnl: number;
-        date: Date;
-      }[] = [];
-      let cum = 0;
-      for (const event of events) {
-        const data = event.data as SettlePnlRecord;
-        const pnl = Number(data.pnl) / QUOTE_PRECISION.toNumber();
-        const date = new Date(Number(data.ts) * 1000);
-        pnls.push({ pnl, date });
-        cum += pnl;
-      }
-      console.log(`cum pnl: $${cum}`);
+      console.log(`RPC returned ${events.length} events`);
+      const data: SettlePnlRecord[] = events.map(
+        (event) => event.data as SettlePnlRecord,
+      );
 
-      // const results = await TxClient.fetch(
-      //   SHYFT_API_KEY,
-      //   vault.account.user,
-      //   connection,
-      //   2000,
-      // );
-      // const events = [];
-      // let total = 0;
-      // let good = 0;
-      // for (const res of results) {
-      //   if (res.success) {
-      //     good++;
-      //     for (const tx of res.result) {
-      //       for (const event of tx.events) {
-      //         if (event.name.includes("SettlePnlRecord")) {
-      //           console.log(event);
-      //           events.push(event);
-      //         }
-      //       }
-      //     }
-      //   }
-      //   total++;
-      // }
-      // console.log(`${good}/${total} tx responses succeeded`);
-      // console.log(`${events.length} SettlePnlRecord events`);
+      const vaultPNL = VaultPNL.fromSettlePnlRecord(data);
+      const start = yyyymmdd(vaultPNL.startDate());
+      const end = yyyymmdd(vaultPNL.endDate());
+      console.log(
+        `$${vaultPNL.cumulativePNL()} cum pnl from RPC, ${data.length} events, from ${start} to ${end}`,
+      );
+    }
+  });
+
+  it("Shyft Transactions", async () => {
+    const vaults = await client.fetchVaults();
+    expect(vaults.length).toBeGreaterThan(0);
+
+    const vault = vaults.find(
+      (v) => decodeName(v.account.name) === "Supercharger Vault",
+    );
+    if (vault) {
+      const results = await TxClient.fetch(
+        SHYFT_API_KEY,
+        vault.account.user,
+        connection,
+        5_000,
+      );
+
+      let total = 0;
+      let good = 0;
+      const data: SettlePnlRecord[] = [];
+      for (const res of results) {
+        if (res.success) {
+          good++;
+          for (const tx of res.result) {
+            for (const event of tx.events) {
+              if (event.name.includes("SettlePnlRecord")) {
+                data.push(event.data as SettlePnlRecord);
+              }
+            }
+          }
+        }
+        total++;
+      }
+      const vaultPNL = VaultPNL.fromSettlePnlRecord(data);
+      const start = yyyymmdd(vaultPNL.startDate());
+      const end = yyyymmdd(vaultPNL.endDate());
+      console.log(
+        `$${vaultPNL.cumulativePNL()} cum pnl from Shyft, ${data.length} events, from ${start} to ${end}`,
+      );
     }
   });
 });
