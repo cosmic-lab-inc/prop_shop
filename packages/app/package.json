@@ -17,7 +17,7 @@
     "generate-meta-tag": "node ../../node_modules/react-cache-buster/dist/generate-meta-tag.js"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "0.28.0",
+    "@coral-xyz/anchor": "0.29.0",
     "@cosmic-lab/data-source": "^0.7.4",
     "@cosmic-lab/prop-shop-sdk": "^0.2.10",
     "@emotion/react": "^11.11.1",

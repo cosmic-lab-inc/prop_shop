@@ -1,5 +1,5 @@
 import { DataAndSlot } from "@drift-labs/sdk";
-import { AccountInfo, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { AccountNamespace, ProgramAccount } from "@coral-xyz/anchor";
 import { DriftVaults } from "@drift-labs/vaults-sdk";
 import { Buffer } from "buffer";
@@ -27,8 +27,8 @@ export interface AccountSubscription {
   publicKey: PublicKey;
   eventType: keyof PropShopAccountEvents;
   id?: string;
-  accountInfo?: AccountInfo<Buffer>;
-  dataAndSlot?: DataAndSlot<any>;
+  dataAndSlot?: DataAndSlot<Buffer>;
+  decoded?: any;
 }
 
 export interface AccountGpaFilter {

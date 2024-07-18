@@ -232,6 +232,7 @@ export class PropShopClient {
     this.vaultClient = new VaultClient({
       // @ts-ignore
       driftClient,
+      // @ts-ignore
       program: driftVaultsProgram,
     });
 

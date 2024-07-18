@@ -209,6 +209,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     const subs: AccountSubscription[] = [];
 
     if (this._subscriptionConfig.accounts) {
+      const slot = await this.program.provider.connection.getSlot();
       const keys: PublicKey[] = this._subscriptionConfig.accounts.map(
         (key) => new PublicKey(key),
       );
@@ -277,10 +278,27 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
               this.commitment,
             );
 
+            const dataAndSlot = {
+              data: accountInfo.data,
+              slot,
+            };
+            if (accountInfo.data.length < 8) {
+              console.error(
+                `Invalid account data length (${accountInfo.data.length}) for account ${value.publicKey.toString()}`,
+              );
+            }
+
+            const _accountName =
+              this.program.account[value.accountName].idlAccount.name;
+            const decoded = this.program.account[
+              value.accountName
+            ].coder.accounts.decodeUnchecked(_accountName, accountInfo.data);
+
             const sub: AccountSubscription = {
               ...value,
-              accountInfo,
+              dataAndSlot,
               id: id.toString(),
+              decoded,
             };
             this.subscriptions.set(sub.publicKey.toString(), sub);
             subs.push(sub);
@@ -294,15 +312,15 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
 
       const gpas: GetProgramAccountsResponse[] = await Promise.all(
         this._subscriptionConfig.filters.map((filter) => {
+          const _accountName =
+            this.program.account[filter.accountName].idlAccount.name;
           const gpaConfig: GetProgramAccountsConfig = {
             filters: [
               {
                 memcmp: {
                   offset: 0,
                   bytes: bs58.encode(
-                    BorshAccountsCoder.accountDiscriminator(
-                      capitalize(filter.accountName),
-                    ),
+                    BorshAccountsCoder.accountDiscriminator(_accountName),
                   ),
                 },
               },
@@ -318,14 +336,14 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
       gpas.forEach((gpa, index) => {
         if (this._subscriptionConfig.filters) {
           const filter = this._subscriptionConfig.filters[index]!;
+          const _accountName =
+            this.program.account[filter.accountName].idlAccount.name;
           const gpaConfig: GetProgramAccountsFilter[] = [
             {
               memcmp: {
                 offset: 0,
                 bytes: bs58.encode(
-                  BorshAccountsCoder.accountDiscriminator(
-                    capitalize(filter.accountName),
-                  ),
+                  BorshAccountsCoder.accountDiscriminator(_accountName),
                 ),
               },
             },
@@ -334,6 +352,11 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
           const id = this.program.provider.connection.onProgramAccountChange(
             this.program.programId,
             ({ accountId, accountInfo }, context) => {
+              if (accountInfo.data.length < 8) {
+                console.error(
+                  `onProgramAccountChange, empty account (${accountInfo.data.length}) for account ${accountId.toString()}`,
+                );
+              }
               if (this.resubOpts?.resubTimeoutMs) {
                 this.receivingData = true;
                 clearTimeout(this.timeoutId);
@@ -358,22 +381,29 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
           );
 
           gpa.forEach((value) => {
-            const accountName =
+            if (value.account.data.length < 8) {
+              console.error(
+                `Invalid account data length (${value.account.data.length}) for account ${value.pubkey.toString()}`,
+              );
+            }
+
+            const _accountName =
               this.program.account[filter.accountName].idlAccount.name;
-            const data = this.program.account[
+            const decoded = this.program.account[
               filter.accountName
-            ].coder.accounts.decodeUnchecked(accountName, value.account.data);
+            ].coder.accounts.decodeUnchecked(_accountName, value.account.data);
+
             const dataAndSlot = {
-              data,
+              data: value.account.data,
               slot,
             };
             const sub: AccountSubscription = {
               accountName: filter.accountName,
               eventType: filter.eventType,
               publicKey: value.pubkey,
-              accountInfo: value.account,
               dataAndSlot,
               id: id.toString(),
+              decoded,
             };
             this.subscriptions.set(sub.publicKey.toString(), sub);
             subs.push(sub);
@@ -416,14 +446,31 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     for (const account of accounts) {
       const key = account.publicKey.toString();
       // only update accounts that are subscribed
-      if (!this.subscriptions.has(key)) {
-        const existing = this.subscriptions.get(key)!;
+      let existing = this.subscriptions.get(key);
+      if (existing) {
         const lastSlot = existing.dataAndSlot?.slot ?? 0;
         if (context.slot > lastSlot) {
-          existing.dataAndSlot = {
-            data: account.account.data,
-            slot: context.slot,
+          if (account.account.data.length < 8) {
+            console.error(
+              `Invalid account data length (${account.account.data.length}) for account ${key.toString()}`,
+            );
+            continue;
+          }
+          const _accountName =
+            this.program.account[existing.accountName].idlAccount.name;
+          const decoded = this.program.account[
+            existing.accountName
+          ].coder.accounts.decodeUnchecked(_accountName, account.account.data);
+          existing = {
+            ...existing,
+            dataAndSlot: {
+              data: account.account.data,
+              slot: context.slot,
+            },
+            decoded,
           };
+
+          this.subscriptions.set(key, existing);
         }
       }
     }
@@ -434,11 +481,11 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     key: PublicKey,
   ): DataAndSlot<any> | undefined {
     const entry = this.subscriptions.get(key.toString());
-    if (entry && entry.dataAndSlot) {
-      return this.program.account[accountName].coder.accounts.decode(
-        capitalize(accountName),
-        entry.dataAndSlot.data,
-      );
+    if (entry && entry.dataAndSlot && entry.decoded) {
+      return {
+        data: entry.decoded,
+        slot: entry.dataAndSlot.slot,
+      };
     } else {
       return undefined;
     }
@@ -450,17 +497,16 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     const decoded: ProgramAccount<DataAndSlot<any>>[] = [];
     for (const [key, account] of Array.from(this.subscriptions.entries())) {
       const entry = this.subscriptions.get(key.toString());
-      if (entry && entry.dataAndSlot) {
-        const decodedAccount = this.program.account[
-          accountName
-        ].coder.accounts.decode(
-          capitalize(accountName),
-          entry.dataAndSlot.data,
-        );
+      if (
+        entry &&
+        entry.accountName === accountName &&
+        entry.decoded &&
+        entry.dataAndSlot
+      ) {
         decoded.push({
           publicKey: new PublicKey(key),
           account: {
-            data: decodedAccount,
+            data: entry.decoded,
             slot: entry.dataAndSlot.slot,
           },
         });

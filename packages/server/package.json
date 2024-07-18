@@ -12,7 +12,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "0.28.0",
+    "@coral-xyz/anchor": "0.29.0",
     "@solana/spl-token": "^0.3.7",
     "@solana/web3.js": "^1.77.3",
     "@cosmic-lab/prop-shop-sdk": "^0.2.10",
