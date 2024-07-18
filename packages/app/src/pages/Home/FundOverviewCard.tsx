@@ -5,6 +5,7 @@ import { Line, LineChart, XAxis, YAxis } from "recharts";
 import {
   formatNumber,
   FundOverview,
+  PropShopClient,
   truncateNumber,
   truncateString,
 } from "@cosmic-lab/prop-shop-sdk";
@@ -28,11 +29,13 @@ function calcMaxDrawdown(values: number[]): number {
 }
 
 export function FundOverviewCard({
-  title,
-  investors,
-  aum,
-  data,
-}: FundOverview) {
+  client,
+  fundOverview,
+}: {
+  client: PropShopClient;
+  fundOverview: FundOverview;
+}) {
+  const { vault, title, investors, aum, data } = fundOverview;
   const roi = data[data.length - 1] - data[0];
   const drawdown = calcMaxDrawdown(data);
   const _data = data.map((d) => ({ y: d }));
@@ -43,7 +46,7 @@ export function FundOverviewCard({
 
   return (
     <>
-      <FundDialog open={open} onClose={onClose} />
+      <FundDialog client={client} vault={vault} open={open} onClose={onClose} />
       <Container onClick={onOpen}>
         <Header title={title} investors={investors} />
         <Box

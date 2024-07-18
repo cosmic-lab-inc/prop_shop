@@ -1,7 +1,9 @@
 import { BN } from "@coral-xyz/anchor";
 import { QUOTE_PRECISION, SettlePnlRecord } from "@drift-labs/sdk";
+import { PublicKey } from "@solana/web3.js";
 
 export interface FundOverview {
+  vault: PublicKey;
   title: string;
   investors: number;
   aum: number;

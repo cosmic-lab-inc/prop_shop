@@ -38,6 +38,7 @@ import { Drift, IDL as DRIFT_IDL } from "./idl/drift";
 import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
 import {
+  Data,
   DriftVaultsSubscriber,
   FundOverview,
   SnackInfo,
@@ -135,6 +136,9 @@ export class PropShopClient {
     this.managerWithdraw = this.managerWithdraw.bind(this);
     this.protocolRequestWithdraw = this.protocolRequestWithdraw.bind(this);
     this.protocolWithdraw = this.protocolWithdraw.bind(this);
+
+    // utils
+    this.clientVaultDepositor = this.clientVaultDepositor.bind(this);
 
     this.wallet = wallet;
     this.connection = connection;
@@ -567,6 +571,7 @@ export class PropShopClient {
     const vaultPNL = VaultPNL.fromHistoricalSettlePNL(pnlData);
     const data = vaultPNL.cumulativeSeriesPNL();
     const fo: FundOverview = {
+      vault: vault.account.data.pubkey,
       title: decodeName(vault.account.data.name),
       investors: investors.length,
       aum,
@@ -607,6 +612,7 @@ export class PropShopClient {
       const vaultPNL = VaultPNL.fromHistoricalSettlePNL(pnlData);
       const data = vaultPNL.cumulativeSeriesPNL();
       const fo: FundOverview = {
+        vault: vault.account.data.pubkey,
         title: decodeName(vault.account.data.name),
         investors: investors.length,
         aum,
@@ -687,7 +693,6 @@ export class PropShopClient {
       } else {
         vault = this.vault(vd.account.data.vault).account.data;
       }
-      // todo: this errors because mainnet vaults have assets for spot markets we aren't subscribed to
       const amount =
         await this.vaultClient.calculateWithdrawableVaultDepositorEquityInDepositAsset(
           {
@@ -699,6 +704,25 @@ export class PropShopClient {
       usdc += balance;
     }
     return usdc;
+  }
+
+  public async vaultDepositorEquityInDepositAsset(
+    vdKey: PublicKey,
+    vaultKey: PublicKey,
+  ): Promise<number> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vault = this.vault(vaultKey);
+    const vd = this.vaultDepositor(vdKey);
+    const amount =
+      await this.vaultClient.calculateWithdrawableVaultDepositorEquityInDepositAsset(
+        {
+          vaultDepositor: vd.account.data,
+          vault: vault.account.data,
+        },
+      );
+    return amount.toNumber() / QUOTE_PRECISION.toNumber();
   }
 
   /**
@@ -999,6 +1023,28 @@ export class PropShopClient {
   public async protocolRequestWithdraw(usdc: number): Promise<void> {}
 
   public async protocolWithdraw(): Promise<void> {}
+
+  //
+  // Utils
+  //
+
+  public clientVaultDepositor(
+    vault: PublicKey,
+  ): Data<PublicKey, VaultDepositor> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const key = getVaultDepositorAddressSync(
+      this.vaultClient.program.programId,
+      vault,
+      this.publicKey,
+    );
+    const vd = this.vaultDepositor(key);
+    return {
+      key,
+      data: vd.account.data,
+    };
+  }
 
   //
   // Static utils

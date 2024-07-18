@@ -72,13 +72,7 @@ export function Funds({ client }: { client: PropShopClient }) {
         <GridContainer>
           {vaults.map((vault, i) => {
             return (
-              <FundOverviewCard
-                key={i}
-                title={vault.title}
-                investors={vault.investors}
-                aum={vault.aum}
-                data={vault.data}
-              />
+              <FundOverviewCard key={i} client={client} fundOverview={vault} />
             );
           })}
         </GridContainer>

@@ -6,7 +6,11 @@ import {
   Typography,
 } from "@mui/material";
 import { customTheme } from "../../../styles";
-import { shortenAddress } from "@cosmic-lab/prop-shop-sdk";
+import {
+  PropShopClient,
+  shortenAddress,
+  truncateNumber,
+} from "@cosmic-lab/prop-shop-sdk";
 import { observer } from "mobx-react";
 import { ContentCopyOutlined } from "@mui/icons-material";
 import {
@@ -15,6 +19,42 @@ import {
   MinusIcon,
   PlusIcon,
 } from "../../../components";
+import { PublicKey } from "@solana/web3.js";
+
+export const InvestorStats = observer(
+  ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
+    return (
+      <Box
+        sx={{
+          width: "100%",
+          borderRadius: "10px",
+          display: "flex",
+          flexDirection: "row",
+          flexGrow: 1,
+          gap: 1,
+          p: 1,
+          bgcolor: customTheme.light,
+        }}
+      >
+        <Stats client={client} vault={vault} />
+
+        <Box
+          sx={{
+            borderRadius: "10px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 1,
+          }}
+        >
+          <IconButton component={AirdropIcon} iconSize={50} disabled={false} />
+          <IconButton component={PlusIcon} iconSize={50} disabled={true} />
+          <IconButton component={MinusIcon} iconSize={50} disabled={false} />
+        </Box>
+      </Box>
+    );
+  },
+);
 
 function CopyButton({ text }: { text: string }) {
   function copy() {
@@ -34,40 +74,51 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-const Stats = observer(() => {
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        // bgcolor: customTheme.dark,
-        borderRadius: "10px",
-        width: "100%",
-      }}
-    >
-      <Container>
-        <div style={{ width: "100%" }}>
-          <TableRow hover>
-            <Text>API KEY</Text>
-            <TextIconWrapper text={"asdfasdfasdfas"} shorten />
-          </TableRow>
-          <TableRow hover>
-            <Text>PROFILE</Text>
-            <TextIconWrapper text={";ojh;ojh;ojh"} shorten />
-          </TableRow>
-          <TableRow hover>
-            <Text>VAULT</Text>
-            <TextIconWrapper text={"asdfjhasdf;ojh"} shorten />
-          </TableRow>
-          <TableRow hover>
-            <Text>BALANCE</Text>
-            <TextIconWrapper text={"129381"} />
-          </TableRow>
-        </div>
-      </Container>
-    </Box>
-  );
-});
+const Stats = observer(
+  ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
+    const { key, data } = client.clientVaultDepositor(vault);
+    const [equity, setEquity] = React.useState<number>(0);
+    React.useEffect(() => {
+      async function fetch() {
+        const usdc = await client.vaultDepositorEquityInDepositAsset(
+          key,
+          vault,
+        );
+        setEquity(truncateNumber(usdc, 2));
+      }
+
+      fetch();
+    }, []);
+
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          borderRadius: "10px",
+          width: "100%",
+        }}
+      >
+        <Container>
+          <div style={{ width: "100%" }}>
+            <TableRow hover>
+              <Text>Equity</Text>
+              <TextIconWrapper text={`$${equity}`} />
+            </TableRow>
+            <TableRow hover>
+              <Text>Vault Depositor</Text>
+              <TextIconWrapper text={key.toString()} shorten />
+            </TableRow>
+            <TableRow hover>
+              <Text>VAULT</Text>
+              <TextIconWrapper text={vault.toString()} shorten />
+            </TableRow>
+          </div>
+        </Container>
+      </Box>
+    );
+  },
+);
 
 function Container({ children }: { children: ReactNode }) {
   return (
@@ -138,37 +189,3 @@ const TableRow = styled("div")<{ hover?: boolean; header?: boolean }>(
     }),
   }),
 );
-
-// todo: take VaultDepositor as param
-export const InvestorStats = observer(() => {
-  return (
-    <Box
-      sx={{
-        width: "100%",
-        borderRadius: "10px",
-        display: "flex",
-        flexDirection: "row",
-        flexGrow: 1,
-        gap: 1,
-        p: 1,
-        bgcolor: customTheme.light,
-      }}
-    >
-      <Stats />
-
-      <Box
-        sx={{
-          borderRadius: "10px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 1,
-        }}
-      >
-        <IconButton component={AirdropIcon} iconSize={50} disabled={false} />
-        <IconButton component={PlusIcon} iconSize={50} disabled={true} />
-        <IconButton component={MinusIcon} iconSize={50} disabled={false} />
-      </Box>
-    </Box>
-  );
-});
