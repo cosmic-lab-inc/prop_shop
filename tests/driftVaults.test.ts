@@ -318,7 +318,7 @@ describe("driftProtocolVaults", () => {
     bulkAccountLoader.stopPolling();
 
     // end test
-    process.exit(0);
+    process.exit();
   });
 
   //
@@ -326,7 +326,6 @@ describe("driftProtocolVaults", () => {
   //
 
   it("Initialize Vault", async () => {
-    console.log("DriftVaults:", anchor.workspace.DriftVaults);
     console.log("initialize vault...");
     await managerClient.initializeVault({
       name: encodeName(vaultName),
@@ -499,6 +498,7 @@ describe("driftProtocolVaults", () => {
     );
     const vaultClient = new VaultClient({
       driftClient,
+      // @ts-ignore
       program: program,
     });
     const vaultName = "if stake vault";
@@ -577,6 +577,7 @@ describe("driftProtocolVaults", () => {
     );
     const vaultClient = new VaultClient({
       driftClient,
+      // @ts-ignore
       program: program,
     });
     const vaultName = "competition vault";
@@ -1141,7 +1142,9 @@ describe("driftProtocolVaults", () => {
 
     const withdrawAmount =
       await vdClient.calculateWithdrawableVaultDepositorEquityInDepositAsset({
+        // @ts-ignore
         vaultDepositor: vaultDepositorAccount,
+        // @ts-ignore
         vault: vaultAccount,
       });
     console.log(

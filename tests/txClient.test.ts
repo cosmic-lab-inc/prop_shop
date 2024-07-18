@@ -64,8 +64,12 @@ describe("TxClient", () => {
       );
 
       const vaultPNL = VaultPnl.fromSettlePnlRecord(data);
-      const start = yyyymmdd(vaultPNL.startDate());
-      const end = yyyymmdd(vaultPNL.endDate());
+      const start = vaultPNL.startDate()
+        ? yyyymmdd(vaultPNL.startDate()!)
+        : "undefined";
+      const end = vaultPNL.endDate()
+        ? yyyymmdd(vaultPNL.endDate()!)
+        : "undefined";
       console.log(
         `$${vaultPNL.cumulativePNL()} cum pnl from RPC, ${data.length} events, from ${start} to ${end}`,
       );

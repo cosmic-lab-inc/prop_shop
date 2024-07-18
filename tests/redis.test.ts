@@ -182,10 +182,14 @@ describe("Redis", () => {
       const data: HistoricalSettlePNL[] = JSON.parse(get);
       if (data.length > 0) {
         const hydrated = VaultPnl.fromHistoricalSettlePNL(data);
-        console.log(
-          `${name} pnl start date: ${yyyymmdd(hydrated.startDate())}`,
-        );
-        console.log(`${name} pnl end date: ${yyyymmdd(hydrated.endDate())}`);
+        const start = hydrated.startDate()
+          ? yyyymmdd(hydrated.startDate()!)
+          : "undefined";
+        console.log(`${name} pnl start date: ${start}`);
+        const end = hydrated.endDate()
+          ? yyyymmdd(hydrated.endDate()!)
+          : "undefined";
+        console.log(`${name} pnl end date: ${end}`);
         console.log(
           `${name} pnl over ${data.length} trades: $${truncateNumber(hydrated.cumulativePNL(), 2)}`,
         );

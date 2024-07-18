@@ -44,7 +44,6 @@ import {
 import { IDL, VaultClient } from "@drift-labs/vaults-sdk";
 
 export async function mockOracle(
-  // program: Program<anchor.Idl>,
   price: number = 50 * 10e7,
   expo = -7,
   confidence?: number,
