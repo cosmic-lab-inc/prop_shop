@@ -41,15 +41,19 @@ app.use(async (_req, _res, next) => {
 
 app.post("/api/performance", async (req, res) => {
   try {
-    const { vaultKey, vaultUser, daysBack } = req.body;
-    let data = await redis.get(vaultKey);
-    if (!data) {
-      const value = await fetchDriftUserHistoricalPnl(vaultUser, daysBack);
-      console.log(`vault PNL not cached, fetched ${value.length} entries`);
-      data = JSON.stringify(value);
-      await redis.set(vaultKey, data);
+    const { vaultKey, vaultUser, daysBack, skipFetching } = req.body;
+    if (skipFetching) {
+      res.send(JSON.stringify([]));
+    } else {
+      let data = await redis.get(vaultKey);
+      if (!data) {
+        const value = await fetchDriftUserHistoricalPnl(vaultUser, daysBack);
+        console.log(`vault PNL not cached, fetched ${value.length} entries`);
+        data = JSON.stringify(value);
+        await redis.set(vaultKey, data);
+      }
+      res.send(data);
     }
-    res.send(data);
   } catch (e: any) {
     console.error(e);
     throw new Error(e);

@@ -7,7 +7,7 @@ import {
   ProxyClient,
   RedisClient,
   truncateNumber,
-  VaultPNL,
+  VaultPnl,
   yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
@@ -165,7 +165,11 @@ describe("Redis", () => {
       const key = vault.account.pubkey.toString();
       const name = decodeName(vault.account.name);
       const daysBack = 30;
-      const pnl = await ProxyClient.performance(vault.account, daysBack, true);
+      const pnl = await ProxyClient.performance({
+        vault: vault.account,
+        daysBack,
+        usePrefix: true,
+      });
       const value = JSON.stringify(pnl);
       await redis.set(key, value);
       const get = await redis.get(key);
@@ -177,7 +181,7 @@ describe("Redis", () => {
 
       const data: HistoricalSettlePNL[] = JSON.parse(get);
       if (data.length > 0) {
-        const hydrated = VaultPNL.fromHistoricalSettlePNL(data);
+        const hydrated = VaultPnl.fromHistoricalSettlePNL(data);
         console.log(
           `${name} pnl start date: ${yyyymmdd(hydrated.startDate())}`,
         );

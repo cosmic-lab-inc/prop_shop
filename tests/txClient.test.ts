@@ -7,7 +7,7 @@ import {
   PropShopClient,
   stopProcess,
   TxClient,
-  VaultPNL,
+  VaultPnl,
   yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
@@ -31,7 +31,7 @@ describe("TxClient", () => {
 
   const program = anchor.workspace.DriftVaults as Program<DriftVaults>;
 
-  const client = new PropShopClient(wallet, connection, true);
+  const client = new PropShopClient(wallet, connection, true, true);
 
   beforeAll(async () => {
     await client.initialize();
@@ -63,7 +63,7 @@ describe("TxClient", () => {
         (event) => event.data as SettlePnlRecord,
       );
 
-      const vaultPNL = VaultPNL.fromSettlePnlRecord(data);
+      const vaultPNL = VaultPnl.fromSettlePnlRecord(data);
       const start = yyyymmdd(vaultPNL.startDate());
       const end = yyyymmdd(vaultPNL.endDate());
       console.log(

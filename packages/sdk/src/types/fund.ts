@@ -32,41 +32,42 @@ export interface PNL {
   ts: number;
 }
 
-export class VaultPNL {
+export class VaultPnl {
   data: PNL[];
 
   constructor(data: PNL[]) {
-    if (data.length === 0) {
-      throw new Error("No PNL data found");
+    if (!data[0] || !data[data.length - 1]) {
+      this.data = [];
+    } else {
+      const startTs = Number(data[0].ts);
+      const endTs = Number(data[data.length - 1].ts);
+      let series = data;
+      if (endTs < startTs) {
+        // sort data from lowest ts to highest so 0th index is oldest
+        series = data.sort((a, b) => Number(a.ts) - Number(b.ts));
+      }
+      this.data = series;
     }
-    const startTs = Number(data[0].ts);
-    const endTs = Number(data[data.length - 1].ts);
-    let series = data;
-    if (endTs < startTs) {
-      // sort data from lowest ts to highest so 0th index is oldest
-      series = data.sort((a, b) => Number(a.ts) - Number(b.ts));
-    }
-    this.data = series;
   }
 
-  public static fromHistoricalSettlePNL(data: HistoricalSettlePNL[]): VaultPNL {
+  public static fromHistoricalSettlePNL(data: HistoricalSettlePNL[]): VaultPnl {
     const series: PNL[] = data.map((d) => {
       return {
         pnl: Number(d.pnl) / QUOTE_PRECISION.toNumber(),
         ts: Number(d.ts),
       };
     });
-    return new VaultPNL(series);
+    return new VaultPnl(series);
   }
 
-  public static fromSettlePnlRecord(data: SettlePnlRecord[]): VaultPNL {
+  public static fromSettlePnlRecord(data: SettlePnlRecord[]): VaultPnl {
     const series: PNL[] = data.map((d) => {
       return {
         pnl: Number(d.pnl) / QUOTE_PRECISION.toNumber(),
         ts: Number(d.ts),
       };
     });
-    return new VaultPNL(series);
+    return new VaultPnl(series);
   }
 
   public cumulativeSeriesPNL(): number[] {
@@ -87,12 +88,18 @@ export class VaultPNL {
     return cumSum;
   }
 
-  public startDate(): Date {
+  public startDate(): Date | undefined {
+    if (!this.data[0]) {
+      return undefined;
+    }
     const first = this.data[0];
     return new Date(Number(first.ts) * 1000);
   }
 
-  public endDate(): Date {
+  public endDate(): Date | undefined {
+    if (!this.data[this.data.length - 1]) {
+      return undefined;
+    }
     const last = this.data[this.data.length - 1];
     return new Date(Number(last.ts) * 1000);
   }

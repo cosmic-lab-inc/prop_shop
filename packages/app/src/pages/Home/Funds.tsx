@@ -23,7 +23,11 @@ export function Funds({ client }: { client: PropShopClient }) {
   const [vaults, setVaults] = React.useState<FundOverview[]>([]);
   React.useEffect(() => {
     async function fetchVaults() {
-      if (process.env.ENV === "dev") {
+      // only use mock data on mainnet dev mode
+      if (
+        process.env.ENV === "dev" &&
+        process.env.RPC_URL !== "http://localhost:8899"
+      ) {
         setVaults(mockFundOverviews());
       } else {
         const vaults = await client!.fundOverviews();

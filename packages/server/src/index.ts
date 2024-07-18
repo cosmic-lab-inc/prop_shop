@@ -27,7 +27,7 @@ const wallet = PropShopClient.keypairToWalletContextState(signer);
 
 const connection = new Connection(process.env.RPC_URL);
 
-const client = new PropShopClient(wallet, connection, true);
+const client = new PropShopClient(wallet, connection, true, true);
 
 const redis = RedisClient.new({
   endpoint: process.env.REDIS_ENDPOINT,

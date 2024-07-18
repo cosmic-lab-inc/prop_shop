@@ -42,7 +42,7 @@ import {
   DriftVaultsSubscriber,
   FundOverview,
   SnackInfo,
-  VaultPNL,
+  VaultPnl,
 } from "./types";
 import {
   DriftVaults,
@@ -86,13 +86,16 @@ export class PropShopClient {
   eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>;
 
   _fundOverviews: Map<string, FundOverview>;
-  private _disableCache: boolean = false;
   _cache: DriftVaultsSubscriber | undefined = undefined;
+
+  private readonly disableCache: boolean = false;
+  private readonly skipFetching: boolean = false;
 
   constructor(
     wallet: WalletContextState,
     connection: Connection,
     disableCache: boolean = false,
+    skipFetching: boolean = false,
   ) {
     makeObservable(this);
 
@@ -143,7 +146,8 @@ export class PropShopClient {
     this.wallet = wallet;
     this.connection = connection;
     this._fundOverviews = new Map();
-    this._disableCache = disableCache;
+    this.disableCache = disableCache;
+    this.skipFetching = skipFetching;
     this.eventEmitter = new EventEmitter();
     console.log("constructed PropShopClient");
     this.loading = false;
@@ -240,7 +244,7 @@ export class PropShopClient {
       program: driftVaultsProgram,
     });
 
-    if (!this._disableCache) {
+    if (!this.disableCache) {
       const preSub = new Date().getTime();
       await this.subscribe(driftVaultsProgram);
       // takes about 2s for websocket and 4s for polling
@@ -255,7 +259,7 @@ export class PropShopClient {
   }
 
   async subscribe(program: anchor.Program<DriftVaults>) {
-    if (this._disableCache) {
+    if (this.disableCache) {
       return;
     }
     this._cache = new WebSocketSubscriber(program, {
@@ -567,8 +571,12 @@ export class PropShopClient {
 
     const investors = vaultVds.get(vault.account.data.pubkey.toString()) ?? [];
     const aum = await this.aggregateTVL([vault], investors);
-    const pnlData = await ProxyClient.performance(vault.account.data, 100);
-    const vaultPNL = VaultPNL.fromHistoricalSettlePNL(pnlData);
+    const pnlData = await ProxyClient.performance({
+      vault: vault.account.data,
+      daysBack: 100,
+      skipFetching: this.skipFetching,
+    });
+    const vaultPNL = VaultPnl.fromHistoricalSettlePNL(pnlData);
     const data = vaultPNL.cumulativeSeriesPNL();
     const fo: FundOverview = {
       vault: vault.account.data.pubkey,
@@ -608,8 +616,12 @@ export class PropShopClient {
       const investors =
         vaultVds.get(vault.account.data.pubkey.toString()) ?? [];
       const aum = await this.aggregateTVL(vaults, investors);
-      const pnlData = await ProxyClient.performance(vault.account.data, 100);
-      const vaultPNL = VaultPNL.fromHistoricalSettlePNL(pnlData);
+      const pnlData = await ProxyClient.performance({
+        vault: vault.account.data,
+        daysBack: 100,
+        skipFetching: this.skipFetching,
+      });
+      const vaultPNL = VaultPnl.fromHistoricalSettlePNL(pnlData);
       const data = vaultPNL.cumulativeSeriesPNL();
       const fo: FundOverview = {
         vault: vault.account.data.pubkey,

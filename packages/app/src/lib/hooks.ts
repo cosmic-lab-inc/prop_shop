@@ -11,9 +11,16 @@ export function useClient(): PropShopClient | undefined {
   );
 
   React.useEffect(() => {
+    const env = process.env.ENV ?? "dev";
+    const skipFetching = env === "dev";
     const run = async () => {
       if (!client && wallet.publicKey) {
-        const _client = new PropShopClient(wallet, connection.connection);
+        const _client = new PropShopClient(
+          wallet,
+          connection.connection,
+          undefined,
+          skipFetching,
+        );
         if (!_client.vaultClient && !_client.loading) {
           await _client.initialize();
           setClient(_client);

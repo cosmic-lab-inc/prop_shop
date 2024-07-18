@@ -8,11 +8,13 @@ export class ProxyClient {
    * @param daysBack
    * @param usePrefix set to true if used outside the vite app
    */
-  public static async performance(
-    vault: Vault,
-    daysBack: number,
-    usePrefix?: boolean,
-  ): Promise<HistoricalSettlePNL[]> {
+  public static async performance(params: {
+    vault: Vault;
+    daysBack: number;
+    usePrefix?: boolean;
+    skipFetching?: boolean;
+  }): Promise<HistoricalSettlePNL[]> {
+    const { vault, daysBack, usePrefix, skipFetching } = params;
     try {
       let url = "/api/performance";
       if (usePrefix) {
@@ -27,6 +29,7 @@ export class ProxyClient {
           vaultKey: vault.pubkey.toString(),
           vaultUser: vault.user.toString(),
           daysBack,
+          skipFetching,
         }),
       });
       const data: HistoricalSettlePNL[] = await response.json();
