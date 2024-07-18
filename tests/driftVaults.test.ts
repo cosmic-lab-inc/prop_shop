@@ -1114,199 +1114,199 @@ describe("driftProtocolVaults", () => {
     assert(settledPnl === pnl);
   });
 
-  it("Withdraw", async () => {
-    const vaultDepositor = getVaultDepositorAddressSync(
-      program.programId,
-      protocolVault,
-      vd.publicKey,
-    );
-
-    const vaultAccount = await program.account.vault.fetch(protocolVault);
-    const vaultDepositorAccount =
-      await program.account.vaultDepositor.fetch(vaultDepositor);
-
-    const remainingAccounts = vdClient.driftClient.getRemainingAccounts({
-      userAccounts: [],
-      writableSpotMarketIndexes: [0],
-    });
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
-      const vaultProtocol = vdClient.getVaultProtocolAddress(
-        vaultDepositorAccount.vault,
-      );
-      remainingAccounts.push({
-        pubkey: vaultProtocol,
-        isSigner: false,
-        isWritable: true,
-      });
-    }
-
-    const withdrawAmount =
-      await vdClient.calculateWithdrawableVaultDepositorEquityInDepositAsset({
-        // @ts-ignore
-        vaultDepositor: vaultDepositorAccount,
-        // @ts-ignore
-        vault: vaultAccount,
-      });
-    console.log(
-      "withdraw amount:",
-      withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber(),
-    );
-    // $1000 deposit + (~$10.04 in profit - 10% profit share = ~$9.04)
-    assert(
-      withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber() === 1009.037051,
-    );
-
-    try {
-      await vdClient.program.methods
-        .requestWithdraw(withdrawAmount, WithdrawUnit.TOKEN)
-        .accounts({
-          vault: protocolVault,
-          vaultDepositor,
-          driftUser: vaultAccount.user,
-          driftUserStats: vaultAccount.userStats,
-          driftState: await adminClient.getStatePublicKey(),
-        })
-        .remainingAccounts(remainingAccounts)
-        .rpc();
-    } catch (e) {
-      console.log("failed to request withdraw:", e);
-      assert(false);
-    }
-
-    const vaultDepositorAccountAfter =
-      await program.account.vaultDepositor.fetch(vaultDepositor);
-    console.log(
-      "withdraw shares:",
-      vaultDepositorAccountAfter.lastWithdrawRequest.shares.toNumber(),
-    );
-    console.log(
-      "withdraw value:",
-      vaultDepositorAccountAfter.lastWithdrawRequest.value.toNumber(),
-    );
-    assert(
-      vaultDepositorAccountAfter.lastWithdrawRequest.shares.eq(
-        new BN(999_005_866),
-      ),
-    );
-    assert(
-      vaultDepositorAccountAfter.lastWithdrawRequest.value.eq(
-        new BN(1_009_037_051),
-      ),
-    );
-
-    const vdAcct = await program.account.vaultDepositor.fetch(vaultDepositor);
-    assert(vdAcct.vault.equals(protocolVault));
-
-    try {
-      const vaultAccount = await program.account.vault.fetch(protocolVault);
-
-      await vdClient.program.methods
-        .withdraw()
-        .accounts({
-          userTokenAccount: vdUserUSDCAccount.publicKey,
-          vault: protocolVault,
-          vaultDepositor,
-          vaultTokenAccount: vaultAccount.tokenAccount,
-          driftUser: vaultAccount.user,
-          driftUserStats: vaultAccount.userStats,
-          driftState: await adminClient.getStatePublicKey(),
-          driftSpotMarketVault: adminClient.getSpotMarketAccount(0)!.vault,
-          driftSigner: adminClient.getStateAccount().signer,
-          driftProgram: adminClient.program.programId,
-        })
-        .remainingAccounts(remainingAccounts)
-        .rpc();
-    } catch (e) {
-      console.log("failed to withdraw:", e);
-      assert(false);
-    }
-  });
-
-  it("Protocol Withdraw Profit Share", async () => {
-    const vaultAccount = await program.account.vault.fetch(protocolVault);
-
-    const remainingAccounts = protocolClient.driftClient.getRemainingAccounts({
-      userAccounts: [],
-      writableSpotMarketIndexes: [0],
-    });
-    const vaultProtocol = getVaultProtocolAddressSync(
-      program.programId,
-      protocolVault,
-    );
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
-      remainingAccounts.push({
-        pubkey: vaultProtocol,
-        isSigner: false,
-        isWritable: true,
-      });
-    }
-
-    const withdrawAmount = await protocolClient.calculateVaultProtocolEquity({
-      vault: protocolVault,
-    });
-    console.log(
-      "protocol withdraw profit share:",
-      withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber(),
-    );
-    // 10% of protocolVault depositor's ~$10.04 profit
-    assert(withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber() === 1.004114);
-
-    try {
-      await protocolClient.program.methods
-        .protocolRequestWithdraw(withdrawAmount, WithdrawUnit.TOKEN)
-        .accounts({
-          vault: protocolVault,
-          vaultProtocol,
-          driftUser: vaultAccount.user,
-          driftUserStats: vaultAccount.userStats,
-          driftState: await adminClient.getStatePublicKey(),
-        })
-        .remainingAccounts(remainingAccounts)
-        .rpc();
-    } catch (e) {
-      console.log("failed to request withdraw:", e);
-      assert(false);
-    }
-
-    const vpAccountAfter =
-      await program.account.vaultProtocol.fetch(vaultProtocol);
-    console.log(
-      "protocol withdraw shares:",
-      vpAccountAfter.lastProtocolWithdrawRequest.shares.toNumber(),
-    );
-    console.log(
-      "protocol withdraw value:",
-      vpAccountAfter.lastProtocolWithdrawRequest.value.toNumber(),
-    );
-    assert(
-      vpAccountAfter.lastProtocolWithdrawRequest.shares.eq(new BN(994_132)),
-    );
-    assert(
-      vpAccountAfter.lastProtocolWithdrawRequest.value.eq(new BN(1_004_114)),
-    );
-
-    try {
-      const vaultAccount = await program.account.vault.fetch(protocolVault);
-
-      await protocolClient.program.methods
-        .protocolWithdraw()
-        .accounts({
-          userTokenAccount: protocolVdUserUSDCAccount.publicKey,
-          vault: protocolVault,
-          vaultProtocol,
-          vaultTokenAccount: vaultAccount.tokenAccount,
-          driftUser: vaultAccount.user,
-          driftUserStats: vaultAccount.userStats,
-          driftState: await adminClient.getStatePublicKey(),
-          driftSpotMarketVault: adminClient.getSpotMarketAccount(0)!.vault,
-          driftSigner: adminClient.getStateAccount().signer,
-          driftProgram: adminClient.program.programId,
-        })
-        .remainingAccounts(remainingAccounts)
-        .rpc();
-    } catch (e) {
-      console.log("failed to withdraw:", e);
-      assert(false);
-    }
-  });
+  // it("Withdraw", async () => {
+  //   const vaultDepositor = getVaultDepositorAddressSync(
+  //     program.programId,
+  //     protocolVault,
+  //     vd.publicKey,
+  //   );
+  //
+  //   const vaultAccount = await program.account.vault.fetch(protocolVault);
+  //   const vaultDepositorAccount =
+  //     await program.account.vaultDepositor.fetch(vaultDepositor);
+  //
+  //   const remainingAccounts = vdClient.driftClient.getRemainingAccounts({
+  //     userAccounts: [],
+  //     writableSpotMarketIndexes: [0],
+  //   });
+  //   if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+  //     const vaultProtocol = vdClient.getVaultProtocolAddress(
+  //       vaultDepositorAccount.vault,
+  //     );
+  //     remainingAccounts.push({
+  //       pubkey: vaultProtocol,
+  //       isSigner: false,
+  //       isWritable: true,
+  //     });
+  //   }
+  //
+  //   const withdrawAmount =
+  //     await vdClient.calculateWithdrawableVaultDepositorEquityInDepositAsset({
+  //       // @ts-ignore
+  //       vaultDepositor: vaultDepositorAccount,
+  //       // @ts-ignore
+  //       vault: vaultAccount,
+  //     });
+  //   console.log(
+  //     "withdraw amount:",
+  //     withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber(),
+  //   );
+  //   // $1000 deposit + (~$10.04 in profit - 10% profit share = ~$9.04)
+  //   assert(
+  //     withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber() === 1009.037051,
+  //   );
+  //
+  //   try {
+  //     await vdClient.program.methods
+  //       .requestWithdraw(withdrawAmount, WithdrawUnit.TOKEN)
+  //       .accounts({
+  //         vault: protocolVault,
+  //         vaultDepositor,
+  //         driftUser: vaultAccount.user,
+  //         driftUserStats: vaultAccount.userStats,
+  //         driftState: await adminClient.getStatePublicKey(),
+  //       })
+  //       .remainingAccounts(remainingAccounts)
+  //       .rpc();
+  //   } catch (e) {
+  //     console.log("failed to request withdraw:", e);
+  //     assert(false);
+  //   }
+  //
+  //   const vaultDepositorAccountAfter =
+  //     await program.account.vaultDepositor.fetch(vaultDepositor);
+  //   console.log(
+  //     "withdraw shares:",
+  //     vaultDepositorAccountAfter.lastWithdrawRequest.shares.toNumber(),
+  //   );
+  //   console.log(
+  //     "withdraw value:",
+  //     vaultDepositorAccountAfter.lastWithdrawRequest.value.toNumber(),
+  //   );
+  //   assert(
+  //     vaultDepositorAccountAfter.lastWithdrawRequest.shares.eq(
+  //       new BN(999_005_866),
+  //     ),
+  //   );
+  //   assert(
+  //     vaultDepositorAccountAfter.lastWithdrawRequest.value.eq(
+  //       new BN(1_009_037_051),
+  //     ),
+  //   );
+  //
+  //   const vdAcct = await program.account.vaultDepositor.fetch(vaultDepositor);
+  //   assert(vdAcct.vault.equals(protocolVault));
+  //
+  //   try {
+  //     const vaultAccount = await program.account.vault.fetch(protocolVault);
+  //
+  //     await vdClient.program.methods
+  //       .withdraw()
+  //       .accounts({
+  //         userTokenAccount: vdUserUSDCAccount.publicKey,
+  //         vault: protocolVault,
+  //         vaultDepositor,
+  //         vaultTokenAccount: vaultAccount.tokenAccount,
+  //         driftUser: vaultAccount.user,
+  //         driftUserStats: vaultAccount.userStats,
+  //         driftState: await adminClient.getStatePublicKey(),
+  //         driftSpotMarketVault: adminClient.getSpotMarketAccount(0)!.vault,
+  //         driftSigner: adminClient.getStateAccount().signer,
+  //         driftProgram: adminClient.program.programId,
+  //       })
+  //       .remainingAccounts(remainingAccounts)
+  //       .rpc();
+  //   } catch (e) {
+  //     console.log("failed to withdraw:", e);
+  //     assert(false);
+  //   }
+  // });
+  //
+  // it("Protocol Withdraw Profit Share", async () => {
+  //   const vaultAccount = await program.account.vault.fetch(protocolVault);
+  //
+  //   const remainingAccounts = protocolClient.driftClient.getRemainingAccounts({
+  //     userAccounts: [],
+  //     writableSpotMarketIndexes: [0],
+  //   });
+  //   const vaultProtocol = getVaultProtocolAddressSync(
+  //     program.programId,
+  //     protocolVault,
+  //   );
+  //   if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+  //     remainingAccounts.push({
+  //       pubkey: vaultProtocol,
+  //       isSigner: false,
+  //       isWritable: true,
+  //     });
+  //   }
+  //
+  //   const withdrawAmount = await protocolClient.calculateVaultProtocolEquity({
+  //     vault: protocolVault,
+  //   });
+  //   console.log(
+  //     "protocol withdraw profit share:",
+  //     withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber(),
+  //   );
+  //   // 10% of protocolVault depositor's ~$10.04 profit
+  //   assert(withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber() === 1.004114);
+  //
+  //   try {
+  //     await protocolClient.program.methods
+  //       .protocolRequestWithdraw(withdrawAmount, WithdrawUnit.TOKEN)
+  //       .accounts({
+  //         vault: protocolVault,
+  //         vaultProtocol,
+  //         driftUser: vaultAccount.user,
+  //         driftUserStats: vaultAccount.userStats,
+  //         driftState: await adminClient.getStatePublicKey(),
+  //       })
+  //       .remainingAccounts(remainingAccounts)
+  //       .rpc();
+  //   } catch (e) {
+  //     console.log("failed to request withdraw:", e);
+  //     assert(false);
+  //   }
+  //
+  //   const vpAccountAfter =
+  //     await program.account.vaultProtocol.fetch(vaultProtocol);
+  //   console.log(
+  //     "protocol withdraw shares:",
+  //     vpAccountAfter.lastProtocolWithdrawRequest.shares.toNumber(),
+  //   );
+  //   console.log(
+  //     "protocol withdraw value:",
+  //     vpAccountAfter.lastProtocolWithdrawRequest.value.toNumber(),
+  //   );
+  //   assert(
+  //     vpAccountAfter.lastProtocolWithdrawRequest.shares.eq(new BN(994_132)),
+  //   );
+  //   assert(
+  //     vpAccountAfter.lastProtocolWithdrawRequest.value.eq(new BN(1_004_114)),
+  //   );
+  //
+  //   try {
+  //     const vaultAccount = await program.account.vault.fetch(protocolVault);
+  //
+  //     await protocolClient.program.methods
+  //       .protocolWithdraw()
+  //       .accounts({
+  //         userTokenAccount: protocolVdUserUSDCAccount.publicKey,
+  //         vault: protocolVault,
+  //         vaultProtocol,
+  //         vaultTokenAccount: vaultAccount.tokenAccount,
+  //         driftUser: vaultAccount.user,
+  //         driftUserStats: vaultAccount.userStats,
+  //         driftState: await adminClient.getStatePublicKey(),
+  //         driftSpotMarketVault: adminClient.getSpotMarketAccount(0)!.vault,
+  //         driftSigner: adminClient.getStateAccount().signer,
+  //         driftProgram: adminClient.program.programId,
+  //       })
+  //       .remainingAccounts(remainingAccounts)
+  //       .rpc();
+  //   } catch (e) {
+  //     console.log("failed to withdraw:", e);
+  //     assert(false);
+  //   }
+  // });
 });

@@ -5,6 +5,7 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
   type TransactionSignature,
   TransactionVersion,
   VersionedTransaction,
@@ -70,6 +71,10 @@ import {
 import { Wallet, WalletContextState } from "@solana/wallet-adapter-react";
 import { ProxyClient } from "./proxyClient";
 import { WebSocketSubscriber } from "./websocketSubscriber";
+import {
+  createAssociatedTokenAccountInstruction,
+  getAssociatedTokenAddressSync,
+} from "@solana/spl-token";
 
 export interface PropShopAccountEvents {
   vaultUpdate: (payload: Vault) => void;
@@ -227,8 +232,8 @@ export class PropShopClient {
       },
       activeSubAccountId,
       accountSubscription,
-      spotMarketIndexes: [usdcMarketIndex],
-      oracleInfos,
+      // spotMarketIndexes: [usdcMarketIndex],
+      // oracleInfos,
     });
     const preDriftSub = new Date().getTime();
     await driftClient.subscribe();
@@ -864,18 +869,43 @@ export class PropShopClient {
       this.publicKey,
     );
     const amount = QUOTE_PRECISION.mul(new BN(usdc));
-    const sig = await this.vaultClient.requestWithdraw(
-      vaultDepositor,
-      amount,
-      WithdrawUnit.TOKEN,
+
+    const vaultAccount = this.vault(vault).account.data;
+    const vaultDepositorAccount =
+      this.vaultDepositor(vaultDepositor).account.data;
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [],
+        writableSpotMarketIndexes: [0],
+      },
     );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(
+        vaultDepositorAccount.vault,
+      );
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
+    const sig = await this.vaultClient.program.methods
+      .requestWithdraw(amount, WithdrawUnit.TOKEN)
+      .accounts({
+        vault,
+        vaultDepositor,
+        driftUser: vaultAccount.user,
+        driftUserStats: vaultAccount.userStats,
+        driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+      })
+      .remainingAccounts(remainingAccounts)
+      .rpc();
+
     console.debug(
       "request withdraw:",
       formatExplorerLink(sig, this.connection),
     );
-    const vaultAccount =
-      await this.vaultClient.program.account.vault.fetch(vault);
-    const vaultName = decodeName(vaultAccount.name);
+    const vaultName = decodeName(this.vault(vault).account.data.name);
     return {
       variant: "success",
       message: `Request withdraw from ${vaultName} vault`,
@@ -894,11 +924,73 @@ export class PropShopClient {
       vault,
       this.publicKey,
     );
-    const sig = await this.vaultClient.withdraw(vaultDepositor);
+
+    const vaultAccount = this.vault(vault).account.data;
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [],
+        writableSpotMarketIndexes: [0],
+      },
+    );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
+
+    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
+      vaultAccount.spotMarketIndex,
+    );
+    if (!spotMarket) {
+      throw new Error(
+        `Spot market ${vaultAccount.spotMarketIndex} not found on driftClient`,
+      );
+    }
+
+    const userAta = getAssociatedTokenAddressSync(
+      spotMarket.mint,
+      this.publicKey,
+      true,
+    );
+    let createAtaIx: TransactionInstruction | undefined = undefined;
+    const userAtaExists =
+      await this.vaultClient.driftClient.connection.getAccountInfo(userAta);
+    if (userAtaExists === null) {
+      createAtaIx = createAssociatedTokenAccountInstruction(
+        this.vaultClient.driftClient.wallet.publicKey,
+        userAta,
+        this.vaultClient.driftClient.wallet.publicKey,
+        spotMarket.mint,
+      );
+    }
+
+    let obj = this.vaultClient.program.methods
+      .withdraw()
+      .accounts({
+        userTokenAccount: userAta,
+        vault,
+        vaultDepositor,
+        vaultTokenAccount: vaultAccount.tokenAccount,
+        driftUser: vaultAccount.user,
+        driftUserStats: vaultAccount.userStats,
+        driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+        driftSpotMarketVault: spotMarket.vault,
+        driftSigner: this.vaultClient.driftClient.getStateAccount().signer,
+        driftProgram: this.vaultClient.driftClient.program.programId,
+      })
+      .remainingAccounts(remainingAccounts);
+
+    if (createAtaIx) {
+      obj = obj.preInstructions([createAtaIx]);
+    }
+    const sig = await obj.rpc();
+
+    // const sig = await this.vaultClient.withdraw(vaultDepositor);
     console.debug("withdraw:", formatExplorerLink(sig, this.connection));
-    const vaultAccount =
-      await this.vaultClient.program.account.vault.fetch(vault);
-    const vaultName = decodeName(vaultAccount.name);
+    const vaultName = decodeName(this.vault(vault).account.data.name);
     return {
       variant: "success",
       message: `Withdraw from ${vaultName} vault`,

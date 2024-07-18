@@ -23,6 +23,30 @@ import { PublicKey } from "@solana/web3.js";
 
 export const InvestorStats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
+    const { key, data } = client.clientVaultDepositor(vault);
+    const [equity, setEquity] = React.useState<number>(0);
+    React.useEffect(() => {
+      async function fetch() {
+        const usdc = await client.vaultDepositorEquityInDepositAsset(
+          key,
+          vault,
+        );
+        console.log(`$${usdc}`);
+        setEquity(truncateNumber(usdc, 2));
+      }
+
+      fetch();
+    }, []);
+
+    async function handleWithdraw() {
+      const state = await client.vaultClient?.driftClient.getStatePublicKey();
+      console.log("STATE:", state?.toString());
+
+      await client.requestWithdraw(vault, equity);
+      // todo: handle redeem period
+      await client.withdraw(vault);
+    }
+
     return (
       <Box
         sx={{
@@ -36,7 +60,7 @@ export const InvestorStats = observer(
           bgcolor: customTheme.light,
         }}
       >
-        <Stats client={client} vault={vault} />
+        <Stats client={client} vault={vault} equity={equity} />
 
         <Box
           sx={{
@@ -49,7 +73,12 @@ export const InvestorStats = observer(
         >
           <IconButton component={AirdropIcon} iconSize={50} disabled={false} />
           <IconButton component={PlusIcon} iconSize={50} disabled={true} />
-          <IconButton component={MinusIcon} iconSize={50} disabled={false} />
+          <IconButton
+            component={MinusIcon}
+            iconSize={50}
+            disabled={false}
+            onClick={handleWithdraw}
+          />
         </Box>
       </Box>
     );
@@ -75,21 +104,16 @@ function CopyButton({ text }: { text: string }) {
 }
 
 const Stats = observer(
-  ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
+  ({
+    client,
+    vault,
+    equity,
+  }: {
+    client: PropShopClient;
+    vault: PublicKey;
+    equity: number;
+  }) => {
     const { key, data } = client.clientVaultDepositor(vault);
-    const [equity, setEquity] = React.useState<number>(0);
-    React.useEffect(() => {
-      async function fetch() {
-        const usdc = await client.vaultDepositorEquityInDepositAsset(
-          key,
-          vault,
-        );
-        setEquity(truncateNumber(usdc, 2));
-      }
-
-      fetch();
-    }, []);
-
     return (
       <Box
         sx={{
