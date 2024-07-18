@@ -1,7 +1,6 @@
 import {
   ConfirmedSignatureInfo,
   Connection,
-  ParsedTransactionWithMeta,
   PublicKey,
   SignaturesForAddressOptions,
   VersionedTransactionResponse,
@@ -174,27 +173,39 @@ export abstract class TxClient {
     connection: Connection,
     limit: number = 1000,
   ): Promise<TxEvent[]> {
-    const sigs = await TxClient.chunkedSignatures(key, connection, limit);
-    console.log(`fetched ${sigs.length} signatures`);
-    const sigChunks = chunks(sigs, 1000);
+    const unfilteredSigs = await TxClient.chunkedSignatures(
+      key,
+      connection,
+      limit,
+    );
+    const sigs = unfilteredSigs.filter((sig) => sig.err === null);
+    const sigChunks = chunks(sigs, 100);
+    console.log(
+      `${sigs.length}/${unfilteredSigs.length} sigs are valid, divided into ${sigChunks.length} chunks`,
+    );
 
-    const result: ParsedTransactionWithMeta[] = [];
+    const result: VersionedTransactionResponse[] = [];
     for (const chunk of sigChunks) {
+      console.log(`this chunk has ${chunk.length} sigs`);
       try {
-        const res = (
-          await connection.getParsedTransactions(
+        const res: VersionedTransactionResponse[] = (
+          await connection.getTransactions(
             chunk.map((c) => c.signature),
             {
-              maxSupportedTransactionVersion: 0,
+              maxSupportedTransactionVersion: 1,
             },
           )
-        ).filter((t) => t !== null) as ParsedTransactionWithMeta[];
-        await sleep(2000);
+        ).filter((t) => t !== null) as VersionedTransactionResponse[];
+        await sleep(1500);
+        console.log(`pushing ${res.length} txs to ${result.length} results`);
         result.push(...res);
       } catch (e) {
         console.error("failed to fetch transactions from RPC:", e);
       }
     }
+    console.log(
+      `RPC returned ${result.length} transactions out of ${sigs.length} signatures`,
+    );
 
     const eventParser = new anchor.EventParser(
       program.programId,
