@@ -24,27 +24,25 @@ import {
 import { Buffer } from "buffer";
 import { DriftVaults } from "@drift-labs/vaults-sdk";
 import bs58 from "bs58";
+import StrictEventEmitter from "strict-event-emitter-types";
+import { EventEmitter } from "events";
+import { PropShopAccountEvents } from "./client";
 
 export class WebSocketSubscriber implements DriftVaultsSubscriber {
   _subscriptionConfig: SubscriptionConfig;
   subscriptions: Map<string, AccountSubscription>;
   program: Program<DriftVaults>;
-
   resubOpts?: ResubOpts;
-
   commitment?: Commitment;
   isUnsubscribing = false;
-
   timeoutId?: NodeJS.Timeout;
-
   receivingData: boolean;
+  eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>;
 
-  /**
-   * "subscribedKeys" should equal the fetchConfig "keys" and accounts found via "filters"
-   */
   public constructor(
     program: Program<DriftVaults>,
     subscriptionConfig: SubscriptionConfig,
+    eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>,
     resubOpts?: ResubOpts,
     commitment?: Commitment,
   ) {
@@ -52,6 +50,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     this.subscriptions = new Map();
     this._subscriptionConfig = subscriptionConfig;
     this.resubOpts = resubOpts;
+    this.eventEmitter = eventEmitter;
     if (
       this.resubOpts?.resubTimeoutMs &&
       this.resubOpts?.resubTimeoutMs < 1000
@@ -302,6 +301,8 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
             };
             this.subscriptions.set(sub.publicKey.toString(), sub);
             subs.push(sub);
+            this.eventEmitter.emit(sub.eventType, decoded);
+            this.eventEmitter.emit("update");
           }
         });
       }
@@ -406,6 +407,10 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
               decoded,
             };
             this.subscriptions.set(sub.publicKey.toString(), sub);
+
+            this.eventEmitter.emit(sub.eventType, decoded);
+            this.eventEmitter.emit("update");
+
             subs.push(sub);
           });
         }
@@ -417,6 +422,8 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
       this.receivingData = true;
       this.setTimeout();
     }
+
+    this.eventEmitter.emit("update");
   }
 
   private setTimeout(): void {
@@ -446,9 +453,9 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     for (const account of accounts) {
       const key = account.publicKey.toString();
       // only update accounts that are subscribed
-      let existing = this.subscriptions.get(key);
-      if (existing) {
-        const lastSlot = existing.dataAndSlot?.slot ?? 0;
+      let value = this.subscriptions.get(key);
+      if (value) {
+        const lastSlot = value.dataAndSlot?.slot ?? 0;
         if (context.slot > lastSlot) {
           if (account.account.data.length < 8) {
             console.error(
@@ -457,12 +464,12 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
             continue;
           }
           const _accountName =
-            this.program.account[existing.accountName].idlAccount.name;
+            this.program.account[value.accountName].idlAccount.name;
           const decoded = this.program.account[
-            existing.accountName
+            value.accountName
           ].coder.accounts.decodeUnchecked(_accountName, account.account.data);
-          existing = {
-            ...existing,
+          value = {
+            ...value,
             dataAndSlot: {
               data: account.account.data,
               slot: context.slot,
@@ -470,7 +477,9 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
             decoded,
           };
 
-          this.subscriptions.set(key, existing);
+          this.subscriptions.set(key, value);
+          this.eventEmitter.emit(value.eventType, decoded);
+          this.eventEmitter.emit("update");
         }
       }
     }

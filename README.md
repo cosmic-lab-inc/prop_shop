@@ -22,14 +22,4 @@ export const SHYFT_API_KEY = "api-key";
 
 ## TODO
 
-parse Anchor events from tx logs
-https://solana.stackexchange.com/questions/3463/how-to-parse-event-in-transaction-log-with-anchor
-
-Anchor events docs
-https://book.anchor-lang.com/anchor_in_depth/events.html
-
-HelloMoon 30d tx history
-https://docs.hellomoon.io/reference/post_v0-solana-txns-by-user
-
-HelloMoon all-time tx history
-https://docs.hellomoon.io/reference/post_v0-solana-all-time-txns-by-user
+Make PropShopClient subscribed accounts observable to allow UI to react to changes.

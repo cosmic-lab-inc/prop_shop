@@ -9,6 +9,7 @@ import { customTheme } from "../../../styles";
 import {
   PropShopClient,
   shortenAddress,
+  Timer,
   truncateNumber,
 } from "@cosmic-lab/prop-shop-sdk";
 import { observer } from "mobx-react";
@@ -20,6 +21,7 @@ import {
   PlusIcon,
 } from "../../../components";
 import { PublicKey } from "@solana/web3.js";
+import { useSnackbar } from "notistack";
 
 export const InvestorStats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
@@ -38,13 +40,33 @@ export const InvestorStats = observer(
       fetch();
     }, []);
 
-    async function handleWithdraw() {
-      const state = await client.vaultClient?.driftClient.getStatePublicKey();
-      console.log("STATE:", state?.toString());
+    const [countdown, setCountdown] = React.useState<Timer | undefined>(
+      undefined,
+    );
 
-      await client.requestWithdraw(vault, equity);
-      // todo: handle redeem period
-      await client.withdraw(vault);
+    const { enqueueSnackbar } = useSnackbar();
+
+    async function handleWithdraw() {
+      const reqSnack = await client.requestWithdraw(vault, equity);
+      enqueueSnackbar(reqSnack.message, {
+        variant: reqSnack.variant,
+      });
+
+      const timer = client.withdrawTimer(vault);
+      console.log(`timer with ${timer?.secondsRemaining} seconds remaining`);
+      setCountdown(client.withdrawTimer(vault));
+
+      const withdrawSnack = await client.withdraw(vault);
+      enqueueSnackbar(withdrawSnack.message, {
+        variant: withdrawSnack.variant,
+      });
+    }
+
+    async function cancelWithdraw() {
+      const snack = await client.cancelWithdrawRequest(vault);
+      enqueueSnackbar(snack.message, {
+        variant: snack.variant,
+      });
     }
 
     return (
@@ -60,7 +82,12 @@ export const InvestorStats = observer(
           bgcolor: customTheme.light,
         }}
       >
-        <Stats client={client} vault={vault} equity={equity} />
+        <Stats
+          client={client}
+          vault={vault}
+          equity={equity}
+          countdown={countdown}
+        />
 
         <Box
           sx={{
@@ -71,7 +98,6 @@ export const InvestorStats = observer(
             gap: 1,
           }}
         >
-          <IconButton component={AirdropIcon} iconSize={50} disabled={false} />
           <IconButton component={PlusIcon} iconSize={50} disabled={true} />
           <IconButton
             component={MinusIcon}
@@ -79,7 +105,62 @@ export const InvestorStats = observer(
             disabled={false}
             onClick={handleWithdraw}
           />
+          <IconButton
+            component={AirdropIcon}
+            iconSize={50}
+            disabled={!client.hasWithdrawRequest(vault)}
+            onClick={cancelWithdraw}
+          />
         </Box>
+      </Box>
+    );
+  },
+);
+
+const Stats = observer(
+  ({
+    client,
+    vault,
+    equity,
+    countdown,
+  }: {
+    client: PropShopClient;
+    vault: PublicKey;
+    equity: number;
+    countdown: Timer | undefined;
+  }) => {
+    const { key } = client.clientVaultDepositor(vault);
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          borderRadius: "10px",
+          width: "100%",
+        }}
+      >
+        <Container>
+          <div style={{ width: "100%" }}>
+            <TableRow hover>
+              <Text>Equity</Text>
+              <TextIconWrapper text={`$${equity}`} />
+            </TableRow>
+            <TableRow hover>
+              <Text>Vault Depositor</Text>
+              <TextIconWrapper text={key.toString()} shorten />
+            </TableRow>
+            <TableRow hover>
+              <Text>Vault</Text>
+              <TextIconWrapper text={vault.toString()} shorten />
+            </TableRow>
+            <TableRow hover>
+              <Text>Withdraw Request Countdown</Text>
+              <TextIconWrapper
+                text={countdown ? countdown.secondsRemaining.toString() : "--"}
+              />
+            </TableRow>
+          </div>
+        </Container>
       </Box>
     );
   },
@@ -102,47 +183,6 @@ function CopyButton({ text }: { text: string }) {
     </MuiIconButton>
   );
 }
-
-const Stats = observer(
-  ({
-    client,
-    vault,
-    equity,
-  }: {
-    client: PropShopClient;
-    vault: PublicKey;
-    equity: number;
-  }) => {
-    const { key, data } = client.clientVaultDepositor(vault);
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          borderRadius: "10px",
-          width: "100%",
-        }}
-      >
-        <Container>
-          <div style={{ width: "100%" }}>
-            <TableRow hover>
-              <Text>Equity</Text>
-              <TextIconWrapper text={`$${equity}`} />
-            </TableRow>
-            <TableRow hover>
-              <Text>Vault Depositor</Text>
-              <TextIconWrapper text={key.toString()} shorten />
-            </TableRow>
-            <TableRow hover>
-              <Text>VAULT</Text>
-              <TextIconWrapper text={vault.toString()} shorten />
-            </TableRow>
-          </div>
-        </Container>
-      </Box>
-    );
-  },
-);
 
 function Container({ children }: { children: ReactNode }) {
   return (

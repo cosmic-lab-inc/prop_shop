@@ -10,7 +10,7 @@ import {
   TransactionVersion,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { makeObservable } from "mobx";
+import { action, makeObservable } from "mobx";
 import * as anchor from "@coral-xyz/anchor";
 import { BN, ProgramAccount } from "@coral-xyz/anchor";
 import { Wallet as AnchorWallet } from "@coral-xyz/anchor/dist/cjs/provider";
@@ -43,6 +43,7 @@ import {
   DriftVaultsSubscriber,
   FundOverview,
   SnackInfo,
+  Timer,
   VaultPnl,
 } from "./types";
 import {
@@ -102,7 +103,18 @@ export class PropShopClient {
     disableCache: boolean = false,
     skipFetching: boolean = false,
   ) {
-    makeObservable(this);
+    makeObservable(this, {
+      // read account cache
+      vault: action,
+      vaults: action,
+      vaultDepositor: action,
+      vaultDepositors: action,
+
+      // monitor changes
+      withdrawTimer: action,
+      hasWithdrawRequest: action,
+      vaultDepositorEquityInDepositAsset: action,
+    });
 
     // init
     this.initialize = this.initialize.bind(this);
@@ -116,6 +128,8 @@ export class PropShopClient {
     this.aggregateTVL = this.aggregateTVL.bind(this);
     this.aggregateDeposits = this.aggregateDeposits.bind(this);
     this.aggregatePNL = this.aggregatePNL.bind(this);
+    this.vaultDepositorEquityInDepositAsset =
+      this.vaultDepositorEquityInDepositAsset.bind(this);
     //
     this.fetchVaults = this.fetchVaults.bind(this);
     this.vault = this.vault.bind(this);
@@ -147,13 +161,23 @@ export class PropShopClient {
 
     // utils
     this.clientVaultDepositor = this.clientVaultDepositor.bind(this);
+    this.withdrawTimer = this.withdrawTimer.bind(this);
+    this.hasWithdrawRequest = this.hasWithdrawRequest.bind(this);
 
     this.wallet = wallet;
     this.connection = connection;
     this._fundOverviews = new Map();
     this.disableCache = disableCache;
     this.skipFetching = skipFetching;
+
     this.eventEmitter = new EventEmitter();
+    this.eventEmitter.on("vaultUpdate", (payload: Vault) => {
+      console.log("VAULT UPDATE");
+    });
+    this.eventEmitter.on("vaultDepositorUpdate", (payload: VaultDepositor) => {
+      console.log("VD UPDATE", payload);
+    });
+
     console.log("constructed PropShopClient");
     this.loading = false;
   }
@@ -267,35 +291,41 @@ export class PropShopClient {
     if (this.disableCache) {
       return;
     }
-    this._cache = new WebSocketSubscriber(program, {
-      filters: [
-        {
-          accountName: "vault",
-          eventType: "vaultUpdate",
-        },
-        {
-          accountName: "vaultDepositor",
-          eventType: "vaultDepositorUpdate",
-        },
-      ],
-    });
+    this._cache = new WebSocketSubscriber(
+      program,
+      {
+        filters: [
+          {
+            accountName: "vault",
+            eventType: "vaultUpdate",
+          },
+          {
+            accountName: "vaultDepositor",
+            eventType: "vaultDepositorUpdate",
+          },
+        ],
+      },
+      this.eventEmitter,
+    );
     // const loader = new AccountLoader(
     //   program.provider.connection,
     //   "confirmed",
     //   30_000,
     // );
     // this._cache = new PollingSubscriber(program, loader, {
-    //   filters: [
-    //     {
-    //       accountName: "vault",
-    //       eventType: "vaultUpdate",
-    //     },
-    //     {
-    //       accountName: "vaultDepositor",
-    //       eventType: "vaultDepositorUpdate",
-    //     },
-    //   ],
-    // });
+    //     filters: [
+    //       {
+    //         accountName: "vault",
+    //         eventType: "vaultUpdate",
+    //       },
+    //       {
+    //         accountName: "vaultDepositor",
+    //         eventType: "vaultDepositorUpdate",
+    //       },
+    //     ],
+    //   },
+    //   this.eventEmitter
+    // );
     await this._cache.subscribe();
   }
 
@@ -908,7 +938,59 @@ export class PropShopClient {
     const vaultName = decodeName(this.vault(vault).account.data.name);
     return {
       variant: "success",
-      message: `Request withdraw from ${vaultName} vault`,
+      message: `Request withdraw for ${vaultName} vault`,
+    };
+  }
+
+  public async cancelWithdrawRequest(vault: PublicKey): Promise<SnackInfo> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    if (!this.userInitialized()) {
+      throw new Error("User not initialized");
+    }
+    const vaultDepositor = getVaultDepositorAddressSync(
+      this.vaultClient.program.programId,
+      vault,
+      this.publicKey,
+    );
+
+    const vaultAccount = this.vault(vault).account.data;
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [],
+        writableSpotMarketIndexes: [0],
+      },
+    );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
+
+    const sig = await this.vaultClient.program.methods
+      .cancelRequestWithdraw()
+      .accounts({
+        vault,
+        vaultDepositor,
+        driftUser: vaultAccount.user,
+        driftUserStats: vaultAccount.userStats,
+        driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+      })
+      .remainingAccounts(remainingAccounts)
+      .rpc();
+
+    console.debug(
+      "cancel withdraw request:",
+      formatExplorerLink(sig, this.connection),
+    );
+    const vaultName = decodeName(this.vault(vault).account.data.name);
+    return {
+      variant: "success",
+      message: `Cancel withdraw request for ${vaultName} vault`,
     };
   }
 
@@ -988,7 +1070,6 @@ export class PropShopClient {
     }
     const sig = await obj.rpc();
 
-    // const sig = await this.vaultClient.withdraw(vaultDepositor);
     console.debug("withdraw:", formatExplorerLink(sig, this.connection));
     const vaultName = decodeName(this.vault(vault).account.data.name);
     return {
@@ -1129,28 +1210,6 @@ export class PropShopClient {
   public async protocolWithdraw(): Promise<void> {}
 
   //
-  // Utils
-  //
-
-  public clientVaultDepositor(
-    vault: PublicKey,
-  ): Data<PublicKey, VaultDepositor> {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
-    const key = getVaultDepositorAddressSync(
-      this.vaultClient.program.programId,
-      vault,
-      this.publicKey,
-    );
-    const vd = this.vaultDepositor(key);
-    return {
-      key,
-      data: vd.account.data,
-    };
-  }
-
-  //
   // Static utils
   //
 
@@ -1285,5 +1344,95 @@ export class PropShopClient {
       },
       publicKey: wallet.publicKey,
     };
+  }
+
+  //
+  // Utils
+  //
+
+  public clientVaultDepositor(
+    vault: PublicKey,
+  ): Data<PublicKey, VaultDepositor> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const key = getVaultDepositorAddressSync(
+      this.vaultClient.program.programId,
+      vault,
+      this.publicKey,
+    );
+    const vd = this.vaultDepositor(key);
+    return {
+      key,
+      data: vd.account.data,
+    };
+  }
+
+  public withdrawTimer(vault: PublicKey): Timer | undefined {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vaultAcct = this.vault(vault).account.data;
+    const vdKey = getVaultDepositorAddressSync(
+      this.vaultClient.program.programId,
+      vault,
+      this.publicKey,
+    );
+
+    const vdAcct = this.vaultDepositor(vdKey).account.data;
+    if (
+      vdAcct.lastWithdrawRequest.shares.eq(new BN(0)) ||
+      vdAcct.lastWithdrawRequest.value.eq(new BN(0)) ||
+      vdAcct.lastWithdrawRequest.ts.eq(new BN(0))
+    ) {
+      return undefined;
+    }
+    const reqTs = vdAcct.lastWithdrawRequest.ts.toNumber();
+
+    const checkTime = () => {
+      const now = Math.floor(Date.now() / 1000);
+      const timeSinceReq = now - reqTs;
+      const redeemPeriod = vaultAcct.redeemPeriod.toNumber();
+      // return Math.max(redeemPeriod - timeSinceReq, 0);
+      console.log("checkTime:", redeemPeriod - timeSinceReq);
+      return redeemPeriod - timeSinceReq;
+    };
+
+    let secondsRemaining = checkTime();
+
+    const timer = setInterval(() => {
+      if (secondsRemaining > 0) {
+        secondsRemaining = checkTime();
+      } else {
+        clearInterval(timer);
+      }
+    }, 500);
+
+    return {
+      timer,
+      secondsRemaining,
+    };
+  }
+
+  public hasWithdrawRequest(vault: PublicKey): boolean {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vdKey = getVaultDepositorAddressSync(
+      this.vaultClient.program.programId,
+      vault,
+      this.publicKey,
+    );
+
+    const vdAcct = this.vaultDepositor(vdKey).account.data;
+    if (
+      vdAcct.lastWithdrawRequest.shares.eq(new BN(0)) ||
+      vdAcct.lastWithdrawRequest.value.eq(new BN(0)) ||
+      vdAcct.lastWithdrawRequest.ts.eq(new BN(0))
+    ) {
+      return false;
+    } else {
+      return true;
+    }
   }
 }

@@ -29,13 +29,10 @@ import { AccountLoader } from "./accountLoader";
 export class PollingSubscriber implements DriftVaultsSubscriber {
   isSubscribed: boolean;
   program: Program<DriftVaults>;
-
   eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>;
-
   accountLoader: AccountLoader;
   accountsToPoll = new Map<string, AccountSubscription>();
   errorCallbackId?: string;
-
   _subscriptionConfig: SubscriptionConfig;
   subscriptions: Map<string, AccountSubscription>;
 
@@ -45,10 +42,11 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     program: Program<DriftVaults>,
     accountLoader: AccountLoader,
     subscriptionConfig: SubscriptionConfig,
+    eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>,
   ) {
     this.isSubscribed = false;
     this.program = program;
-    this.eventEmitter = new EventEmitter();
+    this.eventEmitter = eventEmitter;
     this.accountLoader = accountLoader;
     this.subscriptions = new Map();
     this._subscriptionConfig = subscriptionConfig;
