@@ -15,14 +15,14 @@ import {
   PublicKey,
 } from "@solana/web3.js";
 import { DriftVaults } from "@drift-labs/vaults-sdk";
-import { PropShopAccountEvents } from "./client";
-import { Buffer } from "buffer";
 import {
   AccountGpaFilter,
   AccountSubscription,
   DriftVaultsSubscriber,
+  PropShopAccountEvents,
   SubscriptionConfig,
 } from "./types";
+import { Buffer } from "buffer";
 import bs58 from "bs58";
 import { AccountLoader } from "./accountLoader";
 
@@ -227,7 +227,11 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
             decoded,
           });
 
-          this.eventEmitter.emit(accountToPoll.eventType, decoded);
+          // @ts-ignore
+          this.eventEmitter.emit(accountToPoll.eventType, {
+            key: accountToPoll.publicKey,
+            data: decoded,
+          });
           this.eventEmitter.emit("update");
 
           if (!this.isSubscribed) {

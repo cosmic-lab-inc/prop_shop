@@ -1,9 +1,9 @@
 import { DataAndSlot } from "@drift-labs/sdk";
 import { PublicKey } from "@solana/web3.js";
 import { AccountNamespace, ProgramAccount } from "@coral-xyz/anchor";
-import { DriftVaults } from "@drift-labs/vaults-sdk";
+import { DriftVaults, Vault, VaultDepositor } from "@drift-labs/vaults-sdk";
 import { Buffer } from "buffer";
-import { PropShopAccountEvents } from "../client";
+import { Data } from "./misc";
 
 export interface DriftVaultsSubscriber {
   getAccount(
@@ -20,6 +20,13 @@ export interface DriftVaultsSubscriber {
   fetch(): Promise<void>;
 
   unsubscribe(): Promise<any>;
+}
+
+export interface PropShopAccountEvents {
+  vaultUpdate: (payload: Data<PublicKey, Vault>) => void;
+  vaultDepositorUpdate: (payload: Data<PublicKey, VaultDepositor>) => void;
+  update: void;
+  error: (e: Error) => void;
 }
 
 export interface AccountSubscription {

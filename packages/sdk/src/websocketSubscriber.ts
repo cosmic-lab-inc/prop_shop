@@ -19,6 +19,7 @@ import { capitalize } from "./utils";
 import {
   AccountSubscription,
   DriftVaultsSubscriber,
+  PropShopAccountEvents,
   SubscriptionConfig,
 } from "./types";
 import { Buffer } from "buffer";
@@ -26,7 +27,6 @@ import { DriftVaults } from "@drift-labs/vaults-sdk";
 import bs58 from "bs58";
 import StrictEventEmitter from "strict-event-emitter-types";
 import { EventEmitter } from "events";
-import { PropShopAccountEvents } from "./client";
 
 export class WebSocketSubscriber implements DriftVaultsSubscriber {
   _subscriptionConfig: SubscriptionConfig;
@@ -301,7 +301,11 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
             };
             this.subscriptions.set(sub.publicKey.toString(), sub);
             subs.push(sub);
-            this.eventEmitter.emit(sub.eventType, decoded);
+            // @ts-ignore
+            this.eventEmitter.emit(sub.eventType, {
+              key: value.publicKey,
+              data: decoded,
+            });
             this.eventEmitter.emit("update");
           }
         });
@@ -408,7 +412,11 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
             };
             this.subscriptions.set(sub.publicKey.toString(), sub);
 
-            this.eventEmitter.emit(sub.eventType, decoded);
+            // @ts-ignore
+            this.eventEmitter.emit(sub.eventType, {
+              key: value.pubkey,
+              data: decoded,
+            });
             this.eventEmitter.emit("update");
 
             subs.push(sub);
@@ -478,7 +486,11 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
           };
 
           this.subscriptions.set(key, value);
-          this.eventEmitter.emit(value.eventType, decoded);
+          // @ts-ignore
+          this.eventEmitter.emit(value.eventType, {
+            key: value.publicKey,
+            data: decoded,
+          });
           this.eventEmitter.emit("update");
         }
       }

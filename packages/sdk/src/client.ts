@@ -10,12 +10,11 @@ import {
   TransactionVersion,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { action, makeObservable } from "mobx";
+import { makeAutoObservable } from "mobx";
 import * as anchor from "@coral-xyz/anchor";
 import { BN, ProgramAccount } from "@coral-xyz/anchor";
 import { Wallet as AnchorWallet } from "@coral-xyz/anchor/dist/cjs/provider";
 import {
-  DataAndSlot,
   decodeName,
   DRIFT_PROGRAM_ID,
   DriftClient,
@@ -42,6 +41,7 @@ import {
   Data,
   DriftVaultsSubscriber,
   FundOverview,
+  PropShopAccountEvents,
   SnackInfo,
   Timer,
   VaultPnl,
@@ -77,13 +77,6 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 
-export interface PropShopAccountEvents {
-  vaultUpdate: (payload: Vault) => void;
-  vaultDepositorUpdate: (payload: VaultDepositor) => void;
-  update: void;
-  error: (e: Error) => void;
-}
-
 export class PropShopClient {
   connection: Connection;
   wallet: WalletContextState;
@@ -96,6 +89,8 @@ export class PropShopClient {
 
   private readonly disableCache: boolean = false;
   private readonly skipFetching: boolean = false;
+  private _vaults: Map<string, Vault>;
+  private _vaultDepositors: Map<string, VaultDepositor>;
 
   constructor(
     wallet: WalletContextState,
@@ -103,80 +98,74 @@ export class PropShopClient {
     disableCache: boolean = false,
     skipFetching: boolean = false,
   ) {
-    makeObservable(this, {
-      // read account cache
-      vault: action,
-      vaults: action,
-      vaultDepositor: action,
-      vaultDepositors: action,
+    makeAutoObservable(this);
 
-      // monitor changes
-      withdrawTimer: action,
-      hasWithdrawRequest: action,
-      vaultDepositorEquityInDepositAsset: action,
-    });
-
-    // init
-    this.initialize = this.initialize.bind(this);
-    this.subscribe = this.subscribe.bind(this);
-    this.shutdown = this.shutdown.bind(this);
-    this.initUser = this.initUser.bind(this);
-    this.userInitialized = this.userInitialized.bind(this);
-
-    // read, fetch, and aggregate data
-    this.spotMarketByIndex = this.spotMarketByIndex.bind(this);
-    this.aggregateTVL = this.aggregateTVL.bind(this);
-    this.aggregateDeposits = this.aggregateDeposits.bind(this);
-    this.aggregatePNL = this.aggregatePNL.bind(this);
-    this.vaultDepositorEquityInDepositAsset =
-      this.vaultDepositorEquityInDepositAsset.bind(this);
+    // // init
+    // this.initialize = this.initialize.bind(this);
+    // this.subscribe = this.subscribe.bind(this);
+    // this.shutdown = this.shutdown.bind(this);
+    // this.initUser = this.initUser.bind(this);
+    // this.userInitialized = this.userInitialized.bind(this);
     //
-    this.fetchVaults = this.fetchVaults.bind(this);
-    this.vault = this.vault.bind(this);
-    this.vaults = this.vaults.bind(this);
-    this.managedVaults = this.managedVaults.bind(this);
-    this.investedVaults = this.investedVaults.bind(this);
+    // // read, fetch, and aggregate data
+    // this.spotMarketByIndex = this.spotMarketByIndex.bind(this);
+    // this.aggregateTVL = this.aggregateTVL.bind(this);
+    // this.aggregateDeposits = this.aggregateDeposits.bind(this);
+    // this.aggregatePNL = this.aggregatePNL.bind(this);
+    // this.vaultDepositorEquityInDepositAsset =
+    //   this.vaultDepositorEquityInDepositAsset.bind(this);
+    // //
+    // this.fetchVaults = this.fetchVaults.bind(this);
+    // this.vault = this.vault.bind(this);
+    // this.vaults = this.vaults.bind(this);
+    // this.managedVaults = this.managedVaults.bind(this);
+    // this.investedVaults = this.investedVaults.bind(this);
+    // //
+    // this.fetchVaultDepositors = this.fetchVaultDepositors.bind(this);
+    // this.vaultDepositor = this.vaultDepositor.bind(this);
+    // this.vaultDepositors = this.vaultDepositors.bind(this);
+    // //
+    // this.fundOverview = this.fundOverview.bind(this);
+    // this.fetchFundOverview = this.fetchFundOverview.bind(this);
+    // this.fetchFundOverviews = this.fetchFundOverviews.bind(this);
     //
-    this.fetchVaultDepositors = this.fetchVaultDepositors.bind(this);
-    this.vaultDepositor = this.vaultDepositor.bind(this);
-    this.vaultDepositors = this.vaultDepositors.bind(this);
+    // // actions
+    // this.joinVault = this.joinVault.bind(this);
+    // this.deposit = this.deposit.bind(this);
+    // this.requestWithdraw = this.requestWithdraw.bind(this);
+    // this.withdraw = this.withdraw.bind(this);
+    // this.createVault = this.createVault.bind(this);
+    // this.delegateVault = this.delegateVault.bind(this);
+    // this.updateVault = this.updateVault.bind(this);
+    // this.managerDeposit = this.managerDeposit.bind(this);
+    // this.managerRequestWithdraw = this.managerRequestWithdraw.bind(this);
+    // this.managerWithdraw = this.managerWithdraw.bind(this);
+    // this.protocolRequestWithdraw = this.protocolRequestWithdraw.bind(this);
+    // this.protocolWithdraw = this.protocolWithdraw.bind(this);
     //
-    this.fundOverview = this.fundOverview.bind(this);
-    this.fetchFundOverview = this.fetchFundOverview.bind(this);
-    this.fetchFundOverviews = this.fetchFundOverviews.bind(this);
-
-    // actions
-    this.joinVault = this.joinVault.bind(this);
-    this.deposit = this.deposit.bind(this);
-    this.requestWithdraw = this.requestWithdraw.bind(this);
-    this.withdraw = this.withdraw.bind(this);
-    this.createVault = this.createVault.bind(this);
-    this.delegateVault = this.delegateVault.bind(this);
-    this.updateVault = this.updateVault.bind(this);
-    this.managerDeposit = this.managerDeposit.bind(this);
-    this.managerRequestWithdraw = this.managerRequestWithdraw.bind(this);
-    this.managerWithdraw = this.managerWithdraw.bind(this);
-    this.protocolRequestWithdraw = this.protocolRequestWithdraw.bind(this);
-    this.protocolWithdraw = this.protocolWithdraw.bind(this);
-
-    // utils
-    this.clientVaultDepositor = this.clientVaultDepositor.bind(this);
-    this.withdrawTimer = this.withdrawTimer.bind(this);
-    this.hasWithdrawRequest = this.hasWithdrawRequest.bind(this);
+    // // utils
+    // this.clientVaultDepositor = this.clientVaultDepositor.bind(this);
+    // this.withdrawTimer = this.withdrawTimer.bind(this);
+    // this.hasWithdrawRequest = this.hasWithdrawRequest.bind(this);
 
     this.wallet = wallet;
     this.connection = connection;
     this._fundOverviews = new Map();
     this.disableCache = disableCache;
     this.skipFetching = skipFetching;
+    this._vaults = new Map();
+    this._vaultDepositors = new Map();
 
     this.eventEmitter = new EventEmitter();
-    this.eventEmitter.on("vaultUpdate", (payload: Vault) => {
-      console.log("VAULT UPDATE");
+    this.eventEmitter.on("vaultUpdate", (payload: Data<PublicKey, Vault>) => {
+      this._vaults.set(payload.key.toString(), payload.data);
     });
-    this.eventEmitter.on("vaultDepositorUpdate", (payload: VaultDepositor) => {
-      console.log("VD UPDATE", payload);
-    });
+    this.eventEmitter.on(
+      "vaultDepositorUpdate",
+      (payload: Data<PublicKey, VaultDepositor>) => {
+        this._vaultDepositors.set(payload.key.toString(), payload.data);
+      },
+    );
 
     console.log("constructed PropShopClient");
     this.loading = false;
@@ -426,78 +415,81 @@ export class PropShopClient {
     }
   }
 
-  public vault(key: PublicKey): ProgramAccount<DataAndSlot<Vault>> {
+  public vault(key: PublicKey): Data<PublicKey, Vault> {
     if (!this.vaultClient || !this._cache) {
       throw new Error("PropShopClient not initialized");
     }
-    const v = this._cache.getAccount("vault", key);
-    if (!v) {
+    const data = this._vaults.get(key.toString());
+    if (!data) {
       throw new Error("Vault not subscribed");
     } else {
       return {
-        publicKey: key,
-        account: v,
+        key,
+        data,
       };
     }
   }
 
-  public vaults(protocolsOnly?: boolean): ProgramAccount<DataAndSlot<Vault>>[] {
+  public vaults(protocolsOnly?: boolean): Data<PublicKey, Vault>[] {
     if (!this.vaultClient || !this._cache) {
       throw new Error("PropShopClient not initialized");
     }
     const preFetch = new Date().getTime();
     // account subscriber fetches upon subscription, so these should never be undefined
-    const vaults: ProgramAccount<DataAndSlot<Vault>>[] = this._cache
-      .getAccounts("vault")
-      .filter((pa) => {
-        const dataAndSlot = pa.account as DataAndSlot<Vault>;
+    const vaults = Array.from(this._vaults.entries())
+      .filter(([_key, value]) => {
         if (protocolsOnly) {
-          return dataAndSlot.data.vaultProtocol !== SystemProgram.programId;
+          return value.vaultProtocol !== SystemProgram.programId;
         } else {
           return true;
         }
-      });
+      })
+      .map(([key, data]) => {
+        return {
+          key: new PublicKey(key),
+          data,
+        };
+      }) as Data<PublicKey, Vault>[];
     console.log(
       `fetched ${vaults.length} cached vaults in ${new Date().getTime() - preFetch}ms`,
     );
     return vaults;
   }
 
-  public vaultDepositor(
-    key: PublicKey,
-  ): ProgramAccount<DataAndSlot<VaultDepositor>> {
-    if (!this.vaultClient || !this._cache) {
-      throw new Error("PropShopClient not initialized");
-    }
-    const vd = this._cache.getAccount("vaultDepositor", key);
-    if (!vd) {
+  public vaultDepositor(key: PublicKey): Data<PublicKey, VaultDepositor> {
+    const data = this._vaultDepositors.get(key.toString());
+    if (!data) {
       throw new Error("VaultDepositor not subscribed");
     } else {
       return {
-        publicKey: key,
-        account: vd,
+        key,
+        data,
       };
     }
   }
 
   public vaultDepositors(
     filterByAuthority?: boolean,
-  ): ProgramAccount<DataAndSlot<VaultDepositor>>[] {
+  ): Data<PublicKey, VaultDepositor>[] {
     if (!this.vaultClient || !this._cache) {
       throw new Error("PropShopClient not initialized");
     }
     const preFetch = new Date().getTime();
     // account subscriber fetches upon subscription, so these should never be undefined
-    const vds: ProgramAccount<DataAndSlot<VaultDepositor>>[] = this._cache
-      .getAccounts("vaultDepositor")
-      .filter((pa) => {
-        const dataAndSlot = pa.account as DataAndSlot<VaultDepositor>;
+    const vds = Array.from(this._vaultDepositors.entries())
+      .filter(([_key, data]) => {
         if (filterByAuthority) {
-          return dataAndSlot.data.authority.equals(this.publicKey);
+          return data.authority.equals(this.publicKey);
         } else {
           return true;
         }
-      });
+      })
+      .map(([key, data]) => {
+        return {
+          key: new PublicKey(key),
+          data,
+        };
+      }) as Data<PublicKey, VaultDepositor>[];
     console.log(
       `fetched ${vds.length} cached vds in ${new Date().getTime() - preFetch}ms`,
     );
@@ -590,12 +582,9 @@ export class PropShopClient {
     const vault = this.vault(vaultKey);
     const vds = this.vaultDepositors();
     // get count of vds per vault
-    const vaultVds = new Map<
-      string,
-      ProgramAccount<DataAndSlot<VaultDepositor>>[]
-    >();
+    const vaultVds = new Map<string, Data<PublicKey, VaultDepositor>[]>();
     for (const vd of vds) {
-      const key = vd.account.data.vault.toString();
+      const key = vd.data.vault.toString();
       const value = vaultVds.get(key);
       if (value) {
         vaultVds.set(key, [...value, vd]);
@@ -604,23 +593,23 @@ export class PropShopClient {
       }
     }
 
-    const investors = vaultVds.get(vault.account.data.pubkey.toString()) ?? [];
+    const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
     const aum = await this.aggregateTVL([vault], investors);
     const pnlData = await ProxyClient.performance({
-      vault: vault.account.data,
+      vault: vault.data,
       daysBack: 100,
       skipFetching: this.skipFetching,
     });
     const vaultPNL = VaultPnl.fromHistoricalSettlePNL(pnlData);
     const data = vaultPNL.cumulativeSeriesPNL();
     const fo: FundOverview = {
-      vault: vault.account.data.pubkey,
-      title: decodeName(vault.account.data.name),
+      vault: vault.data.pubkey,
+      title: decodeName(vault.data.name),
       investors: investors.length,
       aum,
       data,
     };
-    this._fundOverviews.set(vault.publicKey.toString(), fo);
+    this._fundOverviews.set(vault.key.toString(), fo);
     return fo;
   }
 
@@ -633,12 +622,9 @@ export class PropShopClient {
     const vaults = this.vaults(protocolsOnly);
     const vds = this.vaultDepositors();
     // get count of vds per vault
-    const vaultVds = new Map<
-      string,
-      ProgramAccount<DataAndSlot<VaultDepositor>>[]
-    >();
+    const vaultVds = new Map<string, Data<PublicKey, VaultDepositor>[]>();
     for (const vd of vds) {
-      const key = vd.account.data.vault.toString();
+      const key = vd.data.vault.toString();
       const value = vaultVds.get(key);
       if (value) {
         vaultVds.set(key, [...value, vd]);
@@ -648,25 +634,24 @@ export class PropShopClient {
     }
     const fundOverviews: FundOverview[] = [];
     for (const vault of vaults) {
-      const investors =
-        vaultVds.get(vault.account.data.pubkey.toString()) ?? [];
+      const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
       const aum = await this.aggregateTVL(vaults, investors);
       const pnlData = await ProxyClient.performance({
-        vault: vault.account.data,
+        vault: vault.data,
         daysBack: 100,
         skipFetching: this.skipFetching,
       });
       const vaultPNL = VaultPnl.fromHistoricalSettlePNL(pnlData);
       const data = vaultPNL.cumulativeSeriesPNL();
       const fo: FundOverview = {
-        vault: vault.account.data.pubkey,
-        title: decodeName(vault.account.data.name),
+        vault: vault.data.pubkey,
+        title: decodeName(vault.data.name),
         investors: investors.length,
         aum,
         data,
       };
       fundOverviews.push(fo);
-      this._fundOverviews.set(vault.publicKey.toString(), fo);
+      this._fundOverviews.set(vault.key.toString(), fo);
     }
     return fundOverviews;
   }
@@ -674,16 +659,14 @@ export class PropShopClient {
   /**
    * Vaults the connected wallet manages.
    */
-  public managedVaults(
-    protocolsOnly?: boolean,
-  ): ProgramAccount<DataAndSlot<Vault>>[] {
+  public managedVaults(protocolsOnly?: boolean): Data<PublicKey, Vault>[] {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
     const vaults = this.vaults(protocolsOnly);
     return vaults.filter((v) => {
-      return v.account.data.manager === this.wallet.publicKey;
+      return v.data.manager === this.publicKey;
     });
   }
 
@@ -695,21 +678,21 @@ export class PropShopClient {
       throw new Error("PropShopClient not initialized");
     }
     const vds = this.vaultDepositors(true);
-    return vds.map((vd) => vd.account.data.vault);
+    return vds.map((vd) => vd.data.vault);
   }
 
   /**
    * Aggregate total value locked across all vaults denominated in USDC.
    */
   public async aggregateTVL(
-    vaults?: ProgramAccount<DataAndSlot<Vault>>[],
-    vaultDepositors?: ProgramAccount<DataAndSlot<VaultDepositor>>[],
+    vaults?: Data<PublicKey, Vault>[],
+    vaultDepositors?: Data<PublicKey, VaultDepositor>[],
   ): Promise<number> {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
 
-    let _vaults: ProgramAccount<DataAndSlot<Vault>>[];
+    let _vaults: Data<PublicKey, Vault>[];
     if (vaults) {
       _vaults = vaults;
     } else {
@@ -719,7 +702,7 @@ export class PropShopClient {
       _vaults = this.vaults();
     }
 
-    let _vds: ProgramAccount<DataAndSlot<VaultDepositor>>[];
+    let _vds: Data<PublicKey, VaultDepositor>[];
     if (vaultDepositors) {
       _vds = vaultDepositors;
     } else {
@@ -732,18 +715,16 @@ export class PropShopClient {
     let usdc = 0;
     for (const vd of _vds) {
       let vault: Vault;
-      const match = _vaults.find((v) =>
-        v.account.data.pubkey.equals(vd.account.data.vault),
-      );
+      const match = _vaults.find((v) => v.data.pubkey.equals(vd.data.vault));
       if (match) {
-        vault = match.account.data;
+        vault = match.data;
       } else {
-        vault = this.vault(vd.account.data.vault).account.data;
+        vault = this.vault(vd.data.vault).data;
       }
       const amount =
         await this.vaultClient.calculateWithdrawableVaultDepositorEquityInDepositAsset(
           {
-            vaultDepositor: vd.account.data,
+            vaultDepositor: vd.data,
             vault: vault,
           },
         );
@@ -765,8 +746,8 @@ export class PropShopClient {
     const amount =
       await this.vaultClient.calculateWithdrawableVaultDepositorEquityInDepositAsset(
         {
-          vaultDepositor: vd.account.data,
-          vault: vault.account.data,
+          vaultDepositor: vd.data,
+          vault: vault.data,
         },
       );
     return amount.toNumber() / QUOTE_PRECISION.toNumber();
@@ -776,12 +757,12 @@ export class PropShopClient {
    * Aggregate deposits (not including profits) across all vaults denominated in USDC.
    */
   public aggregateDeposits(
-    vaultDepositors?: ProgramAccount<DataAndSlot<VaultDepositor>>[],
+    vaultDepositors?: Data<PublicKey, VaultDepositor>[],
   ): number {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    let vds: ProgramAccount<DataAndSlot<VaultDepositor>>[];
+    let vds: Data<PublicKey, VaultDepositor>[];
     if (!vaultDepositors) {
       if (!this._cache) {
         throw new Error("Cache not initialized");
@@ -793,7 +774,7 @@ export class PropShopClient {
     let usdc = 0;
     for (const vd of vds) {
       const netDeposits =
-        vd.account.data.netDeposits.toNumber() / QUOTE_PRECISION.toNumber();
+        vd.data.netDeposits.toNumber() / QUOTE_PRECISION.toNumber();
       usdc += netDeposits;
     }
     return usdc;
@@ -803,12 +784,12 @@ export class PropShopClient {
    * Aggregate PNL across all vaults denominated in USDC.
    */
   public async aggregatePNL(
-    vaultDepositors?: ProgramAccount<DataAndSlot<VaultDepositor>>[],
+    vaultDepositors?: Data<PublicKey, VaultDepositor>[],
   ): Promise<number> {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    let vds: ProgramAccount<DataAndSlot<VaultDepositor>>[];
+    let vds: Data<PublicKey, VaultDepositor>[];
     if (!vaultDepositors) {
       if (!this._cache) {
         throw new Error("Cache not initialized");
@@ -900,9 +881,8 @@ export class PropShopClient {
     );
     const amount = QUOTE_PRECISION.mul(new BN(usdc));
 
-    const vaultAccount = this.vault(vault).account.data;
-    const vaultDepositorAccount =
-      this.vaultDepositor(vaultDepositor).account.data;
+    const vaultAccount = this.vault(vault).data;
+    const vaultDepositorAccount = this.vaultDepositor(vaultDepositor).data;
     const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
       {
         userAccounts: [],
@@ -935,7 +915,7 @@ export class PropShopClient {
       "request withdraw:",
       formatExplorerLink(sig, this.connection),
     );
-    const vaultName = decodeName(this.vault(vault).account.data.name);
+    const vaultName = decodeName(this.vault(vault).data.name);
     return {
       variant: "success",
       message: `Request withdraw for ${vaultName} vault`,
@@ -955,7 +935,7 @@ export class PropShopClient {
       this.publicKey,
     );
 
-    const vaultAccount = this.vault(vault).account.data;
+    const vaultAccount = this.vault(vault).data;
     const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
       {
         userAccounts: [],
@@ -987,7 +967,7 @@ export class PropShopClient {
       "cancel withdraw request:",
       formatExplorerLink(sig, this.connection),
     );
-    const vaultName = decodeName(this.vault(vault).account.data.name);
+    const vaultName = decodeName(this.vault(vault).data.name);
     return {
       variant: "success",
       message: `Cancel withdraw request for ${vaultName} vault`,
@@ -1007,7 +987,7 @@ export class PropShopClient {
       this.publicKey,
     );
 
-    const vaultAccount = this.vault(vault).account.data;
+    const vaultAccount = this.vault(vault).data;
     const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
       {
         userAccounts: [],
@@ -1071,7 +1051,7 @@ export class PropShopClient {
     const sig = await obj.rpc();
 
     console.debug("withdraw:", formatExplorerLink(sig, this.connection));
-    const vaultName = decodeName(this.vault(vault).account.data.name);
+    const vaultName = decodeName(this.vault(vault).data.name);
     return {
       variant: "success",
       message: `Withdraw from ${vaultName} vault`,
@@ -1364,7 +1344,7 @@ export class PropShopClient {
     const vd = this.vaultDepositor(key);
     return {
       key,
-      data: vd.account.data,
+      data: vd.data,
     };
   }
 
@@ -1372,19 +1352,20 @@ export class PropShopClient {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    const vaultAcct = this.vault(vault).account.data;
+    const vaultAcct = this.vault(vault).data;
     const vdKey = getVaultDepositorAddressSync(
       this.vaultClient.program.programId,
       vault,
       this.publicKey,
     );
 
-    const vdAcct = this.vaultDepositor(vdKey).account.data;
+    const vdAcct = this.vaultDepositor(vdKey).data;
     if (
       vdAcct.lastWithdrawRequest.shares.eq(new BN(0)) ||
       vdAcct.lastWithdrawRequest.value.eq(new BN(0)) ||
       vdAcct.lastWithdrawRequest.ts.eq(new BN(0))
     ) {
+      console.log("no withdraw request");
       return undefined;
     }
     const reqTs = vdAcct.lastWithdrawRequest.ts.toNumber();
@@ -1424,7 +1405,7 @@ export class PropShopClient {
       this.publicKey,
     );
 
-    const vdAcct = this.vaultDepositor(vdKey).account.data;
+    const vdAcct = this.vaultDepositor(vdKey).data;
     if (
       vdAcct.lastWithdrawRequest.shares.eq(new BN(0)) ||
       vdAcct.lastWithdrawRequest.value.eq(new BN(0)) ||
