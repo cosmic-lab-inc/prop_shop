@@ -5,6 +5,7 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
   type TransactionSignature,
   TransactionVersion,
   VersionedTransaction,
@@ -71,6 +72,10 @@ import {
 import { Wallet, WalletContextState } from "@solana/wallet-adapter-react";
 import { ProxyClient } from "./proxyClient";
 import { WebSocketSubscriber } from "./websocketSubscriber";
+import {
+  createAssociatedTokenAccountInstruction,
+  getAssociatedTokenAddressSync,
+} from "@solana/spl-token";
 
 export class PropShopClient {
   connection: Connection;
@@ -779,41 +784,120 @@ export class PropShopClient {
   }
 
   public async deposit(vault: PublicKey, usdc: number): Promise<SnackInfo> {
+    console.log("inside deposit...");
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      console.error("PropShopClient not initialized");
+      return {
+        variant: "error",
+        message: "Client not initialized",
+      };
     }
     if (!this.userInitialized()) {
-      throw new Error("User not initialized");
+      console.error("User not initialized");
+      // todo: init user ix
     }
     const vaultDepositor = getVaultDepositorAddressSync(
       this.vaultClient.program.programId,
       vault,
       this.publicKey,
     );
-    const amount = QUOTE_PRECISION.mul(new BN(usdc));
-
-    const vdExists = await this.connection.getAccountInfo(vaultDepositor);
-    let initVaultDepositor = undefined;
-    if (!vdExists) {
-      initVaultDepositor = {
-        authority: this.publicKey,
-        vault,
+    const vaultAccount = this.vault(vault)?.data;
+    if (!vaultAccount) {
+      console.error("Vault not found in deposit instruction");
+      return {
+        variant: "error",
+        message: "Vault not found",
       };
     }
-    const sig = await this.vaultClient.deposit(
-      vaultDepositor,
-      amount,
-      initVaultDepositor,
+    const amount = QUOTE_PRECISION.mul(new BN(usdc));
+
+    let preIxs: TransactionInstruction[] = [];
+
+    const vdExists = this.vaultDepositor(vaultDepositor)?.data;
+    if (!vdExists) {
+      console.log("create vault depositor");
+      const createVdIx = await this.vaultClient.program.methods
+        .initializeVaultDepositor()
+        .accounts({
+          vaultDepositor,
+          vault,
+          authority: this.publicKey,
+        })
+        .instruction();
+      preIxs.push(createVdIx);
+    }
+
+    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
+      vaultAccount.spotMarketIndex,
     );
-    console.debug("deposit:", formatExplorerLink(sig, this.connection));
-    await confirmTransactions(this.connection, [sig]);
-    const vaultAccount =
-      await this.vaultClient.program.account.vault.fetch(vault);
-    const vaultName = decodeName(vaultAccount.name);
-    return {
-      variant: "success",
-      message: `Deposited to ${vaultName}`,
-    };
+    if (!spotMarket) {
+      console.error("Spot market not found in deposit instruction");
+      return {
+        variant: "error",
+        message: "Spot market not found",
+      };
+    }
+
+    const userAta = getAssociatedTokenAddressSync(
+      spotMarket.mint,
+      this.publicKey,
+      true,
+    );
+    const userAtaExists = await this.connection.getAccountInfo(userAta);
+    if (userAtaExists === null) {
+      console.log("user ata DNE");
+      preIxs.push(
+        createAssociatedTokenAccountInstruction(
+          this.publicKey,
+          userAta,
+          this.publicKey,
+          spotMarket.mint,
+        ),
+      );
+    }
+
+    const { accounts, remainingAccounts } =
+      await this.vaultClient.prepDepositTx(vaultDepositor, amount);
+
+    let obj = this.vaultClient.program.methods
+      .deposit(amount)
+      .accounts(accounts)
+      .remainingAccounts(remainingAccounts);
+
+    if (preIxs.length > 0) {
+      obj = obj.preInstructions(preIxs);
+    }
+
+    try {
+      // let initVaultDepositor = undefined;
+      // if (!vdExists) {
+      //   initVaultDepositor = {
+      //     authority: this.publicKey,
+      //     vault,
+      //   };
+      // }
+      // const sig = await this.vaultClient.deposit(
+      //   vaultDepositor,
+      //   amount,
+      //   initVaultDepositor,
+      // );
+
+      const sig = await obj.rpc();
+
+      console.debug("deposit:", formatExplorerLink(sig, this.connection));
+      const vaultName = decodeName(this.vault(vault)!.data.name);
+      return {
+        variant: "success",
+        message: `Deposited to ${vaultName}`,
+      };
+    } catch (e: any) {
+      console.error("deposit error:", e);
+      this.printProgramLogs(e);
+      return {
+        variant: "error",
+        message: `Deposit failed: ${e}`,
+      };
+    }
   }
 
   public async requestWithdraw(
@@ -1253,5 +1337,14 @@ export class PropShopClient {
 
   public hasWithdrawRequest(vault: PublicKey): boolean {
     return !!this.withdrawTimer(vault);
+  }
+
+  printProgramLogs(error: any) {
+    if (error.logs) {
+      const logs = error.logs as string[];
+      for (const log of logs) {
+        console.log(log);
+      }
+    }
   }
 }

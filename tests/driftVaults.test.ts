@@ -716,7 +716,7 @@ describe("driftProtocolVaults", () => {
   });
 
   // vault depositor deposits USDC to the vault
-  it("Vault Depositor Deposit", async () => {
+  it("Protocol Vault Depositor Deposit", async () => {
     const vaultAccount = await program.account.vault.fetch(protocolVault);
     const vaultDepositor = getVaultDepositorAddressSync(
       program.programId,

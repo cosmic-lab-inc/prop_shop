@@ -127,12 +127,12 @@ function Container({
         alignItems: "center",
         flexDirection: "column",
 
-        transform: "scale(1)",
-        transition: "transform 0.1s ease",
+        transition: `box-shadow 0.2s ease`,
+        boxShadow: "none",
 
         "&:hover": {
-          transform: "scale(1.05)",
-          transition: "transform 0.1s ease",
+          boxShadow: `0px 5px 20px ${customTheme.light}`,
+          transition: `box-shadow 0.2s ease`,
         },
       }}
       onClick={onClick}

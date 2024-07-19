@@ -14,7 +14,7 @@
     "test": "jest",
     "build": "yarn generate-meta-tag && vite build --debug --force",
     "watch": "vite build --debug --force --watch",
-    "start": "vite --port 3001 --host 0.0.0.0 --open",
+    "start": "vite --force --port 3001 --host 0.0.0.0 --open",
     "generate-meta-tag": "node ../../node_modules/react-cache-buster/dist/generate-meta-tag.js"
   },
   "dependencies": {

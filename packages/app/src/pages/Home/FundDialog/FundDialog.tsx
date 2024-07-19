@@ -29,7 +29,6 @@ export function FundDialog({
           style: {
             background: customTheme.grey2,
             borderRadius: "10px",
-            height: "300px",
           },
         }}
         sx={{

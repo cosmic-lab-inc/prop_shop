@@ -23,7 +23,7 @@ export const IconButton: React.FC<IconButtonProps<React.FC<ChildProps>>> = ({
 
   useEffect(() => {
     if (disabled) {
-      setIconColor(darken(customTheme.grey2, 0.2));
+      setIconColor(customTheme.grey);
     } else {
       setIconColor(customTheme.light);
     }
@@ -45,7 +45,9 @@ export const IconButton: React.FC<IconButtonProps<React.FC<ChildProps>>> = ({
         height: "100%",
         fontFamily: customTheme.font.titilliumBold,
 
-        bgcolor: disabled ? customTheme.grey : customTheme.secondary,
+        bgcolor: disabled
+          ? darken(customTheme.grey2, 0.2)
+          : customTheme.secondary,
         color: disabled ? customTheme.dark : customTheme.light,
         "&:hover": {
           bgcolor: disabled

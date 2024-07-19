@@ -22,6 +22,9 @@ import {
 import { PublicKey } from "@solana/web3.js";
 import { useSnackbar } from "notistack";
 
+const BUTTON_AREA_WIDTH = "30%";
+const STATS_AREA_WIDTH = `calc(100% - ${BUTTON_AREA_WIDTH})`;
+
 export const InvestorStats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
     React.useEffect(() => {
@@ -78,15 +81,8 @@ export const InvestorStats = observer(
 
     async function deposit() {
       // todo
-      const depositAmount = 0;
+      const depositAmount = 1000;
       const snack = await client.deposit(vault, depositAmount);
-      enqueueSnackbar(snack.message, {
-        variant: snack.variant,
-      });
-    }
-
-    async function joinVault() {
-      const snack = await client.joinVault(vault);
       enqueueSnackbar(snack.message, {
         variant: snack.variant,
       });
@@ -114,7 +110,8 @@ export const InvestorStats = observer(
             flexDirection: "column",
             alignItems: "center",
             gap: 1,
-            height: "50%",
+            // height: "50%",
+            width: BUTTON_AREA_WIDTH,
           }}
         >
           {client.hasWithdrawRequest(vault) ? (
@@ -139,11 +136,13 @@ export const InvestorStats = observer(
               flexDirection: "row",
               gap: 1,
               width: "100%",
+              flexGrow: 1,
+              height: "100%",
             }}
           >
             <IconButton
               component={MinusIcon}
-              iconSize={50}
+              iconSize={60}
               disabled={!vd || !client.hasWithdrawRequest(vault)}
               onClick={withdraw}
             >
@@ -152,7 +151,7 @@ export const InvestorStats = observer(
 
             <IconButton
               component={PlusIcon}
-              iconSize={50}
+              iconSize={60}
               disabled={client.hasWithdrawRequest(vault)}
               onClick={deposit}
             >
@@ -183,7 +182,7 @@ const Stats = observer(
           display: "flex",
           flexDirection: "column",
           borderRadius: "10px",
-          width: "100%",
+          width: STATS_AREA_WIDTH,
         }}
       >
         <Container>
