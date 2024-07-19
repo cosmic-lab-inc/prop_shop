@@ -13,7 +13,12 @@ import {
 } from "@cosmic-lab/prop-shop-sdk";
 import { observer } from "mobx-react";
 import { ContentCopyOutlined } from "@mui/icons-material";
-import { ActionButton } from "../../../components";
+import {
+  ActionButton,
+  IconButton,
+  MinusIcon,
+  PlusIcon,
+} from "../../../components";
 import { PublicKey } from "@solana/web3.js";
 import { useSnackbar } from "notistack";
 
@@ -36,14 +41,14 @@ export const InvestorStats = observer(
 
     const { enqueueSnackbar } = useSnackbar();
 
-    async function handleRequestWithdraw() {
+    async function requestWithdraw() {
       const snack = await client.requestWithdraw(vault, equity);
       enqueueSnackbar(snack.message, {
         variant: snack.variant,
       });
     }
 
-    async function handleWithdraw() {
+    async function withdraw() {
       const snack = await client.withdraw(vault);
       enqueueSnackbar(snack.message, {
         variant: snack.variant,
@@ -57,7 +62,14 @@ export const InvestorStats = observer(
       });
     }
 
-    // React.useEffect(() => {}, [client.withdrawTimer(vault)]);
+    async function deposit() {
+      // todo
+      const depositAmount = 0;
+      const snack = await client.deposit(vault, depositAmount);
+      enqueueSnackbar(snack.message, {
+        variant: snack.variant,
+      });
+    }
 
     return (
       <Box
@@ -81,26 +93,51 @@ export const InvestorStats = observer(
             flexDirection: "column",
             alignItems: "center",
             gap: 1,
+            height: "50%",
           }}
         >
-          <ActionButton
-            disabled={client.hasWithdrawRequest(vault)}
-            onClick={handleRequestWithdraw}
+          {client.hasWithdrawRequest(vault) ? (
+            <ActionButton
+              disabled={!client.hasWithdrawRequest(vault)}
+              onClick={cancelWithdraw}
+            >
+              <Typography variant="button">CANCEL WITHDRAW</Typography>
+            </ActionButton>
+          ) : (
+            <ActionButton
+              disabled={client.hasWithdrawRequest(vault)}
+              onClick={requestWithdraw}
+            >
+              <Typography variant="button">REQUEST WITHDRAW</Typography>
+            </ActionButton>
+          )}
+
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              gap: 1,
+              width: "100%",
+            }}
           >
-            <Typography variant="h3">Request Withdraw</Typography>
-          </ActionButton>
-          <ActionButton
-            disabled={!client.hasWithdrawRequest(vault)}
-            onClick={handleWithdraw}
-          >
-            <Typography variant="h3">Withdraw</Typography>
-          </ActionButton>
-          <ActionButton
-            // disabled={!client.hasWithdrawRequest(vault)}
-            onClick={cancelWithdraw}
-          >
-            <Typography variant="h3">Cancel Withdraw</Typography>
-          </ActionButton>
+            <IconButton
+              component={MinusIcon}
+              iconSize={50}
+              disabled={!client.hasWithdrawRequest(vault)}
+              onClick={withdraw}
+            >
+              <Typography variant="button">WITHDRAW</Typography>
+            </IconButton>
+
+            <IconButton
+              component={PlusIcon}
+              iconSize={50}
+              disabled={client.hasWithdrawRequest(vault)}
+              onClick={deposit}
+            >
+              <Typography variant="button">DEPOSIT</Typography>
+            </IconButton>
+          </Box>
         </Box>
       </Box>
     );

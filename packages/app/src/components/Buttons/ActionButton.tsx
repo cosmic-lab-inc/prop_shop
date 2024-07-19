@@ -9,7 +9,7 @@ export function ActionButton(props: ButtonProps) {
   const [color, setColor] = React.useState(customTheme.secondary);
   useEffect(() => {
     if (disabled) {
-      setColor(darken(customTheme.secondary, 0.2));
+      setColor(darken(customTheme.grey2, 0.2));
     } else {
       setColor(customTheme.secondary);
     }

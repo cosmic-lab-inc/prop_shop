@@ -130,7 +130,7 @@ export class PropShopClient {
     if (!this.wallet) {
       throw new Error("Wallet not connected during initialization");
     }
-    const now = new Date().getTime();
+    const now = Date.now();
     this.loading = true;
     const config: Omit<DriftClientConfig, "wallet"> = {
       connection: this.connection,
@@ -192,35 +192,34 @@ export class PropShopClient {
       },
       activeSubAccountId,
       accountSubscription,
-      // spotMarketIndexes: [usdcMarketIndex],
-      // oracleInfos,
+      spotMarketIndexes: [usdcMarketIndex],
+      oracleInfos,
     });
-    const preDriftSub = new Date().getTime();
+    const preDriftSub = Date.now();
     await driftClient.subscribe();
     // this takes about 1.2s which can't be reduced much more
-    console.log(
-      `DriftClient subscribed in ${new Date().getTime() - preDriftSub}ms`,
-    );
+    console.log(`DriftClient subscribed in ${Date.now() - preDriftSub}ms`);
 
     this.vaultClient = new VaultClient({
       // @ts-ignore
       driftClient,
-      // @ts-ignore
       program: driftVaultsProgram,
     });
 
     if (!this.disableCache) {
-      const preSub = new Date().getTime();
+      const preSub = Date.now();
       await this.subscribe(driftVaultsProgram);
       // takes about 2s for websocket and 4s for polling
-      console.log(`subscribed in ${new Date().getTime() - preSub}ms`);
+      console.log(`subscribed in ${Date.now() - preSub}ms`);
+
+      await Promise.all(
+        this.vaults().map((v) => this.createWithdrawTimer(v.key)),
+      );
     }
 
     this.loading = false;
     // 3-6s
-    console.log(
-      `initialized PropShopClient in ${new Date().getTime() - now}ms`,
-    );
+    console.log(`initialized PropShopClient in ${Date.now() - now}ms`);
   }
 
   async subscribe(program: anchor.Program<DriftVaults>) {
@@ -381,7 +380,7 @@ export class PropShopClient {
     if (!this.vaultClient || !this._cache) {
       throw new Error("PropShopClient not initialized");
     }
-    const preFetch = new Date().getTime();
+    const preFetch = Date.now();
     // account subscriber fetches upon subscription, so these should never be undefined
     const vaults = Array.from(this._vaults.entries())
       .filter(([_key, value]) => {
@@ -398,7 +397,7 @@ export class PropShopClient {
         };
       }) as Data<PublicKey, Vault>[];
     console.log(
-      `fetched ${vaults.length} cached vaults in ${new Date().getTime() - preFetch}ms`,
+      `fetched ${vaults.length} cached vaults in ${Date.now() - preFetch}ms`,
     );
     return vaults;
   }
@@ -421,7 +420,7 @@ export class PropShopClient {
     if (!this.vaultClient || !this._cache) {
       throw new Error("PropShopClient not initialized");
     }
-    const preFetch = new Date().getTime();
+    const preFetch = Date.now();
     // account subscriber fetches upon subscription, so these should never be undefined
     const vds = Array.from(this._vaultDepositors.entries())
       .filter(([_key, data]) => {
@@ -438,7 +437,7 @@ export class PropShopClient {
         };
       }) as Data<PublicKey, VaultDepositor>[];
     console.log(
-      `fetched ${vds.length} cached vds in ${new Date().getTime() - preFetch}ms`,
+      `fetched ${vds.length} cached vds in ${Date.now() - preFetch}ms`,
     );
     return vds;
   }
@@ -472,11 +471,11 @@ export class PropShopClient {
       throw new Error("PropShopClient not initialized");
     }
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
-    const preFetch = new Date().getTime();
+    const preFetch = Date.now();
     const vaults: ProgramAccount<Vault>[] =
       await this.vaultClient.program.account.vault.all();
     console.log(
-      `fetched ${vaults.length} vaults from RPC in ${new Date().getTime() - preFetch}ms`,
+      `fetched ${vaults.length} vaults from RPC in ${Date.now() - preFetch}ms`,
     );
     if (protocolsOnly) {
       return vaults.filter((v) => {
@@ -509,11 +508,11 @@ export class PropShopClient {
         },
       ];
     }
-    const preFetch = new Date().getTime();
+    const preFetch = Date.now();
     const vds: ProgramAccount<VaultDepositor>[] =
       await this.vaultClient.program.account.vaultDepositor.all(filters);
     console.log(
-      `fetched ${vds.length} vds from RPC in ${new Date().getTime() - preFetch}ms`,
+      `fetched ${vds.length} vds from RPC in ${Date.now() - preFetch}ms`,
     );
     return vds;
   }
@@ -867,7 +866,7 @@ export class PropShopClient {
     const vaultName = decodeName(this.vault(vault).data.name);
     return {
       variant: "success",
-      message: `Request withdraw for ${vaultName} vault`,
+      message: `Request withdraw for ${vaultName}`,
     };
   }
 
@@ -921,7 +920,7 @@ export class PropShopClient {
     const vaultName = decodeName(this.vault(vault).data.name);
     return {
       variant: "success",
-      message: `Cancel withdraw request for ${vaultName} vault`,
+      message: `Cancel withdraw request for ${vaultName}`,
     };
   }
 
@@ -1007,7 +1006,7 @@ export class PropShopClient {
     const vaultName = decodeName(this.vault(vault).data.name);
     return {
       variant: "success",
-      message: `Withdraw from ${vaultName} vault`,
+      message: `Withdraw from ${vaultName}`,
     };
   }
 
@@ -1321,6 +1320,11 @@ export class PropShopClient {
 
     const vdAcct = this.vaultDepositor(vdKey).data;
     const reqTs = vdAcct.lastWithdrawRequest.ts.toNumber();
+
+    if (vdAcct.lastWithdrawRequest.value.toNumber() === 0 || reqTs === 0) {
+      this.removeWithdrawTimer(vault);
+    }
+
     const equity =
       vdAcct.lastWithdrawRequest.value.toNumber() / QUOTE_PRECISION.toNumber();
 

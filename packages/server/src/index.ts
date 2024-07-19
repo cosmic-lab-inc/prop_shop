@@ -59,7 +59,7 @@ async function update() {
     await redis.connect();
   }
   console.log("begin cache update...");
-  const start = new Date().getTime();
+  const start = Date.now();
   const vaults = await client.fetchVaults();
 
   for (const vault of vaults) {
@@ -74,7 +74,7 @@ async function update() {
     const value = JSON.stringify(pnl);
     await redis.set(key, value);
   }
-  console.log(`finished updating cache in ${new Date().getTime() - start}ms`);
+  console.log(`finished updating cache in ${Date.now() - start}ms`);
 }
 
 // update every 30 minutes

@@ -78,11 +78,12 @@ export const theme: Theme = createTheme({
       fontWeight: 700,
     },
     button: {
-      fontSize: 24,
+      fontSize: 18,
       fontWeight: 700,
       textTransform: "none",
       lineHeight: "2rem",
       letterSpacing: "1px",
+      fontFamily: customTheme.font.titilliumBold,
     },
   },
   components: {
