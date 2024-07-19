@@ -32,23 +32,30 @@ export const InvestorStats = observer(
       run();
     }, []);
 
-    const { key } = client.clientVaultDepositor(vault);
-    const [equity, setEquity] = React.useState<number>(0);
+    const vd = client.clientVaultDepositor(vault);
+    const [equity, setEquity] = React.useState<number | undefined>(undefined);
     React.useEffect(() => {
       async function fetch() {
-        const usdc = await client.vaultDepositorEquityInDepositAsset(
-          key,
-          vault,
-        );
-        setEquity(truncateNumber(usdc, 2));
+        if (vd) {
+          const usdc = await client.vaultDepositorEquityInDepositAsset(
+            vd.key,
+            vault,
+          );
+          setEquity(truncateNumber(usdc, 2));
+        } else {
+          setEquity(undefined);
+        }
       }
 
       fetch();
-    }, []);
+    }, [vd]);
 
     const { enqueueSnackbar } = useSnackbar();
 
     async function requestWithdraw() {
+      if (!equity) {
+        return;
+      }
       const snack = await client.requestWithdraw(vault, equity);
       enqueueSnackbar(snack.message, {
         variant: snack.variant,
@@ -73,6 +80,13 @@ export const InvestorStats = observer(
       // todo
       const depositAmount = 0;
       const snack = await client.deposit(vault, depositAmount);
+      enqueueSnackbar(snack.message, {
+        variant: snack.variant,
+      });
+    }
+
+    async function joinVault() {
+      const snack = await client.joinVault(vault);
       enqueueSnackbar(snack.message, {
         variant: snack.variant,
       });
@@ -112,7 +126,7 @@ export const InvestorStats = observer(
             </ActionButton>
           ) : (
             <ActionButton
-              disabled={client.hasWithdrawRequest(vault)}
+              disabled={!vd || client.hasWithdrawRequest(vault)}
               onClick={requestWithdraw}
             >
               <Typography variant="button">REQUEST WITHDRAW</Typography>
@@ -130,7 +144,7 @@ export const InvestorStats = observer(
             <IconButton
               component={MinusIcon}
               iconSize={50}
-              disabled={!client.hasWithdrawRequest(vault)}
+              disabled={!vd || !client.hasWithdrawRequest(vault)}
               onClick={withdraw}
             >
               <Typography variant="button">WITHDRAW</Typography>
@@ -159,9 +173,9 @@ const Stats = observer(
   }: {
     client: PropShopClient;
     vault: PublicKey;
-    equity: number;
+    equity: number | undefined;
   }) => {
-    const { key } = client.clientVaultDepositor(vault);
+    const vd = client.clientVaultDepositor(vault);
     const timer = client.withdrawTimer(vault);
     return (
       <Box
@@ -176,11 +190,14 @@ const Stats = observer(
           <div style={{ width: "100%" }}>
             <TableRow hover>
               <Text>Equity</Text>
-              <TextIconWrapper text={`$${equity}`} />
+              <TextIconWrapper text={equity ? `$${equity}` : "--"} />
             </TableRow>
             <TableRow hover>
               <Text>Vault Depositor</Text>
-              <TextIconWrapper text={key.toString()} shorten />
+              <TextIconWrapper
+                text={vd ? vd.key.toString() : "--"}
+                shorten={!!vd}
+              />
             </TableRow>
             <TableRow hover>
               <Text>Vault</Text>

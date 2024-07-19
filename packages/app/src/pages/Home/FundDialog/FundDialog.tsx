@@ -19,7 +19,7 @@ export function FundDialog({
   return (
     <>
       <Dialog
-        maxWidth="lg"
+        maxWidth="md"
         fullWidth={true}
         fullScreen={false}
         scroll="paper"

@@ -704,7 +704,7 @@ describe("driftProtocolVaults", () => {
     assert(user.delegate.equals(delegate.publicKey));
   });
 
-  it("Initialize Vault Depositor", async () => {
+  it("Initialize Protocol Vault Depositor", async () => {
     await vdClient.initializeVaultDepositor(protocolVault, vd.publicKey);
     const vaultDepositor = getVaultDepositorAddressSync(
       program.programId,

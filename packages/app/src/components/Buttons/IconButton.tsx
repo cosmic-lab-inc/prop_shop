@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { customTheme } from "../../styles";
-import { alpha, Button, ButtonProps } from "@mui/material";
+import { Button, ButtonProps } from "@mui/material";
 import { darken } from "@mui/system/colorManipulator";
 
 type IconButtonProps<T extends React.ElementType> = {
@@ -23,7 +23,7 @@ export const IconButton: React.FC<IconButtonProps<React.FC<ChildProps>>> = ({
 
   useEffect(() => {
     if (disabled) {
-      setIconColor(alpha(customTheme.dark, 0.7));
+      setIconColor(darken(customTheme.grey2, 0.2));
     } else {
       setIconColor(customTheme.light);
     }
@@ -31,7 +31,10 @@ export const IconButton: React.FC<IconButtonProps<React.FC<ChildProps>>> = ({
 
   return (
     <Button
-      {...rest}
+      {...{
+        ...rest,
+        disabled,
+      }}
       sx={{
         borderRadius: "10px",
         display: "flex",

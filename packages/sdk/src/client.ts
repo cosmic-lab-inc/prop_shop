@@ -5,7 +5,6 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
-  TransactionInstruction,
   type TransactionSignature,
   TransactionVersion,
   VersionedTransaction,
@@ -72,10 +71,6 @@ import {
 import { Wallet, WalletContextState } from "@solana/wallet-adapter-react";
 import { ProxyClient } from "./proxyClient";
 import { WebSocketSubscriber } from "./websocketSubscriber";
-import {
-  createAssociatedTokenAccountInstruction,
-  getAssociatedTokenAddressSync,
-} from "@solana/spl-token";
 
 export class PropShopClient {
   connection: Connection;
@@ -204,6 +199,7 @@ export class PropShopClient {
       // @ts-ignore
       driftClient,
       program: driftVaultsProgram,
+      cliMode: true,
     });
 
     if (!this.disableCache) {
@@ -357,13 +353,20 @@ export class PropShopClient {
     }
   }
 
-  public vault(key: PublicKey): Data<PublicKey, Vault> {
+  public vault(
+    key: PublicKey,
+    errorIfMissing: boolean = true,
+  ): Data<PublicKey, Vault> | undefined {
     if (!this.vaultClient || !this._cache) {
       throw new Error("PropShopClient not initialized");
     }
     const data = this._vaults.get(key.toString());
     if (!data) {
-      throw new Error("Vault not subscribed");
+      if (errorIfMissing) {
+        throw new Error("Vault not subscribed");
+      } else {
+        return undefined;
+      }
     } else {
       return {
         key,
@@ -398,10 +401,17 @@ export class PropShopClient {
     return vaults;
   }
 
-  public vaultDepositor(key: PublicKey): Data<PublicKey, VaultDepositor> {
+  public vaultDepositor(
+    key: PublicKey,
+    errorIfMissing: boolean = true,
+  ): Data<PublicKey, VaultDepositor> | undefined {
     const data = this._vaultDepositors.get(key.toString());
     if (!data) {
-      throw new Error("VaultDepositor not subscribed");
+      if (errorIfMissing) {
+        throw new Error("VaultDepositor not subscribed");
+      } else {
+        return undefined;
+      }
     } else {
       return {
         key,
@@ -521,7 +531,7 @@ export class PropShopClient {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    const vault = this.vault(vaultKey);
+    const vault = this.vault(vaultKey)!;
     const vds = this.vaultDepositors();
     // get count of vds per vault
     const vaultVds = new Map<string, Data<PublicKey, VaultDepositor>[]>();
@@ -661,7 +671,7 @@ export class PropShopClient {
       if (match) {
         vault = match.data;
       } else {
-        vault = this.vault(vd.data.vault).data;
+        vault = this.vault(vd.data.vault)!.data;
       }
       const amount =
         await this.vaultClient.calculateWithdrawableVaultDepositorEquityInDepositAsset(
@@ -683,8 +693,8 @@ export class PropShopClient {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    const vault = this.vault(vaultKey);
-    const vd = this.vaultDepositor(vdKey);
+    const vault = this.vault(vaultKey)!;
+    const vd = this.vaultDepositor(vdKey)!;
     const amount =
       await this.vaultClient.calculateWithdrawableVaultDepositorEquityInDepositAsset(
         {
@@ -764,7 +774,7 @@ export class PropShopClient {
     const vaultName = decodeName(vaultAccount.name);
     return {
       variant: "success",
-      message: `Joined ${vaultName} vault`,
+      message: `Joined ${vaultName}`,
     };
   }
 
@@ -802,7 +812,7 @@ export class PropShopClient {
     const vaultName = decodeName(vaultAccount.name);
     return {
       variant: "success",
-      message: `Deposited to ${vaultName} vault`,
+      message: `Deposited to ${vaultName}`,
     };
   }
 
@@ -823,35 +833,12 @@ export class PropShopClient {
     );
     const amount = QUOTE_PRECISION.mul(new BN(usdc));
 
-    const vaultAccount = this.vault(vault).data;
-    const vaultDepositorAccount = this.vaultDepositor(vaultDepositor).data;
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [],
-        writableSpotMarketIndexes: [0],
-      },
+    const sig = await this.vaultClient.requestWithdraw(
+      vaultDepositor,
+      amount,
+      WithdrawUnit.TOKEN,
     );
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
-      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(
-        vaultDepositorAccount.vault,
-      );
-      remainingAccounts.push({
-        pubkey: vaultProtocol,
-        isSigner: false,
-        isWritable: true,
-      });
-    }
-    const sig = await this.vaultClient.program.methods
-      .requestWithdraw(amount, WithdrawUnit.TOKEN)
-      .accounts({
-        vault,
-        vaultDepositor,
-        driftUser: vaultAccount.user,
-        driftUserStats: vaultAccount.userStats,
-        driftState: await this.vaultClient.driftClient.getStatePublicKey(),
-      })
-      .remainingAccounts(remainingAccounts)
-      .rpc();
+
     // cache timer so frontend can track withdraw request
     await this.createWithdrawTimer(vault);
 
@@ -859,10 +846,10 @@ export class PropShopClient {
       "request withdraw:",
       formatExplorerLink(sig, this.connection),
     );
-    const vaultName = decodeName(this.vault(vault).data.name);
+    const vaultName = decodeName(this.vault(vault)!.data.name);
     return {
       variant: "success",
-      message: `Request withdraw for ${vaultName}`,
+      message: `Requested withdraw from ${vaultName}`,
     };
   }
 
@@ -879,33 +866,8 @@ export class PropShopClient {
       this.publicKey,
     );
 
-    const vaultAccount = this.vault(vault).data;
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [],
-        writableSpotMarketIndexes: [0],
-      },
-    );
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
-      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
-      remainingAccounts.push({
-        pubkey: vaultProtocol,
-        isSigner: false,
-        isWritable: true,
-      });
-    }
+    const sig = await this.vaultClient.cancelRequestWithdraw(vaultDepositor);
 
-    const sig = await this.vaultClient.program.methods
-      .cancelRequestWithdraw()
-      .accounts({
-        vault,
-        vaultDepositor,
-        driftUser: vaultAccount.user,
-        driftUserStats: vaultAccount.userStats,
-        driftState: await this.vaultClient.driftClient.getStatePublicKey(),
-      })
-      .remainingAccounts(remainingAccounts)
-      .rpc();
     // successful withdraw means no more withdraw request
     this.removeWithdrawTimer(vault);
 
@@ -913,7 +875,7 @@ export class PropShopClient {
       "cancel withdraw request:",
       formatExplorerLink(sig, this.connection),
     );
-    const vaultName = decodeName(this.vault(vault).data.name);
+    const vaultName = decodeName(this.vault(vault)!.data.name);
     return {
       variant: "success",
       message: `Cancel withdraw request for ${vaultName}`,
@@ -933,73 +895,13 @@ export class PropShopClient {
       this.publicKey,
     );
 
-    const vaultAccount = this.vault(vault).data;
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [],
-        writableSpotMarketIndexes: [0],
-      },
-    );
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
-      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
-      remainingAccounts.push({
-        pubkey: vaultProtocol,
-        isSigner: false,
-        isWritable: true,
-      });
-    }
+    const sig = await this.vaultClient.withdraw(vaultDepositor);
 
-    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
-      vaultAccount.spotMarketIndex,
-    );
-    if (!spotMarket) {
-      throw new Error(
-        `Spot market ${vaultAccount.spotMarketIndex} not found on driftClient`,
-      );
-    }
-
-    const userAta = getAssociatedTokenAddressSync(
-      spotMarket.mint,
-      this.publicKey,
-      true,
-    );
-    let createAtaIx: TransactionInstruction | undefined = undefined;
-    const userAtaExists =
-      await this.vaultClient.driftClient.connection.getAccountInfo(userAta);
-    if (userAtaExists === null) {
-      createAtaIx = createAssociatedTokenAccountInstruction(
-        this.vaultClient.driftClient.wallet.publicKey,
-        userAta,
-        this.vaultClient.driftClient.wallet.publicKey,
-        spotMarket.mint,
-      );
-    }
-
-    let obj = this.vaultClient.program.methods
-      .withdraw()
-      .accounts({
-        userTokenAccount: userAta,
-        vault,
-        vaultDepositor,
-        vaultTokenAccount: vaultAccount.tokenAccount,
-        driftUser: vaultAccount.user,
-        driftUserStats: vaultAccount.userStats,
-        driftState: await this.vaultClient.driftClient.getStatePublicKey(),
-        driftSpotMarketVault: spotMarket.vault,
-        driftSigner: this.vaultClient.driftClient.getStateAccount().signer,
-        driftProgram: this.vaultClient.driftClient.program.programId,
-      })
-      .remainingAccounts(remainingAccounts);
-
-    if (createAtaIx) {
-      obj = obj.preInstructions([createAtaIx]);
-    }
-    const sig = await obj.rpc();
     // successful withdraw means no more withdraw request
     this.removeWithdrawTimer(vault);
 
     console.debug("withdraw:", formatExplorerLink(sig, this.connection));
-    const vaultName = decodeName(this.vault(vault).data.name);
+    const vaultName = decodeName(this.vault(vault)!.data.name);
     return {
       variant: "success",
       message: `Withdraw from ${vaultName}`,
@@ -1280,7 +1182,7 @@ export class PropShopClient {
 
   public clientVaultDepositor(
     vault: PublicKey,
-  ): Data<PublicKey, VaultDepositor> {
+  ): Data<PublicKey, VaultDepositor> | undefined {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
@@ -1289,11 +1191,7 @@ export class PropShopClient {
       vault,
       this.publicKey,
     );
-    const vd = this.vaultDepositor(key);
-    return {
-      key,
-      data: vd.data,
-    };
+    return this.vaultDepositor(key, false);
   }
 
   public withdrawTimer(vault: PublicKey): WithdrawRequestTimer | undefined {
@@ -1304,7 +1202,7 @@ export class PropShopClient {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    const vaultAcct = this.vault(vault).data;
+    const vaultAcct = this.vault(vault)!.data;
     const vdKey = getVaultDepositorAddressSync(
       this.vaultClient.program.programId,
       vault,
@@ -1314,7 +1212,11 @@ export class PropShopClient {
     // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
     await this._cache?.fetch();
 
-    const vdAcct = this.vaultDepositor(vdKey).data;
+    const vdAcct = this.vaultDepositor(vdKey)?.data;
+    if (!vdAcct) {
+      this.removeWithdrawTimer(vault);
+      return;
+    }
     const reqTs = vdAcct.lastWithdrawRequest.ts.toNumber();
 
     if (vdAcct.lastWithdrawRequest.value.toNumber() === 0 || reqTs === 0) {
