@@ -24,6 +24,14 @@ import { useSnackbar } from "notistack";
 
 export const InvestorStats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
+    React.useEffect(() => {
+      async function run() {
+        await client.createWithdrawTimer(vault);
+      }
+
+      run();
+    }, []);
+
     const { key } = client.clientVaultDepositor(vault);
     const [equity, setEquity] = React.useState<number>(0);
     React.useEffect(() => {
@@ -32,7 +40,6 @@ export const InvestorStats = observer(
           key,
           vault,
         );
-        console.log(`$${usdc}`);
         setEquity(truncateNumber(usdc, 2));
       }
 

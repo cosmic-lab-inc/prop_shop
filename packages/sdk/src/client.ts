@@ -211,10 +211,6 @@ export class PropShopClient {
       await this.subscribe(driftVaultsProgram);
       // takes about 2s for websocket and 4s for polling
       console.log(`subscribed in ${Date.now() - preSub}ms`);
-
-      await Promise.all(
-        this.vaults().map((v) => this.createWithdrawTimer(v.key)),
-      );
     }
 
     this.loading = false;
@@ -1323,6 +1319,7 @@ export class PropShopClient {
 
     if (vdAcct.lastWithdrawRequest.value.toNumber() === 0 || reqTs === 0) {
       this.removeWithdrawTimer(vault);
+      return;
     }
 
     const equity =

@@ -14,6 +14,7 @@
     "clean": "yes | rm -rf dist && rm -rf node_modules",
     "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint",
     "build": "tsc",
+    "watch": "tsc-watch -p tsconfig.json --onSuccess 'echo Compiled successfully!'",
     "test": "jest"
   },
   "dependencies": {
@@ -22,6 +23,8 @@
     "@drift-labs/sdk": "2.86.0-beta.1",
     "@drift-labs/vaults-sdk": "0.1.338",
     "@solana/spl-token": "^0.3.7",
+    "@solana/wallet-adapter-base": "0.9.23",
+    "@solana/wallet-adapter-react": "0.15.35",
     "@solana/web3.js": "^1.77.3",
     "axios": "^1.7.2",
     "bs58": "4.0.1",
@@ -29,9 +32,7 @@
     "neverthrow": "^6.0.0",
     "redis": "^4.6.15",
     "strict-event-emitter-types": "^2.0.0",
-    "tweetnacl": "^1.0.3",
-    "@solana/wallet-adapter-base": "0.9.23",
-    "@solana/wallet-adapter-react": "0.15.35"
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.22.1",
@@ -66,6 +67,7 @@
     "semver": "^7.5.3",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
+    "tsc-watch": "^6.2.0",
     "typescript": "^5",
     "util": "^0.12.3"
   }
