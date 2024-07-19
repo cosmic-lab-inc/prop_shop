@@ -9,23 +9,17 @@ import { customTheme } from "../../../styles";
 import {
   PropShopClient,
   shortenAddress,
-  Timer,
   truncateNumber,
 } from "@cosmic-lab/prop-shop-sdk";
 import { observer } from "mobx-react";
 import { ContentCopyOutlined } from "@mui/icons-material";
-import {
-  AirdropIcon,
-  IconButton,
-  MinusIcon,
-  PlusIcon,
-} from "../../../components";
+import { ActionButton } from "../../../components";
 import { PublicKey } from "@solana/web3.js";
 import { useSnackbar } from "notistack";
 
 export const InvestorStats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
-    const { key, data } = client.clientVaultDepositor(vault);
+    const { key } = client.clientVaultDepositor(vault);
     const [equity, setEquity] = React.useState<number>(0);
     React.useEffect(() => {
       async function fetch() {
@@ -40,25 +34,19 @@ export const InvestorStats = observer(
       fetch();
     }, []);
 
-    const [countdown, setCountdown] = React.useState<Timer | undefined>(
-      undefined,
-    );
-
     const { enqueueSnackbar } = useSnackbar();
 
-    async function handleWithdraw() {
-      const reqSnack = await client.requestWithdraw(vault, equity);
-      enqueueSnackbar(reqSnack.message, {
-        variant: reqSnack.variant,
+    async function handleRequestWithdraw() {
+      const snack = await client.requestWithdraw(vault, equity);
+      enqueueSnackbar(snack.message, {
+        variant: snack.variant,
       });
+    }
 
-      const timer = client.withdrawTimer(vault);
-      console.log(`timer with ${timer?.secondsRemaining} seconds remaining`);
-      setCountdown(client.withdrawTimer(vault));
-
-      const withdrawSnack = await client.withdraw(vault);
-      enqueueSnackbar(withdrawSnack.message, {
-        variant: withdrawSnack.variant,
+    async function handleWithdraw() {
+      const snack = await client.withdraw(vault);
+      enqueueSnackbar(snack.message, {
+        variant: snack.variant,
       });
     }
 
@@ -68,6 +56,8 @@ export const InvestorStats = observer(
         variant: snack.variant,
       });
     }
+
+    // React.useEffect(() => {}, [client.withdrawTimer(vault)]);
 
     return (
       <Box
@@ -82,12 +72,7 @@ export const InvestorStats = observer(
           bgcolor: customTheme.light,
         }}
       >
-        <Stats
-          client={client}
-          vault={vault}
-          equity={equity}
-          countdown={countdown}
-        />
+        <Stats client={client} vault={vault} equity={equity} />
 
         <Box
           sx={{
@@ -98,19 +83,24 @@ export const InvestorStats = observer(
             gap: 1,
           }}
         >
-          <IconButton component={PlusIcon} iconSize={50} disabled={true} />
-          <IconButton
-            component={MinusIcon}
-            iconSize={50}
-            disabled={false}
-            onClick={handleWithdraw}
-          />
-          <IconButton
-            component={AirdropIcon}
-            iconSize={50}
+          <ActionButton
+            disabled={client.hasWithdrawRequest(vault)}
+            onClick={handleRequestWithdraw}
+          >
+            <Typography variant="h3">Request Withdraw</Typography>
+          </ActionButton>
+          <ActionButton
             disabled={!client.hasWithdrawRequest(vault)}
+            onClick={handleWithdraw}
+          >
+            <Typography variant="h3">Withdraw</Typography>
+          </ActionButton>
+          <ActionButton
+            // disabled={!client.hasWithdrawRequest(vault)}
             onClick={cancelWithdraw}
-          />
+          >
+            <Typography variant="h3">Cancel Withdraw</Typography>
+          </ActionButton>
         </Box>
       </Box>
     );
@@ -122,14 +112,13 @@ const Stats = observer(
     client,
     vault,
     equity,
-    countdown,
   }: {
     client: PropShopClient;
     vault: PublicKey;
     equity: number;
-    countdown: Timer | undefined;
   }) => {
     const { key } = client.clientVaultDepositor(vault);
+    const timer = client.withdrawTimer(vault);
     return (
       <Box
         sx={{
@@ -156,7 +145,13 @@ const Stats = observer(
             <TableRow hover>
               <Text>Withdraw Request Countdown</Text>
               <TextIconWrapper
-                text={countdown ? countdown.secondsRemaining.toString() : "--"}
+                text={timer ? timer.secondsRemaining.toString() : "--"}
+              />
+            </TableRow>
+            <TableRow hover>
+              <Text>Withdraw Request Equity</Text>
+              <TextIconWrapper
+                text={timer ? `$${truncateNumber(timer.equity, 2)}` : "--"}
               />
             </TableRow>
           </div>

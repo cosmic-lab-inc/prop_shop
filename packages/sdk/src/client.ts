@@ -43,8 +43,8 @@ import {
   FundOverview,
   PropShopAccountEvents,
   SnackInfo,
-  Timer,
   VaultPnl,
+  WithdrawRequestTimer,
 } from "./types";
 import {
   DriftVaults,
@@ -81,16 +81,18 @@ export class PropShopClient {
   connection: Connection;
   wallet: WalletContextState;
   vaultClient: VaultClient | undefined;
-  loading: boolean;
-  eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>;
+  loading: boolean = false;
+  eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents> =
+    new EventEmitter();
 
-  _fundOverviews: Map<string, FundOverview>;
+  _fundOverviews: Map<string, FundOverview> = new Map();
   _cache: DriftVaultsSubscriber | undefined = undefined;
 
   private readonly disableCache: boolean = false;
   private readonly skipFetching: boolean = false;
-  private _vaults: Map<string, Vault>;
-  private _vaultDepositors: Map<string, VaultDepositor>;
+  private _vaults: Map<string, Vault> = new Map();
+  private _vaultDepositors: Map<string, VaultDepositor> = new Map();
+  private _timers: Map<string, WithdrawRequestTimer> = new Map();
 
   constructor(
     wallet: WalletContextState,
@@ -100,63 +102,11 @@ export class PropShopClient {
   ) {
     makeAutoObservable(this);
 
-    // // init
-    // this.initialize = this.initialize.bind(this);
-    // this.subscribe = this.subscribe.bind(this);
-    // this.shutdown = this.shutdown.bind(this);
-    // this.initUser = this.initUser.bind(this);
-    // this.userInitialized = this.userInitialized.bind(this);
-    //
-    // // read, fetch, and aggregate data
-    // this.spotMarketByIndex = this.spotMarketByIndex.bind(this);
-    // this.aggregateTVL = this.aggregateTVL.bind(this);
-    // this.aggregateDeposits = this.aggregateDeposits.bind(this);
-    // this.aggregatePNL = this.aggregatePNL.bind(this);
-    // this.vaultDepositorEquityInDepositAsset =
-    //   this.vaultDepositorEquityInDepositAsset.bind(this);
-    // //
-    // this.fetchVaults = this.fetchVaults.bind(this);
-    // this.vault = this.vault.bind(this);
-    // this.vaults = this.vaults.bind(this);
-    // this.managedVaults = this.managedVaults.bind(this);
-    // this.investedVaults = this.investedVaults.bind(this);
-    // //
-    // this.fetchVaultDepositors = this.fetchVaultDepositors.bind(this);
-    // this.vaultDepositor = this.vaultDepositor.bind(this);
-    // this.vaultDepositors = this.vaultDepositors.bind(this);
-    // //
-    // this.fundOverview = this.fundOverview.bind(this);
-    // this.fetchFundOverview = this.fetchFundOverview.bind(this);
-    // this.fetchFundOverviews = this.fetchFundOverviews.bind(this);
-    //
-    // // actions
-    // this.joinVault = this.joinVault.bind(this);
-    // this.deposit = this.deposit.bind(this);
-    // this.requestWithdraw = this.requestWithdraw.bind(this);
-    // this.withdraw = this.withdraw.bind(this);
-    // this.createVault = this.createVault.bind(this);
-    // this.delegateVault = this.delegateVault.bind(this);
-    // this.updateVault = this.updateVault.bind(this);
-    // this.managerDeposit = this.managerDeposit.bind(this);
-    // this.managerRequestWithdraw = this.managerRequestWithdraw.bind(this);
-    // this.managerWithdraw = this.managerWithdraw.bind(this);
-    // this.protocolRequestWithdraw = this.protocolRequestWithdraw.bind(this);
-    // this.protocolWithdraw = this.protocolWithdraw.bind(this);
-    //
-    // // utils
-    // this.clientVaultDepositor = this.clientVaultDepositor.bind(this);
-    // this.withdrawTimer = this.withdrawTimer.bind(this);
-    // this.hasWithdrawRequest = this.hasWithdrawRequest.bind(this);
-
     this.wallet = wallet;
     this.connection = connection;
-    this._fundOverviews = new Map();
     this.disableCache = disableCache;
     this.skipFetching = skipFetching;
-    this._vaults = new Map();
-    this._vaultDepositors = new Map();
 
-    this.eventEmitter = new EventEmitter();
     this.eventEmitter.on("vaultUpdate", (payload: Data<PublicKey, Vault>) => {
       this._vaults.set(payload.key.toString(), payload.data);
     });
@@ -166,9 +116,6 @@ export class PropShopClient {
         this._vaultDepositors.set(payload.key.toString(), payload.data);
       },
     );
-
-    console.log("constructed PropShopClient");
-    this.loading = false;
   }
 
   //
@@ -910,6 +857,8 @@ export class PropShopClient {
       })
       .remainingAccounts(remainingAccounts)
       .rpc();
+    // cache timer so frontend can track withdraw request
+    await this.createWithdrawTimer(vault);
 
     console.debug(
       "request withdraw:",
@@ -962,6 +911,8 @@ export class PropShopClient {
       })
       .remainingAccounts(remainingAccounts)
       .rpc();
+    // successful withdraw means no more withdraw request
+    this.removeWithdrawTimer(vault);
 
     console.debug(
       "cancel withdraw request:",
@@ -1049,6 +1000,8 @@ export class PropShopClient {
       obj = obj.preInstructions([createAtaIx]);
     }
     const sig = await obj.rpc();
+    // successful withdraw means no more withdraw request
+    this.removeWithdrawTimer(vault);
 
     console.debug("withdraw:", formatExplorerLink(sig, this.connection));
     const vaultName = decodeName(this.vault(vault).data.name);
@@ -1348,7 +1301,11 @@ export class PropShopClient {
     };
   }
 
-  public withdrawTimer(vault: PublicKey): Timer | undefined {
+  public withdrawTimer(vault: PublicKey): WithdrawRequestTimer | undefined {
+    return this._timers.get(vault.toString());
+  }
+
+  public async createWithdrawTimer(vault: PublicKey): Promise<void> {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
@@ -1359,61 +1316,39 @@ export class PropShopClient {
       this.publicKey,
     );
 
+    // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
+    await this._cache?.fetch();
+
     const vdAcct = this.vaultDepositor(vdKey).data;
-    if (
-      vdAcct.lastWithdrawRequest.shares.eq(new BN(0)) ||
-      vdAcct.lastWithdrawRequest.value.eq(new BN(0)) ||
-      vdAcct.lastWithdrawRequest.ts.eq(new BN(0))
-    ) {
-      console.log("no withdraw request");
-      return undefined;
-    }
     const reqTs = vdAcct.lastWithdrawRequest.ts.toNumber();
+    const equity =
+      vdAcct.lastWithdrawRequest.value.toNumber() / QUOTE_PRECISION.toNumber();
 
     const checkTime = () => {
       const now = Math.floor(Date.now() / 1000);
       const timeSinceReq = now - reqTs;
       const redeemPeriod = vaultAcct.redeemPeriod.toNumber();
-      // return Math.max(redeemPeriod - timeSinceReq, 0);
-      console.log("checkTime:", redeemPeriod - timeSinceReq);
-      return redeemPeriod - timeSinceReq;
+      return Math.max(redeemPeriod - timeSinceReq, 0);
     };
-
-    let secondsRemaining = checkTime();
 
     const timer = setInterval(() => {
-      if (secondsRemaining > 0) {
-        secondsRemaining = checkTime();
-      } else {
-        clearInterval(timer);
-      }
-    }, 500);
+      this._timers.set(vault.toString(), {
+        timer,
+        secondsRemaining: checkTime(),
+        equity,
+      });
+    }, 1000);
+  }
 
-    return {
-      timer,
-      secondsRemaining,
-    };
+  removeWithdrawTimer(vault: PublicKey) {
+    const result = this._timers.get(vault.toString());
+    if (result) {
+      clearInterval(result.timer);
+    }
+    this._timers.delete(vault.toString());
   }
 
   public hasWithdrawRequest(vault: PublicKey): boolean {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
-    const vdKey = getVaultDepositorAddressSync(
-      this.vaultClient.program.programId,
-      vault,
-      this.publicKey,
-    );
-
-    const vdAcct = this.vaultDepositor(vdKey).data;
-    if (
-      vdAcct.lastWithdrawRequest.shares.eq(new BN(0)) ||
-      vdAcct.lastWithdrawRequest.value.eq(new BN(0)) ||
-      vdAcct.lastWithdrawRequest.ts.eq(new BN(0))
-    ) {
-      return false;
-    } else {
-      return true;
-    }
+    return !!this.withdrawTimer(vault);
   }
 }

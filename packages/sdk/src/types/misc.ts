@@ -3,7 +3,8 @@ export interface Data<K, V> {
   data: V;
 }
 
-export interface Timer {
+export interface WithdrawRequestTimer {
   timer: NodeJS.Timeout;
   secondsRemaining: number;
+  equity: number;
 }

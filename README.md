@@ -23,3 +23,5 @@ export const SHYFT_API_KEY = "api-key";
 ## TODO
 
 Make PropShopClient subscribed accounts observable to allow UI to react to changes.
+
+On PropShopClient.initialize() load all withdraw requests for all vaults
