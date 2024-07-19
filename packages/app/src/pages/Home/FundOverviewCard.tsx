@@ -28,6 +28,15 @@ function calcMaxDrawdown(values: number[]): number {
   return maxDrawdown;
 }
 
+function calcRoi(data: number[]): number {
+  if (data[data.length - 1] && data[0]) {
+    const roi = (data[data.length - 1] - data[0]) / data[0];
+    return roi;
+  } else {
+    return 0;
+  }
+}
+
 export function FundOverviewCard({
   client,
   fundOverview,
@@ -36,7 +45,7 @@ export function FundOverviewCard({
   fundOverview: FundOverview;
 }) {
   const { vault, title, investors, aum, data } = fundOverview;
-  const roi = data[data.length - 1] - data[0];
+  const roi = calcRoi(data);
   const drawdown = calcMaxDrawdown(data);
   const _data = data.map((d) => ({ y: d }));
 
@@ -62,7 +71,7 @@ export function FundOverviewCard({
             <Line
               type="monotone"
               dataKey="y"
-              stroke={roi > 0 ? customTheme.secondary : customTheme.error}
+              stroke={roi < 0 ? customTheme.error : customTheme.secondary}
               strokeWidth={5}
               dot={{
                 r: 0,
@@ -80,25 +89,23 @@ export function FundOverviewCard({
           }}
         >
           <TableRow hover>
-            <Typography variant="body1">ROI</Typography>
+            <Typography variant="h3">Profit</Typography>
             <Typography
               variant="h3"
               sx={{
-                color: roi > 0 ? customTheme.secondary : customTheme.error,
+                color: roi < 0 ? customTheme.error : customTheme.secondary,
               }}
             >
-              ${formatNumber(truncateNumber(roi, 2))}
+              {formatNumber(truncateNumber(roi, 2))}%
             </Typography>
           </TableRow>
           <TableRow hover>
-            <Typography variant="body1">Drawdown</Typography>
-            <Typography variant="body1">
-              {truncateNumber(drawdown, 2)}%
-            </Typography>
+            <Typography variant="h3">Drawdown</Typography>
+            <Typography variant="h3">{truncateNumber(drawdown, 2)}%</Typography>
           </TableRow>
           <TableRow hover>
-            <Typography variant="body1">AUM</Typography>
-            <Typography variant="body1">
+            <Typography variant="h3">TVL</Typography>
+            <Typography variant="h3">
               ${formatNumber(truncateNumber(aum, 2))}
             </Typography>
           </TableRow>

@@ -10,6 +10,7 @@ import {
   PropShopClient,
   shortenAddress,
   truncateNumber,
+  WithdrawRequestTimer,
 } from "@cosmic-lab/prop-shop-sdk";
 import { observer } from "mobx-react";
 import { ContentCopyOutlined } from "@mui/icons-material";
@@ -27,35 +28,21 @@ const STATS_AREA_WIDTH = `calc(100% - ${BUTTON_AREA_WIDTH})`;
 
 export const InvestorStats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
+    const vd = client.clientVaultDepositor(vault);
     React.useEffect(() => {
       async function run() {
         await client.createWithdrawTimer(vault);
+        await client.fetchVaultEquity(vault);
       }
 
       run();
-    }, []);
-
-    const vd = client.clientVaultDepositor(vault);
-    const [equity, setEquity] = React.useState<number | undefined>(undefined);
-    React.useEffect(() => {
-      async function fetch() {
-        if (vd) {
-          const usdc = await client.vaultDepositorEquityInDepositAsset(
-            vd.key,
-            vault,
-          );
-          setEquity(truncateNumber(usdc, 2));
-        } else {
-          setEquity(undefined);
-        }
-      }
-
-      fetch();
     }, [vd]);
 
     const { enqueueSnackbar } = useSnackbar();
 
     async function requestWithdraw() {
+      // todo: pass as user input field
+      const equity = client.vaultEquity(vault);
       if (!equity) {
         return;
       }
@@ -80,7 +67,7 @@ export const InvestorStats = observer(
     }
 
     async function deposit() {
-      // todo
+      // todo: passed as user input field
       const depositAmount = 1000;
       const snack = await client.deposit(vault, depositAmount);
       enqueueSnackbar(snack.message, {
@@ -101,7 +88,7 @@ export const InvestorStats = observer(
           bgcolor: customTheme.light,
         }}
       >
-        <Stats client={client} vault={vault} equity={equity} />
+        <Stats client={client} vault={vault} />
 
         <Box
           sx={{
@@ -123,7 +110,11 @@ export const InvestorStats = observer(
             </ActionButton>
           ) : (
             <ActionButton
-              disabled={!vd || client.hasWithdrawRequest(vault)}
+              disabled={
+                !client.vaultEquity(vault) ||
+                !vd ||
+                client.hasWithdrawRequest(vault)
+              }
               onClick={requestWithdraw}
             >
               <Typography variant="button">REQUEST WITHDRAW</Typography>
@@ -165,17 +156,24 @@ export const InvestorStats = observer(
 );
 
 const Stats = observer(
-  ({
-    client,
-    vault,
-    equity,
-  }: {
-    client: PropShopClient;
-    vault: PublicKey;
-    equity: number | undefined;
-  }) => {
-    const vd = client.clientVaultDepositor(vault);
-    const timer = client.withdrawTimer(vault);
+  ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
+    const key = client.clientVaultDepositor(vault)?.key;
+
+    const [equity, setEquity] = React.useState<number | undefined>(undefined);
+    const [timer, setTimer] = React.useState<WithdrawRequestTimer | undefined>(
+      undefined,
+    );
+    React.useEffect(() => {
+      const usdc = client.vaultEquity(vault);
+      if (usdc) {
+        setEquity(truncateNumber(usdc, 2));
+      }
+      const _timer = client.withdrawTimer(vault);
+      if (_timer) {
+        setTimer(_timer);
+      }
+    }, [key, client.vaultEquity(vault), client.withdrawTimer(vault)]);
+
     return (
       <Box
         sx={{
@@ -193,10 +191,7 @@ const Stats = observer(
             </TableRow>
             <TableRow hover>
               <Text>Vault Depositor</Text>
-              <TextIconWrapper
-                text={vd ? vd.key.toString() : "--"}
-                shorten={!!vd}
-              />
+              <TextIconWrapper text={key?.toString() ?? "--"} shorten={!!key} />
             </TableRow>
             <TableRow hover>
               <Text>Vault</Text>
@@ -205,7 +200,7 @@ const Stats = observer(
             <TableRow hover>
               <Text>Withdraw Request Countdown</Text>
               <TextIconWrapper
-                text={timer ? timer.secondsRemaining.toString() : "--"}
+                text={timer?.secondsRemaining.toString() ?? "--"}
               />
             </TableRow>
             <TableRow hover>

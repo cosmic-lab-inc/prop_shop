@@ -50,6 +50,7 @@ import {
   DriftVaults,
   getVaultAddressSync,
   getVaultDepositorAddressSync,
+  getVaultProtocolAddressSync,
   IDL as DRIFT_VAULTS_IDL,
   Vault,
   VaultClient,
@@ -78,21 +79,24 @@ import {
 } from "@solana/spl-token";
 
 export class PropShopClient {
-  connection: Connection;
-  wallet: WalletContextState;
+  private connection: Connection;
+  private wallet: WalletContextState;
   vaultClient: VaultClient | undefined;
   loading: boolean = false;
-  eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents> =
-    new EventEmitter();
+  private eventEmitter: StrictEventEmitter<
+    EventEmitter,
+    PropShopAccountEvents
+  > = new EventEmitter();
 
-  _fundOverviews: Map<string, FundOverview> = new Map();
-  _cache: DriftVaultsSubscriber | undefined = undefined;
+  private _fundOverviews: Map<string, FundOverview> = new Map();
+  private _cache: DriftVaultsSubscriber | undefined = undefined;
 
   private readonly disableCache: boolean = false;
   private readonly skipFetching: boolean = false;
   private _vaults: Map<string, Vault> = new Map();
   private _vaultDepositors: Map<string, VaultDepositor> = new Map();
   private _timers: Map<string, WithdrawRequestTimer> = new Map();
+  private _equities: Map<string, number> = new Map();
 
   constructor(
     wallet: WalletContextState,
@@ -239,25 +243,6 @@ export class PropShopClient {
       },
       this.eventEmitter,
     );
-    // const loader = new AccountLoader(
-    //   program.provider.connection,
-    //   "confirmed",
-    //   30_000,
-    // );
-    // this._cache = new PollingSubscriber(program, loader, {
-    //     filters: [
-    //       {
-    //         accountName: "vault",
-    //         eventType: "vaultUpdate",
-    //       },
-    //       {
-    //         accountName: "vaultDepositor",
-    //         eventType: "vaultDepositorUpdate",
-    //       },
-    //     ],
-    //   },
-    //   this.eventEmitter
-    // );
     await this._cache.subscribe();
   }
 
@@ -272,6 +257,17 @@ export class PropShopClient {
     return this.wallet.publicKey;
   }
 
+  getVaultDepositorAddress(vault: PublicKey): PublicKey {
+    if (!this.vaultClient) {
+      throw new Error("VaultClient not initialized");
+    }
+    return getVaultDepositorAddressSync(
+      this.vaultClient.program.programId,
+      vault,
+      this.publicKey,
+    );
+  }
+
   /**
    * Initialize the User for the connected wallet,
    * and optionally deposit USDC as collateral.
@@ -283,7 +279,7 @@ export class PropShopClient {
     usdcAta: PublicKey;
   }> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(0);
     if (!spotMarket) {
@@ -325,7 +321,7 @@ export class PropShopClient {
    */
   public userInitialized(): boolean {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     const user = this.vaultClient.driftClient.getUserAccount();
     return !!user;
@@ -454,9 +450,6 @@ export class PropShopClient {
   }
 
   public async fundOverview(key: PublicKey): Promise<FundOverview> {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
     let v = this._fundOverviews.get(key.toString());
     if (!v) {
       v = await this.fetchFundOverview(key);
@@ -465,9 +458,6 @@ export class PropShopClient {
   }
 
   public async fundOverviews(protocolsOnly?: boolean): Promise<FundOverview[]> {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
     let res = Array.from(this._fundOverviews.values());
     if (res.length === 0) {
       res = await this.fetchFundOverviews(protocolsOnly);
@@ -479,7 +469,7 @@ export class PropShopClient {
     protocolsOnly?: boolean,
   ): Promise<ProgramAccount<Vault>[]> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
     const preFetch = Date.now();
@@ -504,7 +494,7 @@ export class PropShopClient {
     filterByAuthority?: boolean,
   ): Promise<ProgramAccount<VaultDepositor>[]> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     let filters: GetProgramAccountsFilter[] | undefined = undefined;
     if (filterByAuthority) {
@@ -533,9 +523,6 @@ export class PropShopClient {
   //
 
   public async fetchFundOverview(vaultKey: PublicKey): Promise<FundOverview> {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
     const vault = this.vault(vaultKey)!;
     const vds = this.vaultDepositors();
     // get count of vds per vault
@@ -573,9 +560,6 @@ export class PropShopClient {
   public async fetchFundOverviews(
     protocolsOnly?: boolean,
   ): Promise<FundOverview[]> {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
     const vaults = this.vaults(protocolsOnly);
     const vds = this.vaultDepositors();
     // get count of vds per vault
@@ -617,9 +601,6 @@ export class PropShopClient {
    * Vaults the connected wallet manages.
    */
   public managedVaults(protocolsOnly?: boolean): Data<PublicKey, Vault>[] {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
     const vaults = this.vaults(protocolsOnly);
     return vaults.filter((v) => {
@@ -631,9 +612,6 @@ export class PropShopClient {
    * Vaults the connected wallet is invested in.
    */
   public investedVaults(): PublicKey[] {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
     const vds = this.vaultDepositors(true);
     return vds.map((vd) => vd.data.vault);
   }
@@ -646,9 +624,8 @@ export class PropShopClient {
     vaultDepositors?: Data<PublicKey, VaultDepositor>[],
   ): Promise<number> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
-
     let _vaults: Data<PublicKey, Vault>[];
     if (vaults) {
       _vaults = vaults;
@@ -696,7 +673,7 @@ export class PropShopClient {
     vaultKey: PublicKey,
   ): Promise<number> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     const vault = this.vault(vaultKey)!;
     const vd = this.vaultDepositor(vdKey)!;
@@ -716,9 +693,6 @@ export class PropShopClient {
   public aggregateDeposits(
     vaultDepositors?: Data<PublicKey, VaultDepositor>[],
   ): number {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
     let vds: Data<PublicKey, VaultDepositor>[];
     if (!vaultDepositors) {
       if (!this._cache) {
@@ -744,7 +718,7 @@ export class PropShopClient {
     vaultDepositors?: Data<PublicKey, VaultDepositor>[],
   ): Promise<number> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     let vds: Data<PublicKey, VaultDepositor>[];
     if (!vaultDepositors) {
@@ -766,7 +740,7 @@ export class PropShopClient {
 
   public async joinVault(vault: PublicKey): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     if (!this.userInitialized()) {
       throw new Error("User not initialized");
@@ -784,7 +758,6 @@ export class PropShopClient {
   }
 
   public async deposit(vault: PublicKey, usdc: number): Promise<SnackInfo> {
-    console.log("inside deposit...");
     if (!this.vaultClient) {
       console.error("PropShopClient not initialized");
       return {
@@ -796,12 +769,8 @@ export class PropShopClient {
       console.error("User not initialized");
       // todo: init user ix
     }
-    const vaultDepositor = getVaultDepositorAddressSync(
-      this.vaultClient.program.programId,
-      vault,
-      this.publicKey,
-    );
-    const vaultAccount = this.vault(vault)?.data;
+    const vaultDepositor = this.getVaultDepositorAddress(vault);
+    const vaultAccount = this.vault(vault, false)?.data;
     if (!vaultAccount) {
       console.error("Vault not found in deposit instruction");
       return {
@@ -813,18 +782,19 @@ export class PropShopClient {
 
     let preIxs: TransactionInstruction[] = [];
 
-    const vdExists = this.vaultDepositor(vaultDepositor)?.data;
+    const vdExists = this.vaultDepositor(vaultDepositor, false)?.data;
     if (!vdExists) {
       console.log("create vault depositor");
-      const createVdIx = await this.vaultClient.program.methods
-        .initializeVaultDepositor()
-        .accounts({
-          vaultDepositor,
-          vault,
-          authority: this.publicKey,
-        })
-        .instruction();
-      preIxs.push(createVdIx);
+      preIxs.push(
+        await this.vaultClient.program.methods
+          .initializeVaultDepositor()
+          .accounts({
+            vaultDepositor,
+            vault,
+            authority: this.publicKey,
+          })
+          .instruction(),
+      );
     }
 
     const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
@@ -856,12 +826,37 @@ export class PropShopClient {
       );
     }
 
-    const { accounts, remainingAccounts } =
-      await this.vaultClient.prepDepositTx(vaultDepositor, amount);
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [],
+        writableSpotMarketIndexes: [0],
+      },
+    );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = getVaultProtocolAddressSync(
+        this.vaultClient.program.programId,
+        vault,
+      );
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
 
     let obj = this.vaultClient.program.methods
       .deposit(amount)
-      .accounts(accounts)
+      .accounts({
+        vault,
+        vaultDepositor,
+        vaultTokenAccount: vaultAccount.tokenAccount,
+        driftUserStats: vaultAccount.userStats,
+        driftUser: vaultAccount.user,
+        driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+        userTokenAccount: userAta,
+        driftSpotMarketVault: spotMarket.vault,
+        driftProgram: this.vaultClient.driftClient.program.programId,
+      })
       .remainingAccounts(remainingAccounts);
 
     if (preIxs.length > 0) {
@@ -869,20 +864,8 @@ export class PropShopClient {
     }
 
     try {
-      // let initVaultDepositor = undefined;
-      // if (!vdExists) {
-      //   initVaultDepositor = {
-      //     authority: this.publicKey,
-      //     vault,
-      //   };
-      // }
-      // const sig = await this.vaultClient.deposit(
-      //   vaultDepositor,
-      //   amount,
-      //   initVaultDepositor,
-      // );
-
       const sig = await obj.rpc();
+      await this.fetchVaultEquity(vault);
 
       console.debug("deposit:", formatExplorerLink(sig, this.connection));
       const vaultName = decodeName(this.vault(vault)!.data.name);
@@ -905,16 +888,12 @@ export class PropShopClient {
     usdc: number,
   ): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     if (!this.userInitialized()) {
       throw new Error("User not initialized");
     }
-    const vaultDepositor = getVaultDepositorAddressSync(
-      this.vaultClient.program.programId,
-      vault,
-      this.publicKey,
-    );
+    const vaultDepositor = this.getVaultDepositorAddress(vault);
     const amount = QUOTE_PRECISION.mul(new BN(usdc));
 
     const sig = await this.vaultClient.requestWithdraw(
@@ -922,6 +901,7 @@ export class PropShopClient {
       amount,
       WithdrawUnit.TOKEN,
     );
+    await this.fetchVaultEquity(vault);
 
     // cache timer so frontend can track withdraw request
     await this.createWithdrawTimer(vault);
@@ -939,21 +919,17 @@ export class PropShopClient {
 
   public async cancelWithdrawRequest(vault: PublicKey): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     if (!this.userInitialized()) {
       throw new Error("User not initialized");
     }
-    const vaultDepositor = getVaultDepositorAddressSync(
-      this.vaultClient.program.programId,
-      vault,
-      this.publicKey,
-    );
-
+    const vaultDepositor = this.getVaultDepositorAddress(vault);
     const sig = await this.vaultClient.cancelRequestWithdraw(vaultDepositor);
 
     // successful withdraw means no more withdraw request
     this.removeWithdrawTimer(vault);
+    await this.fetchVaultEquity(vault);
 
     console.debug(
       "cancel withdraw request:",
@@ -968,21 +944,18 @@ export class PropShopClient {
 
   public async withdraw(vault: PublicKey): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     if (!this.userInitialized()) {
       throw new Error("User not initialized");
     }
-    const vaultDepositor = getVaultDepositorAddressSync(
-      this.vaultClient.program.programId,
-      vault,
-      this.publicKey,
-    );
+    const vaultDepositor = this.getVaultDepositorAddress(vault);
 
     const sig = await this.vaultClient.withdraw(vaultDepositor);
 
     // successful withdraw means no more withdraw request
     this.removeWithdrawTimer(vault);
+    await this.fetchVaultEquity(vault);
 
     console.debug("withdraw:", formatExplorerLink(sig, this.connection));
     const vaultName = decodeName(this.vault(vault)!.data.name);
@@ -1020,7 +993,7 @@ export class PropShopClient {
     snack: SnackInfo;
   }> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     if (params.redeemPeriod && params.redeemPeriod > ONE_DAY * 90) {
       throw new Error("Redeem period must be less than 90 days");
@@ -1086,7 +1059,7 @@ export class PropShopClient {
     delegate: PublicKey,
   ): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
+      throw new Error("VaultClient not initialized");
     }
     if (!this.userInitialized()) {
       throw new Error("User not initialized");
@@ -1267,14 +1240,7 @@ export class PropShopClient {
   public clientVaultDepositor(
     vault: PublicKey,
   ): Data<PublicKey, VaultDepositor> | undefined {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
-    const key = getVaultDepositorAddressSync(
-      this.vaultClient.program.programId,
-      vault,
-      this.publicKey,
-    );
+    const key = this.getVaultDepositorAddress(vault);
     return this.vaultDepositor(key, false);
   }
 
@@ -1283,20 +1249,13 @@ export class PropShopClient {
   }
 
   public async createWithdrawTimer(vault: PublicKey): Promise<void> {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
     const vaultAcct = this.vault(vault)!.data;
-    const vdKey = getVaultDepositorAddressSync(
-      this.vaultClient.program.programId,
-      vault,
-      this.publicKey,
-    );
+    const vdKey = this.getVaultDepositorAddress(vault);
 
     // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
     await this._cache?.fetch();
 
-    const vdAcct = this.vaultDepositor(vdKey)?.data;
+    const vdAcct = this.vaultDepositor(vdKey, false)?.data;
     if (!vdAcct) {
       this.removeWithdrawTimer(vault);
       return;
@@ -1327,7 +1286,7 @@ export class PropShopClient {
     }, 1000);
   }
 
-  removeWithdrawTimer(vault: PublicKey) {
+  private removeWithdrawTimer(vault: PublicKey) {
     const result = this._timers.get(vault.toString());
     if (result) {
       clearInterval(result.timer);
@@ -1342,9 +1301,25 @@ export class PropShopClient {
   printProgramLogs(error: any) {
     if (error.logs) {
       const logs = error.logs as string[];
-      for (const log of logs) {
-        console.log(log);
-      }
+      console.error(`Program error: ${logs}`);
+    } else {
+      console.error(`Program error: ${error}`);
     }
+  }
+
+  public async fetchVaultEquity(vault: PublicKey): Promise<number | undefined> {
+    const key = this.clientVaultDepositor(vault)?.key;
+    if (key) {
+      const usdc = await this.vaultDepositorEquityInDepositAsset(key, vault);
+      this._equities.set(vault.toString(), usdc);
+      return usdc;
+    } else {
+      console.log("client vault depositor is undefined in fetchVaultEquity");
+      return undefined;
+    }
+  }
+
+  public vaultEquity(vault: PublicKey): number | undefined {
+    return this._equities.get(vault.toString());
   }
 }
