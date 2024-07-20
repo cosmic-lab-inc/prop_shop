@@ -450,11 +450,11 @@ export class PropShopClient {
   }
 
   public async fundOverview(key: PublicKey): Promise<FundOverview> {
-    let v = this._fundOverviews.get(key.toString());
-    if (!v) {
-      v = await this.fetchFundOverview(key);
+    let res = this._fundOverviews.get(key.toString());
+    if (!res) {
+      res = await this.fetchFundOverview(key);
     }
-    return v!;
+    return res;
   }
 
   public async fundOverviews(protocolsOnly?: boolean): Promise<FundOverview[]> {
@@ -896,16 +896,7 @@ export class PropShopClient {
       throw new Error("User not initialized");
     }
     const vaultDepositor = this.getVaultDepositorAddress(vault);
-    let amount = new BN(usdc * QUOTE_PRECISION.toNumber());
-    const equityBN = new BN(
-      (this.vaultEquity(vault) ?? 0) * QUOTE_PRECISION.toNumber(),
-    );
-    console.log(`amount: ${amount.toNumber()}`);
-    console.log(`equityBN: ${equityBN.toNumber()}`);
-    if (equityBN.eq(amount)) {
-      amount = amount.sub(new BN(1));
-      console.log(`update amount: ${amount.toNumber()}`);
-    }
+    const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
 
     const sig = await this.vaultClient.requestWithdraw(
       vaultDepositor,

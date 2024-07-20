@@ -22,4 +22,4 @@ export const SHYFT_API_KEY = "api-key";
 
 ## TODO
 
-FundOverviewCard reads observable state rather than static prop
+FundOverviewCard reads observable state of fund overviews rather than static prop

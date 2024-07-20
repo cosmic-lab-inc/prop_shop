@@ -99,6 +99,12 @@ export const InvestorStats = observer(
       setDefaultValue(equity ?? 0);
     }
 
+    function resetDialog() {
+      setOpen(false);
+      setAction(TransferInputAction.UNKNOWN);
+      setDefaultValue(0);
+    }
+
     async function submit() {
       if (action === TransferInputAction.WITHDRAW) {
         await requestWithdraw();
@@ -107,7 +113,7 @@ export const InvestorStats = observer(
       } else {
         console.error("Invalid action on submit");
       }
-      setOpen(false);
+      resetDialog();
     }
 
     return (
@@ -117,7 +123,7 @@ export const InvestorStats = observer(
           vault={vault}
           defaultValue={defaultValue}
           open={open}
-          onClose={() => setOpen(false)}
+          onClose={() => resetDialog()}
           onChange={(value: number) => setInput(value)}
           onSubmit={async () => {
             await submit();
@@ -211,8 +217,7 @@ const Stats = observer(
     );
     const [equity, setEquity] = React.useState<number | undefined>(undefined);
     React.useEffect(() => {
-      const _equity = client.vaultEquity(vault);
-      setEquity(_equity ?? undefined);
+      setEquity(client.vaultEquity(vault));
       setTimer(client.withdrawTimer(vault));
     }, [key, client.vaultEquity(vault), client.withdrawTimer(vault)]);
 

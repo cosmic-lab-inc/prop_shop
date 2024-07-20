@@ -4,7 +4,7 @@ import {
   ConnectionProvider,
   WalletProvider,
 } from "@solana/wallet-adapter-react";
-import { SnackbarProvider, useSnackbar } from "notistack";
+import { useSnackbar } from "notistack";
 import type { ReactNode } from "react";
 import React, { useCallback, useMemo } from "react";
 import { ThemeWrapper } from "../styles";
@@ -55,11 +55,9 @@ function Context({ children }: { children: ReactNode }) {
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <SnackbarProvider>
-        <WalletProvider wallets={wallets} onError={onError} autoConnect>
-          <WalletDialogProvider>{children}</WalletDialogProvider>
-        </WalletProvider>
-      </SnackbarProvider>
+      <WalletProvider wallets={wallets} onError={onError} autoConnect>
+        <WalletDialogProvider>{children}</WalletDialogProvider>
+      </WalletProvider>
     </ConnectionProvider>
   );
 }
