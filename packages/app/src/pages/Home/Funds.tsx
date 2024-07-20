@@ -1,5 +1,4 @@
 import React from "react";
-import { customTheme } from "../../styles";
 import { Box, styled, Typography } from "@mui/material";
 import { FundOverviewCard } from "./FundOverviewCard";
 import { FundOverview, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
@@ -63,16 +62,17 @@ export function Funds({ client }: { client: PropShopClient }) {
     >
       <Box
         sx={{
-          width: "100%",
+          width: "70%",
           height: "100%",
           display: "flex",
           borderRadius: "10px",
+          justifyContent: "center",
           alignItems: "center",
-          flexDirection: "row",
+          flexDirection: "column",
         }}
       >
-        <Typography variant="h2" sx={{ color: customTheme.dark }}>
-          Top Funds by ROI
+        <Typography variant="h1">
+          Earn money while you sleep by investing in winning traders.
         </Typography>
       </Box>
       <Box

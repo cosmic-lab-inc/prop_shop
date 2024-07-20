@@ -55,7 +55,7 @@ export const theme: Theme = createTheme({
       fontFamily: customTheme.font.titilliumBold,
       fontSize: 50,
       fontWeight: 800,
-      lineHeight: "2rem",
+      lineHeight: "4rem",
     },
     h2: {
       fontSize: 30,

@@ -72,7 +72,7 @@ export function FundOverviewCard({
             p: 1,
           }}
         >
-          <LineChart width={350} height={200} data={_data} compact>
+          <LineChart width={400} height={160} data={_data} compact>
             <Line
               type="monotone"
               dataKey="y"
@@ -94,7 +94,7 @@ export function FundOverviewCard({
             gap: 1,
           }}
         >
-          <TableRow hover divider square>
+          <TableRow hover divider footer square>
             <Typography variant="h3">Profit</Typography>
             <Typography
               variant="h2"
