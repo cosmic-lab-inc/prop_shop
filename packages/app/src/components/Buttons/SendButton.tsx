@@ -1,8 +1,9 @@
 import IconButton from "@mui/material/IconButton";
-import { alpha, ButtonProps } from "@mui/material";
+import { ButtonProps } from "@mui/material";
 import { customTheme } from "../../styles";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import React, { useEffect } from "react";
+import { darken } from "@mui/system/colorManipulator";
 
 type IconButtonProps = {
   iconSize?: number | string;
@@ -15,7 +16,7 @@ export function SendButton(props: IconButtonProps) {
 
   useEffect(() => {
     if (disabled) {
-      setIconColor(alpha(customTheme.dark, 0.7));
+      setIconColor(customTheme.grey);
     } else {
       setIconColor(customTheme.light);
     }
@@ -30,28 +31,18 @@ export function SendButton(props: IconButtonProps) {
         height: "100%",
         display: "flex",
         justifyContent: "center",
-        minWidth: "40px",
-        minHeight: "40px",
 
-        bgcolor: disabled ? customTheme.grey : customTheme.secondary,
         color: disabled ? customTheme.dark : customTheme.light,
+        bgcolor: disabled
+          ? darken(customTheme.grey2, 0.2)
+          : customTheme.secondary,
         "&:hover": {
-          bgcolor: disabled ? customTheme.grey : customTheme.light,
-          color: disabled ? customTheme.light : customTheme.secondary,
+          bgcolor: disabled
+            ? customTheme.grey
+            : darken(customTheme.secondary, 0.2),
         },
       }}
       type="submit"
-      aria-label="directions"
-      onMouseEnter={() => {
-        if (!disabled) {
-          setIconColor(customTheme.secondary);
-        }
-      }}
-      onMouseLeave={() => {
-        if (!disabled) {
-          setIconColor(customTheme.light);
-        }
-      }}
       {...rest}
     >
       <SendRoundedIcon

@@ -22,6 +22,10 @@ import {
 } from "../../../components";
 import { PublicKey } from "@solana/web3.js";
 import { useSnackbar } from "notistack";
+import {
+  TransferInputAction,
+  TransferInputDialog,
+} from "./TransferInputDialog";
 
 const BUTTON_AREA_WIDTH = "30%";
 const STATS_AREA_WIDTH = `calc(100% - ${BUTTON_AREA_WIDTH})`;
@@ -36,17 +40,12 @@ export const InvestorStats = observer(
       }
 
       run();
-    }, [vd]);
+    }, []);
 
     const { enqueueSnackbar } = useSnackbar();
 
     async function requestWithdraw() {
-      // todo: pass as user input field
-      const equity = client.vaultEquity(vault);
-      if (!equity) {
-        return;
-      }
-      const snack = await client.requestWithdraw(vault, equity);
+      const snack = await client.requestWithdraw(vault, input);
       enqueueSnackbar(snack.message, {
         variant: snack.variant,
       });
@@ -67,89 +66,128 @@ export const InvestorStats = observer(
     }
 
     async function deposit() {
-      // todo: passed as user input field
-      const depositAmount = 1000;
-      const snack = await client.deposit(vault, depositAmount);
+      const snack = await client.deposit(vault, input);
       enqueueSnackbar(snack.message, {
         variant: snack.variant,
       });
     }
 
-    return (
-      <Box
-        sx={{
-          width: "100%",
-          borderRadius: "10px",
-          display: "flex",
-          flexDirection: "row",
-          flexGrow: 1,
-          gap: 1,
-          p: 1,
-          bgcolor: customTheme.light,
-        }}
-      >
-        <Stats client={client} vault={vault} />
+    // dialog state
+    const [open, setOpen] = React.useState(false);
+    const [input, setInput] = React.useState(0);
+    const [action, setAction] = React.useState<TransferInputAction>(
+      TransferInputAction.UNKNOWN,
+    );
 
+    const clickDeposit = React.useCallback(() => {
+      setAction(TransferInputAction.DEPOSIT);
+      setOpen(true);
+    }, []);
+
+    const clickRequestWithdraw = React.useCallback(() => {
+      setAction(TransferInputAction.WITHDRAW);
+      setOpen(true);
+    }, []);
+
+    async function submit() {
+      if (action === TransferInputAction.WITHDRAW) {
+        await requestWithdraw();
+      } else if (action === TransferInputAction.DEPOSIT) {
+        await deposit();
+      } else {
+        console.error("Invalid action on submit");
+      }
+      setOpen(false);
+    }
+
+    return (
+      <>
+        <TransferInputDialog
+          client={client}
+          vault={vault}
+          action={action}
+          open={open}
+          onClose={() => setOpen(false)}
+          onChange={(value: number) => setInput(value)}
+          onSubmit={async () => {
+            await submit();
+          }}
+        />
         <Box
           sx={{
+            width: "100%",
             borderRadius: "10px",
             display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
+            flexDirection: "row",
+            flexGrow: 1,
             gap: 1,
-            width: BUTTON_AREA_WIDTH,
+            p: 1,
+            bgcolor: customTheme.light,
           }}
         >
+          <Stats client={client} vault={vault} />
+
           <Box
             sx={{
+              borderRadius: "10px",
               display: "flex",
-              flexDirection: "row",
+              flexDirection: "column",
+              alignItems: "center",
               gap: 1,
-              width: "100%",
-              flexGrow: 1,
-              height: "100%",
+              width: BUTTON_AREA_WIDTH,
             }}
           >
-            <IconButton
-              component={MinusIcon}
-              iconSize={60}
-              disabled={!vd || !client.hasWithdrawRequest(vault)}
-              onClick={withdraw}
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                gap: 1,
+                width: "100%",
+                flexGrow: 1,
+                height: "100%",
+              }}
             >
-              <Typography variant="button">WITHDRAW</Typography>
-            </IconButton>
+              <IconButton
+                component={MinusIcon}
+                iconSize={60}
+                disabled={!vd || !client.hasWithdrawRequest(vault)}
+                onClick={withdraw}
+              >
+                <Typography variant="button">WITHDRAW</Typography>
+              </IconButton>
 
-            <IconButton
-              component={PlusIcon}
-              iconSize={60}
-              disabled={client.hasWithdrawRequest(vault)}
-              onClick={deposit}
-            >
-              <Typography variant="button">DEPOSIT</Typography>
-            </IconButton>
+              <IconButton
+                component={PlusIcon}
+                iconSize={60}
+                disabled={client.hasWithdrawRequest(vault)}
+                onClick={clickDeposit}
+              >
+                <Typography variant="button">DEPOSIT</Typography>
+              </IconButton>
+            </Box>
+
+            {client.hasWithdrawRequest(vault) ? (
+              <ActionButton
+                disabled={!client.hasWithdrawRequest(vault)}
+                onClick={cancelWithdraw}
+              >
+                <Typography variant="button">CANCEL WITHDRAW</Typography>
+              </ActionButton>
+            ) : (
+              <ActionButton
+                disabled={
+                  !client.vaultEquity(vault) ||
+                  !vd ||
+                  client.hasWithdrawRequest(vault)
+                }
+                onClick={clickRequestWithdraw}
+              >
+                <Typography variant="button">REQUEST WITHDRAW</Typography>
+              </ActionButton>
+            )}
           </Box>
-
-          {client.hasWithdrawRequest(vault) ? (
-            <ActionButton
-              disabled={!client.hasWithdrawRequest(vault)}
-              onClick={cancelWithdraw}
-            >
-              <Typography variant="button">CANCEL WITHDRAW</Typography>
-            </ActionButton>
-          ) : (
-            <ActionButton
-              disabled={
-                !client.vaultEquity(vault) ||
-                !vd ||
-                client.hasWithdrawRequest(vault)
-              }
-              onClick={requestWithdraw}
-            >
-              <Typography variant="button">REQUEST WITHDRAW</Typography>
-            </ActionButton>
-          )}
         </Box>
-      </Box>
+      </>
     );
   },
 );
@@ -158,19 +196,18 @@ const Stats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
     const key = client.clientVaultDepositor(vault)?.key;
 
-    const [equity, setEquity] = React.useState<number | undefined>(undefined);
     const [timer, setTimer] = React.useState<WithdrawRequestTimer | undefined>(
       undefined,
     );
+    const [equity, setEquity] = React.useState<number | undefined>(undefined);
     React.useEffect(() => {
-      const usdc = client.vaultEquity(vault);
-      if (usdc) {
-        setEquity(truncateNumber(usdc, 2));
+      const _equity = client.vaultEquity(vault);
+      if (_equity) {
+        setEquity(truncateNumber(_equity, 2));
+      } else {
+        setEquity(undefined);
       }
-      const _timer = client.withdrawTimer(vault);
-      if (_timer) {
-        setTimer(_timer);
-      }
+      setTimer(client.withdrawTimer(vault));
     }, [key, client.vaultEquity(vault), client.withdrawTimer(vault)]);
 
     return (

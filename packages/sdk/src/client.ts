@@ -1326,4 +1326,24 @@ export class PropShopClient {
   public vaultEquity(vault: PublicKey): number | undefined {
     return this._equities.get(vault.toString());
   }
+
+  public async fetchWalletUSDC(): Promise<number | undefined> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(0);
+    if (!spotMarket) {
+      throw new Error("USDC spot market not found in DriftClient");
+    }
+    const usdcMint = spotMarket.mint;
+    const usdcAta = getAssociatedTokenAddress(usdcMint, this.publicKey);
+    try {
+      const acct = await this.connection.getTokenAccountBalance(usdcAta);
+      return acct.value.uiAmount ?? undefined;
+    } catch (e) {
+      // this error occurs because RPC failed to fetch an account that does not exist
+      // so return undefined instead of throwing an error
+      return undefined;
+    }
+  }
 }

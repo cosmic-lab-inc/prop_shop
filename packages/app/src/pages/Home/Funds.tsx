@@ -22,33 +22,32 @@ const GridContainer = styled("div")(({ theme }) => ({
 export function Funds({ client }: { client: PropShopClient }) {
   const [funds, setFunds] = React.useState<FundOverview[]>([]);
 
-  async function fetchFunds() {
-    // only use mock data on mainnet dev mode
-    if (
-      process.env.ENV === "dev" &&
-      process.env.RPC_URL !== "http://localhost:8899"
-    ) {
-      // dev mode but mainnet so use historical API
-      setFunds(mockFundOverviews());
-    } else if (
-      process.env.ENV === "dev" &&
-      process.env.RPC_URL === "http://localhost:8899"
-    ) {
-      // test prod but localnet doesn't have historical API
-      const _funds = (await client.fundOverviews()).map((fund) => {
-        return {
-          ...fund,
-          data: mockFundOverviews()[0].data,
-        };
-      });
-      setFunds(_funds);
-    } else {
-      setFunds(await client.fundOverviews());
-    }
-  }
-
   React.useEffect(() => {
-    console.log("render");
+    async function fetchFunds() {
+      // only use mock data on mainnet dev mode
+      if (
+        process.env.ENV === "dev" &&
+        process.env.RPC_URL !== "http://localhost:8899"
+      ) {
+        // dev mode but mainnet so use historical API
+        setFunds(mockFundOverviews());
+      } else if (
+        process.env.ENV === "dev" &&
+        process.env.RPC_URL === "http://localhost:8899"
+      ) {
+        // test prod but localnet doesn't have historical API
+        const _funds = (await client.fundOverviews()).map((fund) => {
+          return {
+            ...fund,
+            data: mockFundOverviews()[0].data,
+          };
+        });
+        setFunds(_funds);
+      } else {
+        setFunds(await client.fundOverviews());
+      }
+    }
+
     fetchFunds();
   }, []);
 
