@@ -75,18 +75,27 @@ export const InvestorStats = observer(
     // dialog state
     const [open, setOpen] = React.useState(false);
     const [input, setInput] = React.useState(0);
+    const [defaultValue, setDefaultValue] = React.useState(0);
     const [action, setAction] = React.useState<TransferInputAction>(
       TransferInputAction.UNKNOWN,
     );
 
-    const clickDeposit = React.useCallback(() => {
+    React.useEffect(() => {
+      if (action !== TransferInputAction.UNKNOWN) {
+        setOpen(true);
+      }
+    }, [defaultValue]);
+
+    const clickDeposit = React.useCallback(async () => {
       setAction(TransferInputAction.DEPOSIT);
-      setOpen(true);
+      const usdc = await client.fetchWalletUSDC();
+      setDefaultValue(usdc ?? 0);
     }, []);
 
-    const clickRequestWithdraw = React.useCallback(() => {
+    const clickRequestWithdraw = React.useCallback(async () => {
       setAction(TransferInputAction.WITHDRAW);
-      setOpen(true);
+      const equity = await client.fetchVaultEquity(vault);
+      setDefaultValue(equity ?? 0);
     }, []);
 
     async function submit() {
@@ -105,7 +114,7 @@ export const InvestorStats = observer(
         <TransferInputDialog
           client={client}
           vault={vault}
-          action={action}
+          defaultValue={defaultValue}
           open={open}
           onClose={() => setOpen(false)}
           onChange={(value: number) => setInput(value)}

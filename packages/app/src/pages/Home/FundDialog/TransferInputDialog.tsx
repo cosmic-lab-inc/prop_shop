@@ -15,7 +15,7 @@ export enum TransferInputAction {
 export function TransferInputDialog({
   client,
   vault,
-  action,
+  defaultValue,
   open,
   onClose,
   onChange,
@@ -23,31 +23,32 @@ export function TransferInputDialog({
 }: {
   client: PropShopClient;
   vault: PublicKey;
-  action: TransferInputAction;
+  defaultValue: number;
   open: boolean;
   onClose: () => void;
   onChange: (value: number) => void;
   onSubmit: () => Promise<void>;
 }) {
-  const [defaultValue, setDefaultValue] = React.useState(0);
-
-  React.useEffect(() => {
-    console.log(`use effect action: ${action}`);
-
-    async function handleAction() {
-      if (action === TransferInputAction.DEPOSIT) {
-        const usdc = await client.fetchWalletUSDC();
-        setDefaultValue(usdc ?? 0);
-      } else if (action === TransferInputAction.WITHDRAW) {
-        const equity = await client.fetchVaultEquity(vault);
-        setDefaultValue(equity ?? 0);
-      } else {
-        setDefaultValue(0);
-      }
-    }
-
-    handleAction();
-  }, []);
+  // const [defaultValue, setDefaultValue] = React.useState(0);
+  //
+  // React.useEffect(() => {
+  //   async function handleAction() {
+  //     console.log(`use effect action: ${action}`);
+  //     if (action === TransferInputAction.DEPOSIT) {
+  //       const usdc = await client.fetchWalletUSDC();
+  //       console.log(`deposit: ${usdc}`);
+  //       setDefaultValue(usdc ?? 0);
+  //     } else if (action === TransferInputAction.WITHDRAW) {
+  //       const equity = await client.fetchVaultEquity(vault);
+  //       console.log(`withdraw: ${equity}`);
+  //       setDefaultValue(equity ?? 0);
+  //     } else {
+  //       setDefaultValue(0);
+  //     }
+  //   }
+  //
+  //   handleAction();
+  // }, [action]);
 
   return (
     <>
