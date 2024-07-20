@@ -20,22 +20,36 @@ const GridContainer = styled("div")(({ theme }) => ({
 
 // todo: fetch vaults and sort by criteria using PropShopClient
 export function Funds({ client }: { client: PropShopClient }) {
-  const [vaults, setVaults] = React.useState<FundOverview[]>([]);
-  React.useEffect(() => {
-    async function fetchVaults() {
-      // only use mock data on mainnet dev mode
-      if (
-        process.env.ENV === "dev" &&
-        process.env.RPC_URL !== "http://localhost:8899"
-      ) {
-        setVaults(mockFundOverviews());
-      } else {
-        const vaults = await client!.fundOverviews();
-        setVaults(vaults);
-      }
-    }
+  const [funds, setFunds] = React.useState<FundOverview[]>([]);
 
-    fetchVaults();
+  async function fetchFunds() {
+    // only use mock data on mainnet dev mode
+    if (
+      process.env.ENV === "dev" &&
+      process.env.RPC_URL !== "http://localhost:8899"
+    ) {
+      // dev mode but mainnet so use historical API
+      setFunds(mockFundOverviews());
+    } else if (
+      process.env.ENV === "dev" &&
+      process.env.RPC_URL === "http://localhost:8899"
+    ) {
+      // test prod but localnet doesn't have historical API
+      const _funds = (await client.fundOverviews()).map((fund) => {
+        return {
+          ...fund,
+          data: mockFundOverviews()[0].data,
+        };
+      });
+      setFunds(_funds);
+    } else {
+      setFunds(await client.fundOverviews());
+    }
+  }
+
+  React.useEffect(() => {
+    console.log("render");
+    fetchFunds();
   }, []);
 
   return (
@@ -74,9 +88,9 @@ export function Funds({ client }: { client: PropShopClient }) {
         }}
       >
         <GridContainer>
-          {vaults.map((vault, i) => {
+          {funds.map((fund, i) => {
             return (
-              <FundOverviewCard key={i} client={client} fundOverview={vault} />
+              <FundOverviewCard key={i} client={client} fundOverview={fund} />
             );
           })}
         </GridContainer>

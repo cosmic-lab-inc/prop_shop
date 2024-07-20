@@ -865,7 +865,9 @@ export class PropShopClient {
 
     try {
       const sig = await obj.rpc();
+
       await this.fetchVaultEquity(vault);
+      await this.fetchFundOverviews();
 
       console.debug("deposit:", formatExplorerLink(sig, this.connection));
       const vaultName = decodeName(this.vault(vault)!.data.name);
@@ -902,6 +904,7 @@ export class PropShopClient {
       WithdrawUnit.TOKEN,
     );
     await this.fetchVaultEquity(vault);
+    await this.fetchFundOverviews();
 
     // cache timer so frontend can track withdraw request
     await this.createWithdrawTimer(vault);
@@ -930,6 +933,7 @@ export class PropShopClient {
     // successful withdraw means no more withdraw request
     this.removeWithdrawTimer(vault);
     await this.fetchVaultEquity(vault);
+    await this.fetchFundOverviews();
 
     console.debug(
       "cancel withdraw request:",
@@ -956,6 +960,7 @@ export class PropShopClient {
     // successful withdraw means no more withdraw request
     this.removeWithdrawTimer(vault);
     await this.fetchVaultEquity(vault);
+    await this.fetchFundOverviews();
 
     console.debug("withdraw:", formatExplorerLink(sig, this.connection));
     const vaultName = decodeName(this.vault(vault)!.data.name);
@@ -1314,7 +1319,6 @@ export class PropShopClient {
       this._equities.set(vault.toString(), usdc);
       return usdc;
     } else {
-      console.log("client vault depositor is undefined in fetchVaultEquity");
       return undefined;
     }
   }

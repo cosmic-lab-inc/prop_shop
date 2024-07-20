@@ -97,30 +97,9 @@ export const InvestorStats = observer(
             flexDirection: "column",
             alignItems: "center",
             gap: 1,
-            // height: "50%",
             width: BUTTON_AREA_WIDTH,
           }}
         >
-          {client.hasWithdrawRequest(vault) ? (
-            <ActionButton
-              disabled={!client.hasWithdrawRequest(vault)}
-              onClick={cancelWithdraw}
-            >
-              <Typography variant="button">CANCEL WITHDRAW</Typography>
-            </ActionButton>
-          ) : (
-            <ActionButton
-              disabled={
-                !client.vaultEquity(vault) ||
-                !vd ||
-                client.hasWithdrawRequest(vault)
-              }
-              onClick={requestWithdraw}
-            >
-              <Typography variant="button">REQUEST WITHDRAW</Typography>
-            </ActionButton>
-          )}
-
           <Box
             sx={{
               display: "flex",
@@ -149,6 +128,26 @@ export const InvestorStats = observer(
               <Typography variant="button">DEPOSIT</Typography>
             </IconButton>
           </Box>
+
+          {client.hasWithdrawRequest(vault) ? (
+            <ActionButton
+              disabled={!client.hasWithdrawRequest(vault)}
+              onClick={cancelWithdraw}
+            >
+              <Typography variant="button">CANCEL WITHDRAW</Typography>
+            </ActionButton>
+          ) : (
+            <ActionButton
+              disabled={
+                !client.vaultEquity(vault) ||
+                !vd ||
+                client.hasWithdrawRequest(vault)
+              }
+              onClick={requestWithdraw}
+            >
+              <Typography variant="button">REQUEST WITHDRAW</Typography>
+            </ActionButton>
+          )}
         </Box>
       </Box>
     );
