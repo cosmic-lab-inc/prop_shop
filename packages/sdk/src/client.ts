@@ -297,7 +297,7 @@ export class PropShopClient {
     if (!user.isSubscribed) {
       if (depositUsdc) {
         await this.vaultClient!.driftClient.initializeUserAccountAndDepositCollateral(
-          QUOTE_PRECISION.mul(new BN(depositUsdc)),
+          new BN(depositUsdc * QUOTE_PRECISION.toNumber()),
           usdcAta,
           0,
           this.vaultClient!.driftClient.activeSubAccountId,
@@ -778,7 +778,7 @@ export class PropShopClient {
         message: "Vault not found",
       };
     }
-    const amount = QUOTE_PRECISION.mul(new BN(usdc));
+    const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
 
     let preIxs: TransactionInstruction[] = [];
 
@@ -896,7 +896,16 @@ export class PropShopClient {
       throw new Error("User not initialized");
     }
     const vaultDepositor = this.getVaultDepositorAddress(vault);
-    const amount = QUOTE_PRECISION.mul(new BN(usdc));
+    let amount = new BN(usdc * QUOTE_PRECISION.toNumber());
+    const equityBN = new BN(
+      (this.vaultEquity(vault) ?? 0) * QUOTE_PRECISION.toNumber(),
+    );
+    console.log(`amount: ${amount.toNumber()}`);
+    console.log(`equityBN: ${equityBN.toNumber()}`);
+    if (equityBN.eq(amount)) {
+      amount = amount.sub(new BN(1));
+      console.log(`update amount: ${amount.toNumber()}`);
+    }
 
     const sig = await this.vaultClient.requestWithdraw(
       vaultDepositor,
@@ -1010,12 +1019,14 @@ export class PropShopClient {
     const managementFee = percentToPercentPrecision(
       params.percentAnnualManagementFee ?? 0,
     );
-    const minDepositAmount = QUOTE_PRECISION.mul(
-      new BN(params.minDepositUSDC ?? 0),
+    const minDepositAmount = new BN(
+      (params.minDepositUSDC ?? 0) * QUOTE_PRECISION.toNumber(),
     );
     const permissioned = params.permissioned ?? false;
     const redeemPeriod = new BN(params.redeemPeriod ?? ONE_DAY);
-    const maxTokens = QUOTE_PRECISION.mul(new BN(params.maxCapacityUSDC ?? 0));
+    const maxTokens = new BN(
+      (params.maxCapacityUSDC ?? 0) * QUOTE_PRECISION.toNumber(),
+    );
     const vaultProtocolParams: VaultProtocolParams = {
       protocol: PROP_SHOP_PROTOCOL,
       // 0.5% annual fee

@@ -9,7 +9,6 @@ import { customTheme } from "../../../styles";
 import {
   PropShopClient,
   shortenAddress,
-  truncateNumber,
   WithdrawRequestTimer,
 } from "@cosmic-lab/prop-shop-sdk";
 import { observer } from "mobx-react";
@@ -86,17 +85,19 @@ export const InvestorStats = observer(
       }
     }, [defaultValue]);
 
-    const clickDeposit = React.useCallback(async () => {
+    async function clickDeposit() {
       setAction(TransferInputAction.DEPOSIT);
       const usdc = await client.fetchWalletUSDC();
+      setInput(usdc ?? 0);
       setDefaultValue(usdc ?? 0);
-    }, []);
+    }
 
-    const clickRequestWithdraw = React.useCallback(async () => {
+    async function clickRequestWithdraw() {
       setAction(TransferInputAction.WITHDRAW);
       const equity = await client.fetchVaultEquity(vault);
+      setInput(equity ?? 0);
       setDefaultValue(equity ?? 0);
-    }, []);
+    }
 
     async function submit() {
       if (action === TransferInputAction.WITHDRAW) {
@@ -211,11 +212,7 @@ const Stats = observer(
     const [equity, setEquity] = React.useState<number | undefined>(undefined);
     React.useEffect(() => {
       const _equity = client.vaultEquity(vault);
-      if (_equity) {
-        setEquity(truncateNumber(_equity, 2));
-      } else {
-        setEquity(undefined);
-      }
+      setEquity(_equity ?? undefined);
       setTimer(client.withdrawTimer(vault));
     }, [key, client.vaultEquity(vault), client.withdrawTimer(vault)]);
 
@@ -236,7 +233,10 @@ const Stats = observer(
             </TableRow>
             <TableRow hover>
               <Text>Vault Depositor</Text>
-              <TextIconWrapper text={key?.toString() ?? "--"} shorten={!!key} />
+              <TextIconWrapper
+                text={client.getVaultDepositorAddress(vault).toString()}
+                shorten
+              />
             </TableRow>
             <TableRow hover>
               <Text>Vault</Text>
@@ -250,9 +250,7 @@ const Stats = observer(
             </TableRow>
             <TableRow hover>
               <Text>Withdraw Request Equity</Text>
-              <TextIconWrapper
-                text={timer ? `$${truncateNumber(timer.equity, 2)}` : "--"}
-              />
+              <TextIconWrapper text={timer ? `$${timer.equity}` : "--"} />
             </TableRow>
           </div>
         </Container>
