@@ -138,7 +138,7 @@ export const InvestorStats = observer(
             flexGrow: 1,
             gap: 1,
             p: 1,
-            bgcolor: customTheme.light,
+            bgcolor: customTheme.grey,
           }}
         >
           <Stats client={client} vault={vault} />
@@ -265,15 +265,15 @@ const Stats = observer(
 );
 
 function CopyButton({ text }: { text: string }) {
-  function copy() {
-    navigator.clipboard.writeText(text);
+  async function copy() {
+    await navigator.clipboard.writeText(text);
   }
 
   return (
     <MuiIconButton
       sx={{
         p: 0,
-        color: "inherit",
+        color: customTheme.light,
       }}
       onClick={() => copy()}
     >
@@ -301,10 +301,7 @@ function Container({ children }: { children: ReactNode }) {
 
 function Text({ children }: { children: ReactNode }) {
   return (
-    <Typography
-      variant="body1"
-      sx={{ fontFamily: customTheme.font.titilliumBold }}
-    >
+    <Typography variant="body1" sx={{ color: customTheme.light }}>
       {children}
     </Typography>
   );

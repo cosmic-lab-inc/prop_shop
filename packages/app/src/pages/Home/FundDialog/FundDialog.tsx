@@ -27,7 +27,7 @@ export function FundDialog({
         onClose={onClose}
         PaperProps={{
           style: {
-            background: customTheme.grey2,
+            background: customTheme.grey,
             borderRadius: "10px",
           },
         }}

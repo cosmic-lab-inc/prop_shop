@@ -9,9 +9,9 @@ export function ActionButton(props: ButtonProps) {
   const [color, setColor] = React.useState(customTheme.secondary);
   useEffect(() => {
     if (disabled) {
-      setColor(darken(customTheme.grey2, 0.2));
+      setColor(customTheme.grey);
     } else {
-      setColor(customTheme.secondary);
+      setColor(customTheme.light);
     }
   }, [disabled]);
 
@@ -24,9 +24,16 @@ export function ActionButton(props: ButtonProps) {
         justifyContent: "center",
         alignItems: "center",
         borderRadius: "10px",
-        bgcolor: color,
+
+        bgcolor: disabled
+          ? darken(customTheme.secondary, 0.4)
+          : customTheme.secondary,
+        color,
+
         "&:hover": {
-          bgcolor: darken(color, 0.2),
+          bgcolor: disabled
+            ? customTheme.grey
+            : darken(customTheme.secondary, 0.2),
         },
       }}
       {...props}

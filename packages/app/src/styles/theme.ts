@@ -2,15 +2,16 @@ import "./globals.css";
 import { createTheme, Theme } from "@mui/material";
 
 export const customTheme = {
-  light: "#edefef",
-  // grey: "#1f1f22",
-  // grey2: "#151517",
+  // light: "#edefef",
+  light: "#e3e3e3",
   grey: "#1d1e22",
   grey2: "#15151a",
   dark: "#0e0907",
 
-  secondary: "#986cb5",
-  cyan: "#7ccedd",
+  // secondary: "#986cb5",
+  secondary: "#674d64",
+  blue: "#bcc8e7",
+  blue2: "#7ccedd",
 
   success: "#38aa28",
   error: "#b62b2b",
@@ -54,7 +55,7 @@ export const theme: Theme = createTheme({
     fontSize: 16,
     h1: {
       fontFamily: customTheme.font.heavy,
-      fontSize: 50,
+      fontSize: 40,
       fontWeight: 700,
       lineHeight: "4rem",
     },

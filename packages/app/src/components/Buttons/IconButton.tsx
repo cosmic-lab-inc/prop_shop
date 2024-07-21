@@ -43,12 +43,12 @@ export const IconButton: React.FC<IconButtonProps<React.FC<ChildProps>>> = ({
         alignItems: "center",
         width: "100%",
         height: "100%",
-        fontFamily: customTheme.font.titilliumBold,
+        fontFamily: customTheme.font.light,
 
         bgcolor: disabled
-          ? darken(customTheme.grey2, 0.2)
+          ? darken(customTheme.secondary, 0.4)
           : customTheme.secondary,
-        color: disabled ? customTheme.dark : customTheme.light,
+
         "&:hover": {
           bgcolor: disabled
             ? customTheme.grey
