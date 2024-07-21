@@ -165,7 +165,7 @@ export const InvestorStats = observer(
             >
               <IconButton
                 component={MinusIcon}
-                iconSize={60}
+                iconSize={50}
                 disabled={!vd || !client.hasWithdrawRequest(vault)}
                 onClick={withdraw}
               >
@@ -174,7 +174,7 @@ export const InvestorStats = observer(
 
               <IconButton
                 component={PlusIcon}
-                iconSize={60}
+                iconSize={50}
                 disabled={client.hasWithdrawRequest(vault)}
                 onClick={clickDeposit}
               >
@@ -271,13 +271,18 @@ function CopyButton({ text }: { text: string }) {
 
   return (
     <MuiIconButton
+      size="small"
       sx={{
         p: 0,
         color: customTheme.light,
       }}
       onClick={() => copy()}
     >
-      <ContentCopyOutlined />
+      <ContentCopyOutlined
+        sx={{
+          width: "20px",
+        }}
+      />
     </MuiIconButton>
   );
 }
@@ -301,7 +306,7 @@ function Container({ children }: { children: ReactNode }) {
 
 function Text({ children }: { children: ReactNode }) {
   return (
-    <Typography variant="body1" sx={{ color: customTheme.light }}>
+    <Typography variant="h4" sx={{ color: customTheme.light }}>
       {children}
     </Typography>
   );

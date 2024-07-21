@@ -34,6 +34,20 @@ export function formatNumber(num: number): string {
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
+export function prettyNumber(num: number) {
+  // 519,245,978.83 to 519.24M
+  if (num >= 1_000_000_000) {
+    return `${(num / 1_000_000_000).toFixed(2)}B`;
+  }
+  if (num >= 1_000_000) {
+    return `${(num / 1_000_000).toFixed(2)}M`;
+  }
+  if (num >= 1_000) {
+    return `${(num / 1_000).toFixed(2)}K`;
+  }
+  return num.toFixed(2).toString();
+}
+
 // random set of numbers that go from 0 to end_value, in N steps
 export function mockData(startingBalance: number, N: number): number[] {
   let balance = startingBalance;

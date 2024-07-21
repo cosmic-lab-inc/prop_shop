@@ -3,8 +3,13 @@ import { Button, ButtonProps } from "@mui/material";
 import { customTheme } from "../../styles";
 import { darken } from "@mui/system/colorManipulator";
 
-export function ActionButton(props: ButtonProps) {
-  const { children, disabled } = props;
+type Props = ButtonProps & {
+  header?: boolean;
+  footer?: boolean;
+};
+
+export function ActionButton(props: Props) {
+  const { children, disabled, header, footer } = props;
 
   const [color, setColor] = React.useState(customTheme.secondary);
   useEffect(() => {
@@ -35,6 +40,11 @@ export function ActionButton(props: ButtonProps) {
             ? customTheme.grey
             : darken(customTheme.secondary, 0.2),
         },
+
+        borderTopLeftRadius: header ? "10px" : "0",
+        borderTopRightRadius: header ? "10px" : "0",
+        borderBottomLeftRadius: footer ? "10px" : "0",
+        borderBottomRightRadius: footer ? "10px" : "0",
       }}
       {...props}
     >

@@ -16,15 +16,15 @@ import { BN, ProgramAccount } from "@coral-xyz/anchor";
 import { Wallet as AnchorWallet } from "@coral-xyz/anchor/dist/cjs/provider";
 import {
   decodeName,
-  DRIFT_PROGRAM_ID,
   DriftClient,
   DriftClientConfig,
   encodeName,
+  getUserStatsAccountPublicKey,
   IWallet,
-  OracleInfo,
   QUOTE_PRECISION,
   SpotMarketAccount,
   User,
+  UserStatsAccount,
 } from "@drift-labs/sdk";
 import {
   DRIFT_VAULTS_PROGRAM_ID,
@@ -34,7 +34,7 @@ import {
   PROP_SHOP_PROTOCOL,
 } from "./constants";
 import { getAssociatedTokenAddress } from "./programs";
-import { Drift, IDL as DRIFT_IDL } from "./idl/drift";
+import { Drift } from "./idl/drift";
 import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
 import {
@@ -169,24 +169,27 @@ export class PropShopClient {
       DRIFT_VAULTS_PROGRAM_ID,
       provider,
     );
-    const driftProgram = new anchor.Program(
-      DRIFT_IDL,
-      DRIFT_PROGRAM_ID,
-      provider,
-    );
 
-    const usdcMarketIndex = 0;
-    const usdcSpotMarket = await this.spotMarketByIndex(
-      driftProgram,
-      usdcMarketIndex,
-    );
-    console.log("USDC spot market:", usdcSpotMarket.account.mint.toString());
-    const oracleInfos: OracleInfo[] = [
-      {
-        publicKey: usdcSpotMarket.account.oracle,
-        source: usdcSpotMarket.account.oracleSource,
-      },
-    ];
+    // const driftProgram = new anchor.Program(
+    //   DRIFT_IDL,
+    //   DRIFT_PROGRAM_ID,
+    //   provider,
+    // );
+    // const usdcSpotMarket = await this.spotMarketByIndex(
+    //   driftProgram,
+    //   0,
+    // );
+    // const firstSpotMarket = await this.spotMarketByIndex(driftProgram, 1);
+    // const oracleInfos: OracleInfo[] = [
+    //   {
+    //     publicKey: usdcSpotMarket.account.oracle,
+    //     source: usdcSpotMarket.account.oracleSource,
+    //   },
+    //   {
+    //     publicKey: firstSpotMarket.account.oracle,
+    //     source: firstSpotMarket.account.oracleSource,
+    //   },
+    // ];
 
     const driftClient = new DriftClient({
       connection,
@@ -196,10 +199,12 @@ export class PropShopClient {
       },
       activeSubAccountId,
       accountSubscription,
-      spotMarketIndexes: [usdcMarketIndex],
-      oracleInfos,
+      spotMarketIndexes: Array.from({ length: 50 }, (_, i) => i),
+      // spotMarketIndexes: [0, 1],
+      // oracleInfos,
     });
     const preDriftSub = Date.now();
+    const promises = [];
     await driftClient.subscribe();
     // this takes about 1.2s which can't be reduced much more
     console.log(`DriftClient subscribed in ${Date.now() - preDriftSub}ms`);
@@ -522,6 +527,61 @@ export class PropShopClient {
   // Read only methods to aggregate data
   //
 
+  public async vaultStats(vault: PublicKey): Promise<{
+    equity: number;
+    netDeposits: number;
+    lifetimePNL: number;
+    volume30d: number;
+  }> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const acct = this.vault(vault)?.data;
+    if (!acct) {
+      return {
+        equity: 0,
+        netDeposits: 0,
+        lifetimePNL: 0,
+        volume30d: 0,
+      };
+    }
+    const equity =
+      (
+        await this.vaultClient.calculateVaultEquity({
+          vault: acct,
+          factorUnrealizedPNL: false,
+        })
+      ).toNumber() / QUOTE_PRECISION.toNumber();
+    const user = await this.vaultClient.getSubscribedVaultUser(acct.user);
+    const userAcct = user.getUserAccount();
+    const netDeposits =
+      userAcct.totalDeposits.sub(userAcct.totalWithdraws).toNumber() /
+      QUOTE_PRECISION.toNumber();
+
+    const userStatsKey = getUserStatsAccountPublicKey(
+      this.vaultClient.driftClient.program.programId,
+      vault,
+    );
+
+    const driftProgram = this.vaultClient.driftClient.program;
+    const _userStats = await driftProgram.account.userStats.fetch(userStatsKey);
+    if (!_userStats) {
+      throw new Error(`UserStats not found for: ${decodeName(acct.name)}`);
+    }
+    const userStats = _userStats as any as UserStatsAccount;
+    // const total30dVolume = getUser30dRollingVolumeEstimate(userStats);
+    const total30dVolume = userStats.takerVolume30D.add(
+      userStats.makerVolume30D,
+    );
+    const volume30d = total30dVolume.toNumber() / QUOTE_PRECISION.toNumber();
+    return {
+      equity,
+      netDeposits,
+      lifetimePNL: equity - netDeposits,
+      volume30d,
+    };
+  }
+
   public async fetchFundOverview(vaultKey: PublicKey): Promise<FundOverview> {
     const vault = this.vault(vaultKey)!;
     const vds = this.vaultDepositors();
@@ -538,7 +598,6 @@ export class PropShopClient {
     }
 
     const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-    const aum = await this.aggregateTVL([vault], investors);
     const pnlData = await ProxyClient.performance({
       vault: vault.data,
       daysBack: 100,
@@ -546,11 +605,14 @@ export class PropShopClient {
     });
     const vaultPNL = VaultPnl.fromHistoricalSettlePNL(pnlData);
     const data = vaultPNL.cumulativeSeriesPNL();
+    const stats = await this.vaultStats(vault.key);
     const fo: FundOverview = {
       vault: vault.data.pubkey,
+      lifetimePNL: stats.lifetimePNL,
+      volume30d: stats.volume30d,
+      tvl: stats.equity,
       title: decodeName(vault.data.name),
       investors: investors.length,
-      aum,
       data,
     };
     this._fundOverviews.set(vault.key.toString(), fo);
@@ -576,7 +638,6 @@ export class PropShopClient {
     const fundOverviews: FundOverview[] = [];
     for (const vault of vaults) {
       const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-      const aum = await this.aggregateTVL(vaults, investors);
       const pnlData = await ProxyClient.performance({
         vault: vault.data,
         daysBack: 100,
@@ -584,11 +645,14 @@ export class PropShopClient {
       });
       const vaultPNL = VaultPnl.fromHistoricalSettlePNL(pnlData);
       const data = vaultPNL.cumulativeSeriesPNL();
+      const stats = await this.vaultStats(vault.key);
       const fo: FundOverview = {
         vault: vault.data.pubkey,
+        lifetimePNL: stats.lifetimePNL,
+        volume30d: stats.volume30d,
+        tvl: stats.equity,
         title: decodeName(vault.data.name),
         investors: investors.length,
-        aum,
         data,
       };
       fundOverviews.push(fo);

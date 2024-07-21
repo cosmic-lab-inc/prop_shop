@@ -16,43 +16,29 @@ import {
 import { useWalletMultiButton } from "@solana/wallet-adapter-base-ui";
 import { BaseWalletConnectionButton } from "./BaseWalletConnectionButton";
 import { useWalletDialog } from "@solana/wallet-adapter-material-ui";
+import { customTheme } from "../../../styles";
 
 const StyledMenu = styled(Menu)(({ theme }: { theme: Theme }) => ({
   "& .MuiList-root": {
     padding: 0,
   },
   "& .MuiListItemIcon-root": {
-    marginRight: theme.spacing(),
-    minWidth: "unset",
+    width: "unset",
     "& .MuiSvgIcon-root": {
       width: 20,
-      height: 20,
+      color: customTheme.light,
     },
   },
 }));
 
 const WalletActionMenuItem = styled(MenuItem)(
   ({ theme }: { theme: Theme }) => ({
-    padding: theme.spacing(1, 2),
-    boxShadow: "inset 0 1px 0 0 " + "rgba(255, 255, 255, 0.1)",
-
+    backgroundColor: customTheme.grey,
     "&:hover": {
-      boxShadow:
-        "inset 0 1px 0 0 " +
-        "rgba(255, 255, 255, 0.1)" +
-        ", 0 1px 0 0 " +
-        "rgba(255, 255, 255, 0.05)",
+      backgroundColor: customTheme.grey2,
     },
   }),
 );
-
-const WalletMenuItem = styled(WalletActionMenuItem)(() => ({
-  padding: 0,
-
-  "& .MuiButton-root": {
-    borderRadius: 0,
-  },
-}));
 
 type Props = ButtonProps & {
   labels: Omit<
@@ -136,22 +122,15 @@ export function BaseWalletMultiButton({ children, labels, ...props }: Props) {
         TransitionComponent={Fade}
         transitionDuration={250}
         keepMounted
-        anchorOrigin={{
-          vertical: "top",
-          horizontal: "left",
+        slotProps={{
+          paper: {
+            style: {
+              backgroundColor: customTheme.grey,
+              borderRadius: "10px",
+            },
+          },
         }}
       >
-        <WalletMenuItem onClick={() => setMenuOpen(false)}>
-          <BaseWalletConnectionButton
-            {...props}
-            fullWidth
-            onClick={() => setMenuOpen(false)}
-            walletIcon={walletIcon}
-            walletName={walletName}
-          >
-            {walletName}
-          </BaseWalletConnectionButton>
-        </WalletMenuItem>
         <Collapse in={menuOpen}>
           {publicKey ? (
             <WalletActionMenuItem

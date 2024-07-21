@@ -4,9 +4,11 @@ import { PublicKey } from "@solana/web3.js";
 
 export interface FundOverview {
   vault: PublicKey;
+  lifetimePNL: number;
+  volume30d: number;
+  tvl: number;
   title: string;
   investors: number;
-  aum: number;
   data: number[];
 }
 

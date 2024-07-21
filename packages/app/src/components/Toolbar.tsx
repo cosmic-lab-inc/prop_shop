@@ -20,12 +20,13 @@ export function Toolbar() {
       <MuiToolbar
         disableGutters
         sx={{
+          p: 1,
           display: "flex",
           alignItems: "center",
           flexDirection: "row",
           height: TOOLBAR_HEIGHT,
           width: "70%",
-          bgcolor: customTheme.grey2,
+          bgcolor: customTheme.dark,
         }}
       >
         <Box

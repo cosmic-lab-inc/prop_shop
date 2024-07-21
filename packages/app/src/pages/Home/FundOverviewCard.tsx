@@ -5,11 +5,12 @@ import { Line, LineChart, XAxis, YAxis } from "recharts";
 import {
   formatNumber,
   FundOverview,
+  prettyNumber,
   PropShopClient,
-  truncateNumber,
   truncateString,
 } from "@cosmic-lab/prop-shop-sdk";
 import { FundDialog } from "./FundDialog";
+import { ActionButton } from "../../components";
 
 function calcMaxDrawdown(values: number[]): number {
   let maxDrawdown = 0;
@@ -45,7 +46,8 @@ export function FundOverviewCard({
   client: PropShopClient;
   fundOverview: FundOverview;
 }) {
-  const { vault, title, investors, aum, data } = fundOverview;
+  const { vault, tvl, volume30d, lifetimePNL, title, investors, data } =
+    fundOverview;
 
   const roi = calcRoi(data);
   const drawdown = calcMaxDrawdown(data);
@@ -72,11 +74,11 @@ export function FundOverviewCard({
             p: 1,
           }}
         >
-          <LineChart width={400} height={160} data={_data} compact>
+          <LineChart width={400} height={150} data={_data} compact>
             <Line
               type="monotone"
               dataKey="y"
-              stroke={roi < 0 ? customTheme.blue2 : customTheme.blue2}
+              stroke={roi < 0 ? customTheme.error : customTheme.success}
               strokeWidth={5}
               dot={{
                 r: 0,
@@ -91,30 +93,48 @@ export function FundOverviewCard({
             width: "100%",
             flexDirection: "column",
             display: "flex",
-            gap: 1,
+            gap: 0,
           }}
         >
           <TableRow hover divider footer square>
-            <Typography variant="h3">Profit</Typography>
+            <Typography variant="h4">{roi < 0 ? "Loss" : "Profit"}</Typography>
             <Typography
-              variant="h2"
+              variant="h3"
               sx={{
-                color: roi < 0 ? customTheme.blue2 : customTheme.blue2,
+                color: roi < 0 ? customTheme.error : customTheme.success,
               }}
             >
-              ${formatNumber(truncateNumber(roi, 2))}
+              ${prettyNumber(lifetimePNL)}
             </Typography>
           </TableRow>
+
           <TableRow hover square>
-            <Typography variant="h3">Drawdown</Typography>
-            <Typography variant="h3">${truncateNumber(drawdown, 2)}</Typography>
+            <Typography variant="h4">TVL</Typography>
+            <Typography variant="h4">${prettyNumber(tvl)}</Typography>
           </TableRow>
-          <TableRow hover footer>
-            <Typography variant="h3">TVL</Typography>
-            <Typography variant="h3">
-              ${formatNumber(truncateNumber(aum, 2))}
-            </Typography>
+
+          <TableRow hover square>
+            <Typography variant="h4">Volume 30d</Typography>
+            <Typography variant="h4">${prettyNumber(volume30d)}</Typography>
           </TableRow>
+
+          <TableRow hover square>
+            <Typography variant="h4">Drawdown</Typography>
+            <Typography variant="h4">${prettyNumber(drawdown)}</Typography>
+          </TableRow>
+        </Box>
+
+        <Box
+          sx={{
+            width: "100%",
+            flexDirection: "column",
+            display: "flex",
+            gap: 1,
+          }}
+        >
+          <ActionButton disabled={false} onClick={() => {}} footer={true}>
+            <Typography variant="button">Invest</Typography>
+          </ActionButton>
         </Box>
       </Container>
     </>
@@ -212,7 +232,7 @@ const TableRow = styled("div")<{
     borderBottomRightRadius: "0",
     borderBottomLeftRadius: "0",
     ...(divider && {
-      borderBottom: `2px solid ${customTheme.grey2}`,
+      borderBottom: `1px solid ${customTheme.grey2}`,
     }),
   }),
 
@@ -220,7 +240,7 @@ const TableRow = styled("div")<{
     borderTopRightRadius: "0",
     borderTopLeftRadius: "0",
     ...(divider && {
-      borderTop: `2px solid ${customTheme.grey2}`,
+      borderTop: `1px solid ${customTheme.grey2}`,
     }),
   }),
 }));

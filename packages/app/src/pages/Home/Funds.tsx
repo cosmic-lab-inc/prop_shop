@@ -10,18 +10,10 @@ export function Funds({ client }: { client: PropShopClient }) {
 
   React.useEffect(() => {
     async function fetchFunds() {
-      // only use mock data on mainnet dev mode
       if (
-        process.env.ENV === "dev" &&
-        process.env.RPC_URL !== "http://localhost:8899"
-      ) {
-        // dev mode but mainnet so use historical API
-        setFunds(mockFundOverviews());
-      } else if (
-        process.env.ENV === "dev" &&
+        process.env.ENV === "dev" ||
         process.env.RPC_URL === "http://localhost:8899"
       ) {
-        // test prod but localnet doesn't have historical API
         const _funds = (await client.fundOverviews()).map((fund) => {
           return {
             ...fund,
@@ -44,7 +36,6 @@ export function Funds({ client }: { client: PropShopClient }) {
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
-        // gap: 2,
       }}
     >
       <Box
@@ -52,7 +43,7 @@ export function Funds({ client }: { client: PropShopClient }) {
           width: "60%",
           height: "100%",
           display: "flex",
-          m: 8,
+          p: 5,
           borderRadius: "10px",
           flexDirection: "column",
         }}
@@ -84,9 +75,8 @@ export function Funds({ client }: { client: PropShopClient }) {
 }
 
 const GridContainer = styled("div")(({ theme }) => ({
-  // gridTemplateColumns: "33.3% 33.3% 33.3%",
-  gridTemplateColumns: "25% 25% 25% 25%",
-  gap: "10px",
+  gridTemplateColumns: "33.3% 33.3% 33.3%",
+  gap: "20px",
   width: "100%",
   height: "100%",
   display: "grid",

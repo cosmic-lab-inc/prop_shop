@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
   // const env = loadEnv(mode, process.cwd(), "");
   env.PORT = env.PORT ? env.PORT : "3001";
   env.ENV = env.ENV ? env.ENV : "dev";
+  env.BUST_CACHE = env.BUST_CACHE ? env.BUST_CACHE : "false";
 
   let alias: Record<any, any> = {
     // note: do not uncomment this or vercel says "process is not defined" stack tracing to dependency.
@@ -55,6 +56,7 @@ export default defineConfig(({ mode }) => {
       "process.env.PORT": JSON.stringify(env.PORT),
       "process.env.REDIS_ENDPOINT": JSON.stringify(env.REDIS_ENDPOINT),
       "process.env.REDIS_PASSWORD": JSON.stringify(env.REDIS_PASSWORD),
+      "process.env.BUST_CACHE": JSON.stringify(env.BUST_CACHE),
     },
     plugins: [react(), nodePolyfills()],
     optimizeDeps: {
