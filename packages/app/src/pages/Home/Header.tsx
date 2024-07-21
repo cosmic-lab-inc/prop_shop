@@ -27,7 +27,7 @@ export function Header() {
         }}
       >
         <Box>
-          <Typography variant="h1">Prop Shop</Typography>
+          <Typography variant="h2">Prop Shop</Typography>
           <Typography variant="h2">Crypto Trading Strategies</Typography>
         </Box>
 

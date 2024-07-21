@@ -7,6 +7,7 @@ export interface FundOverview {
   lifetimePNL: number;
   volume30d: number;
   tvl: number;
+  birth: Date;
   title: string;
   investors: number;
   data: number[];

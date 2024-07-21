@@ -35,7 +35,7 @@ import {
 } from "./constants";
 import { getAssociatedTokenAddress } from "./programs";
 import { Drift } from "./idl/drift";
-import { percentToPercentPrecision } from "./utils";
+import { percentToPercentPrecision, yyyymmdd } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
 import {
   Data,
@@ -527,23 +527,22 @@ export class PropShopClient {
   // Read only methods to aggregate data
   //
 
-  public async vaultStats(vault: PublicKey): Promise<{
-    equity: number;
-    netDeposits: number;
-    lifetimePNL: number;
-    volume30d: number;
-  }> {
+  public async vaultStats(vault: PublicKey): Promise<
+    | {
+        equity: number;
+        netDeposits: number;
+        lifetimePNL: number;
+        volume30d: number;
+        birth: Date;
+      }
+    | undefined
+  > {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
     const acct = this.vault(vault)?.data;
     if (!acct) {
-      return {
-        equity: 0,
-        netDeposits: 0,
-        lifetimePNL: 0,
-        volume30d: 0,
-      };
+      return undefined;
     }
     const equity =
       (
@@ -574,11 +573,14 @@ export class PropShopClient {
       userStats.makerVolume30D,
     );
     const volume30d = total30dVolume.toNumber() / QUOTE_PRECISION.toNumber();
+    const birth = new Date(Number(acct.initTs.toNumber() * 1000));
+    console.log(`vault birth: ${yyyymmdd(birth)}`);
     return {
       equity,
       netDeposits,
       lifetimePNL: equity - netDeposits,
       volume30d,
+      birth,
     };
   }
 
@@ -605,13 +607,18 @@ export class PropShopClient {
     });
     const vaultPNL = VaultPnl.fromHistoricalSettlePNL(pnlData);
     const data = vaultPNL.cumulativeSeriesPNL();
+    const title = decodeName(vault.data.name);
     const stats = await this.vaultStats(vault.key);
+    if (!stats) {
+      throw new Error(`Stats not found for vault: ${title}`);
+    }
     const fo: FundOverview = {
       vault: vault.data.pubkey,
       lifetimePNL: stats.lifetimePNL,
       volume30d: stats.volume30d,
       tvl: stats.equity,
-      title: decodeName(vault.data.name),
+      birth: stats.birth,
+      title,
       investors: investors.length,
       data,
     };
@@ -645,12 +652,17 @@ export class PropShopClient {
       });
       const vaultPNL = VaultPnl.fromHistoricalSettlePNL(pnlData);
       const data = vaultPNL.cumulativeSeriesPNL();
+      const title = decodeName(vault.data.name);
       const stats = await this.vaultStats(vault.key);
+      if (!stats) {
+        throw new Error(`Stats not found for vault: ${title}`);
+      }
       const fo: FundOverview = {
         vault: vault.data.pubkey,
         lifetimePNL: stats.lifetimePNL,
         volume30d: stats.volume30d,
         tvl: stats.equity,
+        birth: stats.birth,
         title: decodeName(vault.data.name),
         investors: investors.length,
         data,

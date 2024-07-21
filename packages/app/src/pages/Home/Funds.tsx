@@ -36,6 +36,7 @@ export function Funds({ client }: { client: PropShopClient }) {
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
+        pb: 5,
       }}
     >
       <Box
@@ -46,10 +47,15 @@ export function Funds({ client }: { client: PropShopClient }) {
           p: 5,
           borderRadius: "10px",
           flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          textAlign: "center",
+          gap: 2,
         }}
       >
-        <Typography variant="h1">
-          Build wealth while you sleep ⎯ let the gurus trade for you.
+        <Typography variant="h1">Build wealth while you sleep</Typography>
+        <Typography variant="h3">
+          Invest in the best traders on Solana
         </Typography>
       </Box>
       <Box
@@ -75,7 +81,8 @@ export function Funds({ client }: { client: PropShopClient }) {
 }
 
 const GridContainer = styled("div")(({ theme }) => ({
-  gridTemplateColumns: "33.3% 33.3% 33.3%",
+  // gridTemplateColumns: "33.3% 33.3% 33.3%",
+  gridTemplateColumns: "25% 25% 25% 25%",
   gap: "20px",
   width: "100%",
   height: "100%",

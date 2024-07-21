@@ -8,6 +8,7 @@ import {
   prettyNumber,
   PropShopClient,
   truncateString,
+  yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { FundDialog } from "./FundDialog";
 import { ActionButton } from "../../components";
@@ -46,7 +47,7 @@ export function FundOverviewCard({
   client: PropShopClient;
   fundOverview: FundOverview;
 }) {
-  const { vault, tvl, volume30d, lifetimePNL, title, investors, data } =
+  const { vault, tvl, volume30d, lifetimePNL, title, investors, data, birth } =
     fundOverview;
 
   const roi = calcRoi(data);
@@ -122,6 +123,11 @@ export function FundOverviewCard({
             <Typography variant="h4">Drawdown</Typography>
             <Typography variant="h4">${prettyNumber(drawdown)}</Typography>
           </TableRow>
+
+          <TableRow hover square>
+            <Typography variant="h4">Birthday</Typography>
+            <Typography variant="h4">{yyyymmdd(birth)}</Typography>
+          </TableRow>
         </Box>
 
         <Box
@@ -187,7 +193,7 @@ function Header({ title, investors }: { title: string; investors: number }) {
           gap: 5,
         }}
       >
-        <Typography variant="h2">{truncateString(title, 18)}</Typography>
+        <Typography variant="h2">{truncateString(title, 15)}</Typography>
 
         <Typography variant="body1">
           {formatNumber(investors)} {investors === 1 ? "investor" : "investors"}
