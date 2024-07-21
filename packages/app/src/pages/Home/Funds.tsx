@@ -58,7 +58,7 @@ export function Funds({ client }: { client: PropShopClient }) {
         }}
       >
         <Typography variant="h1">
-          Build wealth while you sleep by letting the gurus trade for you.
+          Build wealth while you sleep ⎯ let the gurus trade for you.
         </Typography>
       </Box>
       <Box

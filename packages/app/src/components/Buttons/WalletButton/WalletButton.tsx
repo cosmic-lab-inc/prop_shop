@@ -1,7 +1,8 @@
-import { BaseWalletMultiButton } from "@solana/wallet-adapter-material-ui";
 import React from "react";
-import { customTheme } from "../../styles";
+import { customTheme } from "../../../styles";
 import { darken } from "@mui/system/colorManipulator";
+import { BaseWalletMultiButton } from "./BaseWalletMultiButton";
+// import { BaseWalletMultiButton } from "@solana/wallet-adapter-material-ui";
 
 const LABELS = {
   "change-wallet": "Switch",
