@@ -4,19 +4,6 @@ import { FundOverviewCard } from "./FundOverviewCard";
 import { FundOverview, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import { mockFundOverviews } from "../../lib";
 
-const GridContainer = styled("div")(({ theme }) => ({
-  gridTemplateColumns: "33% 33% 33%",
-  gap: "20px",
-  width: "100%",
-  height: "100%",
-  marginTop: "30px",
-  marginBottom: "30px",
-  display: "grid",
-  gridAutoRows: "auto",
-  justifyContent: "center",
-  flexDirection: "column",
-}));
-
 // todo: fetch vaults and sort by criteria using PropShopClient
 export function Funds({ client }: { client: PropShopClient }) {
   const [funds, setFunds] = React.useState<FundOverview[]>([]);
@@ -57,22 +44,21 @@ export function Funds({ client }: { client: PropShopClient }) {
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
-        gap: 2,
+        // gap: 2,
       }}
     >
       <Box
         sx={{
-          width: "70%",
+          width: "60%",
           height: "100%",
           display: "flex",
+          m: 8,
           borderRadius: "10px",
-          justifyContent: "center",
-          alignItems: "center",
           flexDirection: "column",
         }}
       >
         <Typography variant="h1">
-          Earn money while you sleep by investing in winning traders.
+          Earn money while you sleep by letting the gurus trade for you.
         </Typography>
       </Box>
       <Box
@@ -80,7 +66,6 @@ export function Funds({ client }: { client: PropShopClient }) {
           width: "100%",
           height: "100%",
           display: "flex",
-          gap: 2,
           borderRadius: "10px",
           alignItems: "center",
           flexDirection: "row",
@@ -97,3 +82,15 @@ export function Funds({ client }: { client: PropShopClient }) {
     </Box>
   );
 }
+
+const GridContainer = styled("div")(({ theme }) => ({
+  // gridTemplateColumns: "33.3% 33.3% 33.3%",
+  gridTemplateColumns: "25% 25% 25% 25%",
+  gap: "10px",
+  width: "100%",
+  height: "100%",
+  display: "grid",
+  gridAutoRows: "auto",
+  justifyContent: "center",
+  flexDirection: "column",
+}));

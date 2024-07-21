@@ -1,19 +1,9 @@
 @font-face {
-    font-family: researcherBold;
-    src: url('./fonts/Researcher-Bold.ttf');
+    font-family: light;
+    src: url('./fonts/Mulish-Light.ttf');
 }
 
 @font-face {
-    font-family: titilliumLight;
-    src: url('./fonts/TitilliumWeb-Light.ttf');
-}
-
-@font-face {
-    font-family: titilliumRegular;
-    src: url('./fonts/TitilliumWeb-Regular.ttf');
-}
-
-@font-face {
-    font-family: titilliumBold;
-    src: url('./fonts/TitilliumWeb-SemiBold.ttf');
+    font-family: heavy;
+    src: url('./fonts/Mulish-Medium.ttf');
 }

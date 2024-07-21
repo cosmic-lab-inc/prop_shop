@@ -3,19 +3,21 @@ import { createTheme, Theme } from "@mui/material";
 
 export const customTheme = {
   light: "#edefef",
-  grey: "#dddddd",
-  grey2: "#d4d4d3",
+  // grey: "#1f1f22",
+  // grey2: "#151517",
+  grey: "#1d1e22",
+  grey2: "#15151a",
   dark: "#0e0907",
 
-  secondary: "#348771",
-  secondaryDark: "#0a1a16",
+  secondary: "#986cb5",
+  cyan: "#7ccedd",
 
   success: "#38aa28",
   error: "#b62b2b",
 
   font: {
-    titillium: "titilliumLight",
-    titilliumBold: "titilliumBold",
+    light: "light",
+    heavy: "heavy",
   },
 };
 
@@ -33,12 +35,12 @@ export const theme: Theme = createTheme({
     },
     secondary: {
       light: customTheme.light,
-      main: customTheme.dark,
+      main: customTheme.secondary,
       dark: customTheme.dark,
     },
     text: {
-      primary: customTheme.dark,
-      secondary: customTheme.dark,
+      primary: customTheme.light,
+      secondary: customTheme.light,
     },
     success: {
       main: customTheme.success,
@@ -48,28 +50,27 @@ export const theme: Theme = createTheme({
     },
   },
   typography: {
-    fontFamily: customTheme.font.titillium,
+    fontFamily: customTheme.font.light,
     fontSize: 16,
     h1: {
-      paddingBottom: "20px",
-      fontFamily: customTheme.font.titilliumBold,
+      fontFamily: customTheme.font.heavy,
       fontSize: 50,
-      fontWeight: 800,
+      fontWeight: 700,
       lineHeight: "4rem",
     },
     h2: {
       fontSize: 30,
-      fontWeight: 800,
+      fontWeight: 500,
       lineHeight: "2rem",
       letterSpacing: "2px",
-      fontFamily: customTheme.font.titilliumBold,
+      fontFamily: customTheme.font.heavy,
     },
     h3: {
       fontSize: 24,
-      fontWeight: 700,
+      fontWeight: 300,
       lineHeight: "2rem",
       letterSpacing: "2px",
-      fontFamily: customTheme.font.titillium,
+      fontFamily: customTheme.font.heavy,
     },
     body1: {
       fontSize: 20,
@@ -83,7 +84,7 @@ export const theme: Theme = createTheme({
       textTransform: "none",
       lineHeight: "2rem",
       letterSpacing: "1px",
-      fontFamily: customTheme.font.titilliumBold,
+      fontFamily: customTheme.font.heavy,
     },
   },
   components: {

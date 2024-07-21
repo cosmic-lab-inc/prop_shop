@@ -76,7 +76,7 @@ export function FundOverviewCard({
             <Line
               type="monotone"
               dataKey="y"
-              stroke={roi < 0 ? customTheme.error : customTheme.secondary}
+              stroke={roi < 0 ? customTheme.cyan : customTheme.cyan}
               strokeWidth={5}
               dot={{
                 r: 0,
@@ -99,7 +99,7 @@ export function FundOverviewCard({
             <Typography
               variant="h2"
               sx={{
-                color: roi < 0 ? customTheme.error : customTheme.secondary,
+                color: roi < 0 ? customTheme.cyan : customTheme.cyan,
               }}
             >
               ${formatNumber(truncateNumber(roi, 2))}
@@ -134,7 +134,6 @@ function Container({
         width: "100%",
         bgcolor: customTheme.grey,
         borderRadius: "10px",
-        border: `2px solid ${customTheme.light}`,
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
@@ -143,7 +142,7 @@ function Container({
         boxShadow: "none",
 
         "&:hover": {
-          boxShadow: `0px 5px 20px ${customTheme.light}`,
+          boxShadow: `0px 0px 10px ${customTheme.light}`,
           transition: `box-shadow 0.2s ease`,
         },
       }}

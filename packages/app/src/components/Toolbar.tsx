@@ -1,8 +1,9 @@
 import * as React from "react";
-import { AppBar, Box, Toolbar as MuiToolbar } from "@mui/material";
+import { AppBar, Box, Toolbar as MuiToolbar, Typography } from "@mui/material";
 import { TOOLBAR_HEIGHT } from "../constants";
 import { WalletButton } from "./Buttons";
 import { customTheme } from "../styles";
+import { PropShopIcon } from "./Icons";
 
 export function Toolbar() {
   return (
@@ -20,22 +21,31 @@ export function Toolbar() {
         disableGutters
         sx={{
           display: "flex",
-          justifyContent: "right",
           alignItems: "center",
           flexDirection: "row",
           height: TOOLBAR_HEIGHT,
           width: "70%",
-          mt: 2,
-          mb: 2,
-          bgcolor: customTheme.grey,
-          borderRadius: "10px",
-          border: `2px solid ${customTheme.light}`,
+          bgcolor: customTheme.grey2,
         }}
       >
         <Box
           sx={{
             display: "flex",
-            width: "15%",
+            flexDirection: "row",
+            justifyContent: "left",
+            alignItems: "center",
+            flexGrow: 1,
+            gap: 2,
+          }}
+        >
+          <PropShopIcon size={80} />
+          <Typography variant="h1">Prop Shop</Typography>
+        </Box>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "right",
+            width: "20%",
             height: "100%",
             p: 1,
           }}
