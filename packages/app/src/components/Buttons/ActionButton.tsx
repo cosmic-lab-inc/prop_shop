@@ -28,7 +28,6 @@ export function ActionButton(props: Props) {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        borderRadius: "10px",
 
         bgcolor: disabled
           ? darken(customTheme.secondary, 0.4)
@@ -41,10 +40,10 @@ export function ActionButton(props: Props) {
             : darken(customTheme.secondary, 0.2),
         },
 
-        borderTopLeftRadius: header ? "10px" : "0",
-        borderTopRightRadius: header ? "10px" : "0",
-        borderBottomLeftRadius: footer ? "10px" : "0",
-        borderBottomRightRadius: footer ? "10px" : "0",
+        borderBottomLeftRadius: header ? "0" : "10px",
+        borderBottomRightRadius: header ? "0" : "10px",
+        borderTopLeftRadius: footer ? "0" : "10px",
+        borderTopRightRadius: footer ? "0" : "10px",
       }}
       {...props}
     >
