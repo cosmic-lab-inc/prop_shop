@@ -7,11 +7,12 @@ export const customTheme = {
   grey2: "#15151a",
   dark: "#0e0907",
 
-  secondary: "#674d64",
-  blue: "#bcc8e7",
-  blue2: "#7ccedd",
+  // secondary: "#745476",
+  secondary: "#5f8ea0",
+  // blue: "#7ccedd",
+  blue: "#73a4ac",
 
-  success: "#7ccedd",
+  success: "#5f8ea0",
   error: "#d47755",
 
   font: {
@@ -73,16 +74,13 @@ export const theme: Theme = createTheme({
     },
     h4: {
       fontSize: 20,
-      fontWeight: 300,
       lineHeight: "2rem",
       letterSpacing: "2px",
-      fontFamily: customTheme.font.heavy,
     },
     body1: {
       fontSize: 16,
       lineHeight: "2rem",
       letterSpacing: "2px",
-      fontWeight: 500,
     },
     button: {
       fontSize: 18,

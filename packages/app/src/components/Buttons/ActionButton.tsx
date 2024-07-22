@@ -23,6 +23,7 @@ export function ActionButton(props: Props) {
   return (
     <Button
       sx={{
+        // flex: "1 0 auto",
         width: "100%",
         height: "100%",
         display: "flex",

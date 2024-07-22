@@ -21,8 +21,9 @@ function calcMaxDrawdown(values: number[]): number {
     if (value > peak) {
       peak = value;
     }
-    // const drawdown = ((value - peak) / peak) * 100;
-    const drawdown = value - peak;
+    let drawdown = ((value - peak) / Math.abs(peak)) * 100;
+    // (-200 - 2) / 2 * 100 = -10100, so cap at -100%
+    drawdown = Math.max(drawdown, -100);
     if (drawdown < maxDrawdown) {
       maxDrawdown = drawdown;
     }
@@ -64,7 +65,12 @@ export function FundOverviewCard({
         open={open}
         onClose={() => setOpen(false)}
       />
-      <Container onClick={() => setOpen(true)}>
+      <Container
+        onClick={() => {
+          console.log("clicky click");
+          setOpen(true);
+        }}
+      >
         <Header title={title} investors={investors} />
         <Box
           sx={{
@@ -124,23 +130,10 @@ export function FundOverviewCard({
             <Typography variant="h4">${prettyNumber(drawdown)}</Typography>
           </TableRow>
 
-          <TableRow hover square>
+          <TableRow hover footer>
             <Typography variant="h4">Birthday</Typography>
             <Typography variant="h4">{yyyymmdd(birth)}</Typography>
           </TableRow>
-        </Box>
-
-        <Box
-          sx={{
-            width: "100%",
-            flexDirection: "column",
-            display: "flex",
-            gap: 1,
-          }}
-        >
-          <ActionButton disabled={false} onClick={() => {}} footer={true}>
-            <Typography variant="button">Invest</Typography>
-          </ActionButton>
         </Box>
       </Container>
     </>
@@ -154,27 +147,59 @@ function Container({
   onClick: () => void;
   children: ReactNode;
 }) {
+  const [isHovered, setIsHovered] = React.useState(false);
+
   return (
     <Box
       sx={{
-        width: "100%",
-        bgcolor: customTheme.grey,
-        borderRadius: "10px",
-        display: "flex",
-        alignItems: "center",
-        flexDirection: "column",
-
-        transition: `box-shadow 0.2s ease`,
-        boxShadow: "none",
-
-        "&:hover": {
-          boxShadow: `0px 0px 10px ${customTheme.light}`,
-          transition: `box-shadow 0.2s ease`,
-        },
+        cursor: "pointer",
+        position: "relative",
       }}
-      onClick={onClick}
     >
-      {children}
+      <Box
+        sx={{
+          width: "100%",
+          bgcolor: customTheme.grey,
+          borderRadius: "10px",
+          display: "flex",
+          alignItems: "center",
+          flexDirection: "column",
+          cursor: "pointer",
+        }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <Box
+          sx={{
+            content: '""',
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: isHovered ? 0 : -1,
+            backdropFilter: "blur(4px)",
+            transition: "backdrop-filter 0.2s linear",
+          }}
+        />
+        {children}
+        {/*{isHovered && (*/}
+        <Box
+          sx={{
+            opacity: isHovered ? 1 : 0,
+            transition: "opacity 0.2s ease-in-out",
+            position: "absolute",
+            height: "70px",
+            width: "50%",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <ActionButton onClick={onClick}>Invest</ActionButton>
+        </Box>
+        {/*)}*/}
+      </Box>
     </Box>
   );
 }
