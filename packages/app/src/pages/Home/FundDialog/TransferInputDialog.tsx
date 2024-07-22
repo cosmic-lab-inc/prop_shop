@@ -1,6 +1,12 @@
 import React from "react";
 import { customTheme } from "../../../styles";
-import { Box, Dialog, FormControl, OutlinedInput } from "@mui/material";
+import {
+  Box,
+  Dialog,
+  FormControl,
+  OutlinedInput,
+  Typography,
+} from "@mui/material";
 import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import InputAdornment from "@mui/material/InputAdornment";
 import { SendButton } from "../../../components";
@@ -32,7 +38,7 @@ export function TransferInputDialog({
   return (
     <>
       <Dialog
-        maxWidth="sm"
+        maxWidth="xs"
         fullWidth={true}
         fullScreen={false}
         scroll="paper"
@@ -40,7 +46,7 @@ export function TransferInputDialog({
         onClose={onClose}
         PaperProps={{
           style: {
-            background: customTheme.grey2,
+            background: customTheme.grey,
             borderRadius: "10px",
           },
         }}
@@ -73,7 +79,7 @@ function Input({
         display: "flex",
         flexDirection: "row",
         width: "100%",
-        bgcolor: customTheme.light,
+        bgcolor: customTheme.grey,
         alignItems: "center",
         justifyContent: "center",
         p: 1,
@@ -102,11 +108,20 @@ function Input({
         >
           <OutlinedInput
             sx={{
-              bgcolor: customTheme.grey2,
+              bgcolor: customTheme.grey,
             }}
             defaultValue={defaultValue}
             multiline={false}
-            startAdornment={<InputAdornment position="start">$</InputAdornment>}
+            startAdornment={
+              <InputAdornment position="start">
+                <Typography
+                  variant="h3"
+                  sx={{ color: customTheme.light, fontWeight: 300 }}
+                >
+                  $
+                </Typography>
+              </InputAdornment>
+            }
             type={"number"}
             onChange={(i: any) => {
               const num = parseInt(i.target.value, 10);

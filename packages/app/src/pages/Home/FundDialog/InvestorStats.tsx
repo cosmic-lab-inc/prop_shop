@@ -13,21 +13,13 @@ import {
 } from "@cosmic-lab/prop-shop-sdk";
 import { observer } from "mobx-react";
 import { ContentCopyOutlined } from "@mui/icons-material";
-import {
-  ActionButton,
-  IconButton,
-  MinusIcon,
-  PlusIcon,
-} from "../../../components";
+import { ActionButton } from "../../../components";
 import { PublicKey } from "@solana/web3.js";
 import { useSnackbar } from "notistack";
 import {
   TransferInputAction,
   TransferInputDialog,
 } from "./TransferInputDialog";
-
-const BUTTON_AREA_WIDTH = "30%";
-const STATS_AREA_WIDTH = `calc(100% - ${BUTTON_AREA_WIDTH})`;
 
 export const InvestorStats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
@@ -74,7 +66,9 @@ export const InvestorStats = observer(
     // dialog state
     const [open, setOpen] = React.useState(false);
     const [input, setInput] = React.useState(0);
-    const [defaultValue, setDefaultValue] = React.useState(0);
+    const [defaultValue, setDefaultValue] = React.useState<number | undefined>(
+      undefined,
+    );
     const [action, setAction] = React.useState<TransferInputAction>(
       TransferInputAction.UNKNOWN,
     );
@@ -102,7 +96,7 @@ export const InvestorStats = observer(
     function resetDialog() {
       setOpen(false);
       setAction(TransferInputAction.UNKNOWN);
-      setDefaultValue(0);
+      setDefaultValue(undefined);
     }
 
     async function submit() {
@@ -121,7 +115,7 @@ export const InvestorStats = observer(
         <TransferInputDialog
           client={client}
           vault={vault}
-          defaultValue={defaultValue}
+          defaultValue={defaultValue!}
           open={open}
           onClose={() => resetDialog()}
           onChange={(value: number) => setInput(value)}
@@ -134,7 +128,7 @@ export const InvestorStats = observer(
             width: "100%",
             borderRadius: "10px",
             display: "flex",
-            flexDirection: "row",
+            flexDirection: "column",
             flexGrow: 1,
             gap: 1,
             p: 1,
@@ -145,61 +139,42 @@ export const InvestorStats = observer(
 
           <Box
             sx={{
+              height: "100px",
               borderRadius: "10px",
               display: "flex",
-              flexDirection: "column",
+              flexDirection: "row",
               alignItems: "center",
               gap: 1,
-              width: BUTTON_AREA_WIDTH,
+              width: "100%",
             }}
           >
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "row",
-                gap: 1,
-                width: "100%",
-                flexGrow: 1,
-                height: "100%",
-              }}
-            >
-              <IconButton
-                component={MinusIcon}
-                iconSize={50}
-                disabled={!vd || !client.hasWithdrawRequest(vault)}
-                onClick={withdraw}
-              >
-                <Typography variant="button">WITHDRAW</Typography>
-              </IconButton>
-
-              <IconButton
-                component={PlusIcon}
-                iconSize={50}
-                disabled={client.hasWithdrawRequest(vault)}
-                onClick={clickDeposit}
-              >
-                <Typography variant="button">DEPOSIT</Typography>
-              </IconButton>
-            </Box>
-
             {client.hasWithdrawRequest(vault) ? (
-              <ActionButton
-                disabled={!client.hasWithdrawRequest(vault)}
-                onClick={cancelWithdraw}
-              >
-                <Typography variant="button">CANCEL WITHDRAW</Typography>
-              </ActionButton>
+              <>
+                <ActionButton
+                  disabled={
+                    !vd ||
+                    (client.withdrawTimer(vault)?.secondsRemaining ?? 0) > 0
+                  }
+                  onClick={withdraw}
+                >
+                  <Typography variant="button">WITHDRAW</Typography>
+                </ActionButton>
+                <ActionButton onClick={cancelWithdraw}>
+                  <Typography variant="button">CANCEL WITHDRAW</Typography>
+                </ActionButton>
+              </>
             ) : (
-              <ActionButton
-                disabled={
-                  !client.vaultEquity(vault) ||
-                  !vd ||
-                  client.hasWithdrawRequest(vault)
-                }
-                onClick={clickRequestWithdraw}
-              >
-                <Typography variant="button">REQUEST WITHDRAW</Typography>
-              </ActionButton>
+              <>
+                <ActionButton onClick={clickDeposit}>
+                  <Typography variant="button">DEPOSIT</Typography>
+                </ActionButton>
+                <ActionButton
+                  disabled={!client.vaultEquity(vault) || !vd}
+                  onClick={clickRequestWithdraw}
+                >
+                  <Typography variant="button">REQUEST WITHDRAW</Typography>
+                </ActionButton>
+              </>
             )}
           </Box>
         </Box>
@@ -227,7 +202,7 @@ const Stats = observer(
           display: "flex",
           flexDirection: "column",
           borderRadius: "10px",
-          width: STATS_AREA_WIDTH,
+          width: "100%",
         }}
       >
         <Container>
@@ -237,26 +212,31 @@ const Stats = observer(
               <TextIconWrapper text={equity ? `$${equity}` : "--"} />
             </TableRow>
             <TableRow hover>
-              <Text>Vault Depositor</Text>
+              <Text>Investor</Text>
               <TextIconWrapper
                 text={client.getVaultDepositorAddress(vault).toString()}
                 shorten
               />
             </TableRow>
             <TableRow hover>
-              <Text>Vault</Text>
+              <Text>Fund</Text>
               <TextIconWrapper text={vault.toString()} shorten />
             </TableRow>
-            <TableRow hover>
-              <Text>Withdraw Request Countdown</Text>
-              <TextIconWrapper
-                text={timer?.secondsRemaining.toString() ?? "--"}
-              />
-            </TableRow>
-            <TableRow hover>
-              <Text>Withdraw Request Equity</Text>
-              <TextIconWrapper text={timer ? `$${timer.equity}` : "--"} />
-            </TableRow>
+
+            {timer && (
+              <>
+                {timer.secondsRemaining > 0 && (
+                  <TableRow hover>
+                    <Text>Withdraw Countdown</Text>
+                    <TextIconWrapper text={timer.secondsRemaining.toString()} />
+                  </TableRow>
+                )}
+                <TableRow hover>
+                  <Text>Withdraw Request Equity</Text>
+                  <TextIconWrapper text={`$${timer.equity}`} />
+                </TableRow>
+              </>
+            )}
           </div>
         </Container>
       </Box>

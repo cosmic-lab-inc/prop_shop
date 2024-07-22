@@ -35,7 +35,7 @@ import {
 } from "./constants";
 import { getAssociatedTokenAddress } from "./programs";
 import { Drift } from "./idl/drift";
-import { percentToPercentPrecision, yyyymmdd } from "./utils";
+import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
 import {
   Data,
@@ -574,7 +574,6 @@ export class PropShopClient {
     );
     const volume30d = total30dVolume.toNumber() / QUOTE_PRECISION.toNumber();
     const birth = new Date(Number(acct.initTs.toNumber() * 1000));
-    console.log(`vault birth: ${yyyymmdd(birth)}`);
     return {
       equity,
       netDeposits,

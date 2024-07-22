@@ -1,9 +1,9 @@
 import React from "react";
-import { customTheme } from "../../../styles";
 import { Box, Dialog } from "@mui/material";
 import { InvestorStats } from "./InvestorStats";
 import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import { PublicKey } from "@solana/web3.js";
+import { customTheme } from "../../../styles";
 
 export function FundDialog({
   client,
@@ -19,7 +19,7 @@ export function FundDialog({
   return (
     <>
       <Dialog
-        maxWidth="md"
+        maxWidth="sm"
         fullWidth={true}
         fullScreen={false}
         scroll="paper"
@@ -27,7 +27,6 @@ export function FundDialog({
         onClose={onClose}
         PaperProps={{
           style: {
-            background: customTheme.grey,
             borderRadius: "10px",
           },
         }}
@@ -43,6 +42,7 @@ export function FundDialog({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            bgcolor: customTheme.grey,
           }}
         >
           <InvestorStats client={client} vault={vault} />

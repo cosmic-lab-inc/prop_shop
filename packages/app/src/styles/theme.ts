@@ -104,14 +104,14 @@ export const theme: Theme = createTheme({
     // MuiDialog: {
     //   styleOverrides: {
     //     root: {
-    //       backgroundColor: customTheme.light,
+    //       backgroundColor: customTheme.grey2,
     //     },
     //   },
     // },
     // MuiDialogContent: {
     //   styleOverrides: {
     //     root: {
-    //       backgroundColor: customTheme.light,
+    //       backgroundColor: customTheme.grey2,
     //     },
     //   },
     // },
