@@ -2,6 +2,7 @@ import { Flipside } from "@flipsidecrypto/sdk";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import { SettlePnlRecord } from "@drift-labs/sdk";
+import { VaultPnl } from "./types";
 
 interface AccountKey {
   pubkey: string;
@@ -11,10 +12,9 @@ interface AccountKey {
 }
 
 interface SettlePnlQueryResult {
+  tx_id: string;
   // '2024-07-23T06:31:40.000Z'
-  // block_timestamp: string;
-  // signer: string;
-  // account_keys: AccountKey[];
+  block_timestamp: Date;
   log_messages: string[];
 }
 
@@ -25,13 +25,15 @@ export class FlipsideClient {
     this.client = new Flipside(apiKey, "https://api-v2.flipsidecrypto.xyz");
   }
 
-  public async settlePnlEvents(
+  public async settlePnlData(
     user: PublicKey,
     program: anchor.Program,
     daysBack: number,
-  ): Promise<SettlePnlRecord[]> {
+  ): Promise<VaultPnl> {
     const sql = `
     select
+      distinct tx_id,
+      block_timestamp,
       log_messages
     from
       solana.core.fact_transactions,
@@ -49,20 +51,9 @@ export class FlipsideClient {
     }
     if (!result.rows) {
       console.error("no rows in Flipside query result");
-      return [];
+      return VaultPnl.fromSettlePnlRecord([]);
     }
     console.log(`${result.rows.length ?? 0} rows returned`);
-    const queryRows: SettlePnlQueryResult[] = [];
-    for (const row of result.rows) {
-      // this is an array of program logs that would look like:
-      // Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH invoke [1]`
-      // Program logged: "Instruction: SettlePnl"
-      // Program data: OURpGnfG1Vk/96BmAAAAABdnKgGb9/VjbEywZreBEusvhrkFri+0W0tw5TWlZNPjAADVAqgcAwAAAAAAAAAAAAAAAJXHd5PP//+utAa5kwgAAGeurvVVCAAAcLKOCgAAAAAA
-      const data: SettlePnlQueryResult = {
-        log_messages: row[0],
-      };
-      queryRows.push(data);
-    }
 
     // drift program and 0.2.84 idl
     const eventName = "SettlePnlRecord";
@@ -70,19 +61,37 @@ export class FlipsideClient {
       program.programId,
       new anchor.BorshCoder(program.idl),
     );
-    const logs = queryRows.map((r) => r.log_messages).flat();
-    console.log(`${logs.length} logs`);
 
-    const logEvents = eventParser.parseLogs(logs);
+    function msToS(date: Date): number {
+      return Math.floor(date.getTime() / 1000);
+    }
+
+    const timestamps = new Set();
+    const txSigs = new Set();
     const events: SettlePnlRecord[] = [];
-    for (const event of logEvents) {
-      if (event.name.includes(eventName)) {
-        const data = event.data as SettlePnlRecord;
-        if (data.user.toString() === user.toString()) {
-          events.push(data);
+    for (const row of result.rows) {
+      const data: SettlePnlQueryResult = {
+        tx_id: row[0],
+        block_timestamp: new Date(row[1]),
+        log_messages: row[2],
+      };
+      if (
+        !txSigs.has(data.tx_id) &&
+        Math.floor(data.block_timestamp.getTime() / 1000) <= 1721845421 &&
+        Math.floor(data.block_timestamp.getTime() / 1000) > 1721088000
+      ) {
+        const logEvents = eventParser.parseLogs(data.log_messages);
+        for (const event of logEvents) {
+          if (event.name === eventName) {
+            const data = event.data as SettlePnlRecord;
+            if (data.user.toString() === user.toString()) {
+              events.push(data);
+            }
+          }
         }
+        txSigs.add(data.tx_id);
       }
     }
-    return events;
+    return VaultPnl.fromSettlePnlRecord(events);
   }
 }

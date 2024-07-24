@@ -10,7 +10,6 @@ import { FLIPSIDE_API_KEY, RPC_URL } from "../.jest/env";
 import {
   DRIFT_IDL,
   DRIFT_PROGRAM_ID,
-  fetchDriftUserHistoricalPnl,
   FlipsideClient,
   PropShopClient,
   VaultPnl,
@@ -43,10 +42,15 @@ describe("Flipside", () => {
 
   const flipside = new FlipsideClient(FLIPSIDE_API_KEY);
 
-  it("Drift Historical API", async () => {
+  it("Query Flipside", async () => {
+    // Supercharger Vault
+    // const user = new PublicKey("BRksHqLiq2gvQw1XxsZq6DXZjD3GB5a9J63tUBgd6QS9");
+    // Turbocharger Vault
     const user = new PublicKey("2aMcirYcF9W8aTFem6qe8QtvfQ22SLY6KUe6yUQbqfHk");
-    const data = await fetchDriftUserHistoricalPnl(user.toString(), 7);
-    const vaultPNL = VaultPnl.fromHistoricalSettlePNL(data);
+
+    const events = await flipside.settlePnlEvents(user, driftProgram as any, 8);
+
+    const vaultPNL = VaultPnl.fromSettlePnlRecord(events);
     const start = vaultPNL.startDate()
       ? yyyymmdd(vaultPNL.startDate()!)
       : "undefined";
@@ -54,36 +58,9 @@ describe("Flipside", () => {
       ? yyyymmdd(vaultPNL.endDate()!)
       : "undefined";
 
-    // NOTE: database is missing 23rd and 24th
-    // $-0.750445434203 pnl, 724 events, from 2024/07/16 to 2024/07/22
+    // $-24082714.53058505 pnl, 1789 events, from 2024/07/16 to 2024/07/24
     console.log(
-      `$${vaultPNL.cumulativePNL()} pnl, ${data.length} events, from ${start} to ${end}`,
+      `$${vaultPNL.cumulativePNL()} pnl, ${events.length} events, from ${start} to ${end}`,
     );
-  });
-
-  // it("Query Flipside", async () => {
-  //   // Supercharger Vault
-  //   // const user = new PublicKey("BRksHqLiq2gvQw1XxsZq6DXZjD3GB5a9J63tUBgd6QS9");
-  //   // Turbocharger Vault
-  //   const user = new PublicKey("2aMcirYcF9W8aTFem6qe8QtvfQ22SLY6KUe6yUQbqfHk");
-  //
-  //   const events = await flipside.settlePnlEvents(
-  //     user,
-  //     driftProgram as any,
-  //     7,
-  //   );
-  //
-  //   const vaultPNL = VaultPnl.fromSettlePnlRecord(events);
-  //   const start = vaultPNL.startDate()
-  //     ? yyyymmdd(vaultPNL.startDate()!)
-  //     : "undefined";
-  //   const end = vaultPNL.endDate()
-  //     ? yyyymmdd(vaultPNL.endDate()!)
-  //     : "undefined";
-  //
-  //   // $-24082714.53058505 pnl, 1789 events, from 2024/07/16 to 2024/07/24
-  //   console.log(
-  //     `$${vaultPNL.cumulativePNL()} pnl, ${events.length} events, from ${start} to ${end}`,
-  //   );
-  // }, 600_000);
+  }, 600_000);
 });

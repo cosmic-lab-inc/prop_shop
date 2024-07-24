@@ -77,7 +77,8 @@ export async function fetchDriftUserHistoricalPnl(
           `Historical PNL missing for ${year}/${monthStr}/${dayStr} and user ${user}: ${error}`,
         );
       }
-      if (!is403 && !notFound) {
+
+      if (!is403) {
         console.error("Fetch historical PNL error:", e);
         throw new Error(e);
       }
