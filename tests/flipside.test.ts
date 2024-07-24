@@ -48,7 +48,7 @@ describe("Flipside", () => {
     // Turbocharger Vault
     const user = new PublicKey("2aMcirYcF9W8aTFem6qe8QtvfQ22SLY6KUe6yUQbqfHk");
 
-    const events = await flipside.settlePnlEvents(user, driftProgram as any, 8);
+    const events = await flipside.settlePnlData(user, driftProgram as any, 8);
 
     const vaultPNL = VaultPnl.fromSettlePnlRecord(events);
     const start = vaultPNL.startDate()
