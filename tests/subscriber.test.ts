@@ -9,6 +9,7 @@ import {
 } from "@cosmic-lab/prop-shop-sdk";
 import { afterAll, describe, it } from "@jest/globals";
 import { DriftVaults } from "@drift-labs/vaults-sdk";
+import { EventEmitter } from "events";
 
 describe("Polling Subscriber", () => {
   const opts: ConfirmOptions = {
@@ -32,18 +33,23 @@ describe("Polling Subscriber", () => {
     "confirmed",
     30_000,
   );
-  const cache = new PollingSubscriber(program, loader, {
-    filters: [
-      {
-        accountName: "vault",
-        eventType: "vaultUpdate",
-      },
-      {
-        accountName: "vaultDepositor",
-        eventType: "vaultDepositorUpdate",
-      },
-    ],
-  });
+  const cache = new PollingSubscriber(
+    program,
+    loader,
+    {
+      filters: [
+        {
+          accountName: "vault",
+          eventType: "vaultUpdate",
+        },
+        {
+          accountName: "vaultDepositor",
+          eventType: "vaultDepositorUpdate",
+        },
+      ],
+    },
+    new EventEmitter(),
+  );
 
   afterAll(async () => {
     await cache.unsubscribe();

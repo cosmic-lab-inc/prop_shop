@@ -26,9 +26,7 @@ export class FlipsideClient {
   }
 
   public async settlePnlEvents(
-    signer: PublicKey,
     user: PublicKey,
-    eventName: string,
     program: anchor.Program,
     daysBack: number,
   ): Promise<SettlePnlRecord[]> {
@@ -67,6 +65,7 @@ export class FlipsideClient {
     }
 
     // drift program and 0.2.84 idl
+    const eventName = "SettlePnlRecord";
     const eventParser = new anchor.EventParser(
       program.programId,
       new anchor.BorshCoder(program.idl),
