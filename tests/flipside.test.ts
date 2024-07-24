@@ -12,7 +12,6 @@ import {
   DRIFT_PROGRAM_ID,
   FlipsideClient,
   PropShopClient,
-  VaultPnl,
   yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { describe, it } from "@jest/globals";
@@ -48,9 +47,8 @@ describe("Flipside", () => {
     // Turbocharger Vault
     const user = new PublicKey("2aMcirYcF9W8aTFem6qe8QtvfQ22SLY6KUe6yUQbqfHk");
 
-    const events = await flipside.settlePnlData(user, driftProgram as any, 8);
+    const vaultPNL = await flipside.settlePnlData(user, driftProgram as any, 8);
 
-    const vaultPNL = VaultPnl.fromSettlePnlRecord(events);
     const start = vaultPNL.startDate()
       ? yyyymmdd(vaultPNL.startDate()!)
       : "undefined";
@@ -60,7 +58,7 @@ describe("Flipside", () => {
 
     // $-24082714.53058505 pnl, 1789 events, from 2024/07/16 to 2024/07/24
     console.log(
-      `$${vaultPNL.cumulativePNL()} pnl, ${events.length} events, from ${start} to ${end}`,
+      `$${vaultPNL.cumulativePNL()} pnl, ${vaultPNL.data.length} events, from ${start} to ${end}`,
     );
   }, 600_000);
 });
