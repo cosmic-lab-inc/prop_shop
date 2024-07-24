@@ -14,3 +14,5 @@ export * from "./accountLoader";
 export * from "./redisClient";
 export * from "./proxyClient";
 export * from "./txClient";
+export * from "./flipside";
+export * from "./idl";

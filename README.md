@@ -17,7 +17,8 @@ In it put:
 export const REDIS_ENDPOINT = "redis://your-redis-server"
 export const REDIS_PASSWORD = "your-redis-password"
 export const RPC_URL = "https://your-solana-rpc"
-export const SHYFT_API_KEY = "api-key";
+export const SHYFT_API_KEY = "shyft-api-key";
+export const FLIPSIDE_API_KEY = "flipside-api-key";
 ```
 
 ## TODO

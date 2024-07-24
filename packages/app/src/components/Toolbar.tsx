@@ -39,7 +39,7 @@ export function Toolbar() {
             gap: 2,
           }}
         >
-          <PropShopIcon size={80} />
+          <PropShopIcon size={70} />
           <Typography variant="h2">Prop Shop</Typography>
         </Box>
         <Box

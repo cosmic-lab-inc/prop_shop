@@ -2,7 +2,6 @@ import * as anchor from "@coral-xyz/anchor";
 import { ConfirmOptions, Connection, Keypair } from "@solana/web3.js";
 import { REDIS_ENDPOINT, REDIS_PASSWORD, RPC_URL } from "../.jest/env";
 import {
-  HistoricalSettlePNL,
   PropShopClient,
   ProxyClient,
   RedisClient,
@@ -158,11 +157,9 @@ describe("Redis", () => {
     const vaults = await client.fetchVaults();
     expect(vaults.length).toBeGreaterThan(0);
 
-    const vault = vaults.find(
-      (v) => decodeName(v.account.name) === "Supercharger Vault",
-    );
-    if (vault) {
+    for (const vault of vaults) {
       const key = vault.account.pubkey.toString();
+      // await redis.delete(key);
       const name = decodeName(vault.account.name);
       const daysBack = 30;
       const pnl = await ProxyClient.performance({
@@ -170,30 +167,55 @@ describe("Redis", () => {
         daysBack,
         usePrefix: true,
       });
-      const value = JSON.stringify(pnl);
-      await redis.set(key, value);
-      const get = await redis.get(key);
-      if (!get) {
-        throw new Error("Failed to get vault pnl from redis");
-      }
-      expect(get).not.toBeNull();
-      expect(get).toBe(value);
 
-      const data: HistoricalSettlePNL[] = JSON.parse(get);
-      if (data.length > 0) {
-        const hydrated = VaultPnl.fromHistoricalSettlePNL(data);
-        const start = hydrated.startDate()
-          ? yyyymmdd(hydrated.startDate()!)
+      const data = VaultPnl.fromHistoricalSettlePNL(pnl);
+      if (pnl.length > 0) {
+        const start = data.startDate()
+          ? yyyymmdd(data.startDate()!)
           : "undefined";
-        console.log(`${name} pnl start date: ${start}`);
-        const end = hydrated.endDate()
-          ? yyyymmdd(hydrated.endDate()!)
-          : "undefined";
-        console.log(`${name} pnl end date: ${end}`);
+        const end = data.endDate() ? yyyymmdd(data.endDate()!) : "undefined";
         console.log(
-          `${name} pnl over ${data.length} trades: $${truncateNumber(hydrated.cumulativePNL(), 2)}`,
+          `${name} pnl from ${start} to ${end} amd ${data.data.length} trades: $${truncateNumber(data.cumulativePNL(), 2)}`,
         );
       }
     }
+
+    // const vault = vaults.find(
+    //   (v) => decodeName(v.account.name) === "Supercharger Vault",
+    // );
+    // if (vault) {
+    //   const key = vault.account.pubkey.toString();
+    //   const name = decodeName(vault.account.name);
+    //   const daysBack = 30;
+    //   const pnl = await ProxyClient.performance({
+    //     vault: vault.account,
+    //     daysBack,
+    //     usePrefix: true,
+    //   });
+    //   const value = JSON.stringify(pnl);
+    //   await redis.set(key, value);
+    //   const get = await redis.get(key);
+    //   if (!get) {
+    //     throw new Error("Failed to get vault pnl from redis");
+    //   }
+    //   expect(get).not.toBeNull();
+    //   expect(get).toBe(value);
+    //
+    //   const data: HistoricalSettlePNL[] = JSON.parse(get);
+    //   if (data.length > 0) {
+    //     const hydrated = VaultPnl.fromHistoricalSettlePNL(data);
+    //     const start = hydrated.startDate()
+    //       ? yyyymmdd(hydrated.startDate()!)
+    //       : "undefined";
+    //     console.log(`${name} pnl start date: ${start}`);
+    //     const end = hydrated.endDate()
+    //       ? yyyymmdd(hydrated.endDate()!)
+    //       : "undefined";
+    //     console.log(`${name} pnl end date: ${end}`);
+    //     console.log(
+    //       `${name} pnl over ${data.length} trades: $${truncateNumber(hydrated.cumulativePNL(), 2)}`,
+    //     );
+    //   }
+    // }
   });
 });

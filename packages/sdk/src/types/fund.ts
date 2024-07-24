@@ -42,13 +42,8 @@ export class VaultPnl {
     if (!data[0] || !data[data.length - 1]) {
       this.data = [];
     } else {
-      const startTs = Number(data[0].ts);
-      const endTs = Number(data[data.length - 1].ts);
-      let series = data;
-      if (endTs < startTs) {
-        // sort data from lowest ts to highest so 0th index is oldest
-        series = data.sort((a, b) => Number(a.ts) - Number(b.ts));
-      }
+      // sort data from lowest to highest timestamp, so 0th index is oldest
+      const series = data.sort((a, b) => Number(a.ts) - Number(b.ts));
       this.data = series;
     }
   }
@@ -66,8 +61,8 @@ export class VaultPnl {
   public static fromSettlePnlRecord(data: SettlePnlRecord[]): VaultPnl {
     const series: PNL[] = data.map((d) => {
       return {
-        pnl: Number(d.pnl) / QUOTE_PRECISION.toNumber(),
-        ts: Number(d.ts),
+        pnl: Number(d.pnl.toNumber()) / QUOTE_PRECISION.toNumber(),
+        ts: Number(d.ts.toNumber()),
       };
     });
     return new VaultPnl(series);

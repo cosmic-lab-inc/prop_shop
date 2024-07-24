@@ -52,6 +52,11 @@ export function FundOverviewCard({
     fundOverview;
 
   const roi = calcRoi(data);
+  // TVL = netDeposits + lifetimePNL, so TVL - lifetimePNL = netDeposits
+  let pnl = (lifetimePNL / (tvl - lifetimePNL)) * 100;
+  if (isNaN(pnl)) {
+    pnl = 0;
+  }
   const drawdown = calcMaxDrawdown(data);
   const _data = data.map((d) => ({ y: d }));
 
@@ -111,7 +116,7 @@ export function FundOverviewCard({
                 color: roi < 0 ? customTheme.error : customTheme.success,
               }}
             >
-              ${prettyNumber(lifetimePNL)}
+              {prettyNumber(pnl)}%
             </Typography>
           </TableRow>
 
@@ -180,10 +185,10 @@ function Container({
             zIndex: isHovered ? 0 : -1,
             backdropFilter: "blur(4px)",
             transition: "backdrop-filter 0.2s linear",
+            borderRadius: "10px",
           }}
         />
         {children}
-        {/*{isHovered && (*/}
         <Box
           sx={{
             opacity: isHovered ? 1 : 0,
@@ -198,7 +203,6 @@ function Container({
         >
           <ActionButton onClick={onClick}>Invest</ActionButton>
         </Box>
-        {/*)}*/}
       </Box>
     </Box>
   );
