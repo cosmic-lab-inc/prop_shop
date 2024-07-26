@@ -21,6 +21,7 @@ import {
   encodeName,
   getUserStatsAccountPublicKey,
   IWallet,
+  OracleInfo,
   QUOTE_PRECISION,
   SpotMarketAccount,
   User,
@@ -39,11 +40,12 @@ import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
 import {
   Data,
+  DriftMarketInfo,
   DriftVaultsSubscriber,
   FundOverview,
   PropShopAccountEvents,
+  SerializedDriftMarketInfo,
   SnackInfo,
-  VaultPnl,
   WithdrawRequestTimer,
 } from "./types";
 import {
@@ -93,23 +95,26 @@ export class PropShopClient {
 
   private readonly disableCache: boolean = false;
   private readonly skipFetching: boolean = false;
+  private readonly useProxyPrefix: boolean = false;
   private _vaults: Map<string, Vault> = new Map();
   private _vaultDepositors: Map<string, VaultDepositor> = new Map();
   private _timers: Map<string, WithdrawRequestTimer> = new Map();
   private _equities: Map<string, number> = new Map();
 
-  constructor(
-    wallet: WalletContextState,
-    connection: Connection,
-    disableCache: boolean = false,
-    skipFetching: boolean = false,
-  ) {
+  constructor(config: {
+    wallet: WalletContextState;
+    connection: Connection;
+    disableCache?: boolean;
+    skipFetching?: boolean;
+    useProxyPrefix?: boolean;
+  }) {
     makeAutoObservable(this);
 
-    this.wallet = wallet;
-    this.connection = connection;
-    this.disableCache = disableCache;
-    this.skipFetching = skipFetching;
+    this.wallet = config.wallet;
+    this.connection = config.connection;
+    this.disableCache = config.disableCache ?? false;
+    this.skipFetching = config.skipFetching ?? false;
+    this.useProxyPrefix = config.useProxyPrefix ?? false;
 
     this.eventEmitter.on("vaultUpdate", (payload: Data<PublicKey, Vault>) => {
       this._vaults.set(payload.key.toString(), payload.data);
@@ -170,26 +175,45 @@ export class PropShopClient {
       provider,
     );
 
-    // const driftProgram = new anchor.Program(
-    //   DRIFT_IDL,
-    //   DRIFT_PROGRAM_ID,
-    //   provider,
-    // );
-    // const usdcSpotMarket = await this.spotMarketByIndex(
-    //   driftProgram,
-    //   0,
-    // );
-    // const firstSpotMarket = await this.spotMarketByIndex(driftProgram, 1);
-    // const oracleInfos: OracleInfo[] = [
-    //   {
-    //     publicKey: usdcSpotMarket.account.oracle,
-    //     source: usdcSpotMarket.account.oracleSource,
-    //   },
-    //   {
-    //     publicKey: firstSpotMarket.account.oracle,
-    //     source: firstSpotMarket.account.oracleSource,
-    //   },
-    // ];
+    let spotMarketIndexes: number[] | undefined = undefined;
+    let oracleInfos: OracleInfo[] | undefined = undefined;
+    if (!this.skipFetching) {
+      const preSpotMarket = Date.now();
+      const _spotMarkets: SerializedDriftMarketInfo[] | null =
+        await ProxyClient.get("spotMarkets", this.useProxyPrefix);
+      const spotMarkets: DriftMarketInfo[] | undefined = _spotMarkets?.map(
+        (m) => {
+          return {
+            marketIndex: m.marketIndex,
+            oracle: new PublicKey(m.oracle),
+            oracleSource: m.oracleSource,
+          };
+        },
+      );
+      if (spotMarkets) {
+        console.log(
+          `fetched cached spot markets from redis in ${Date.now() - preSpotMarket}ms`,
+        );
+        spotMarketIndexes = spotMarkets.map((m) => m.marketIndex);
+        console.log(`${spotMarketIndexes.length} spot market indexes`);
+        // oracleInfos = spotMarkets.map((m) => {
+        //   return {
+        //     publicKey: m.oracle,
+        //     source: m.oracleSource,
+        //   };
+        // });
+        const usdcSpotMarket = spotMarkets.find((m) => m.marketIndex === 0);
+        if (usdcSpotMarket) {
+          oracleInfos = [
+            {
+              publicKey: usdcSpotMarket.oracle,
+              source: usdcSpotMarket.oracleSource,
+            },
+          ];
+        }
+        console.log(`${oracleInfos?.length ?? 0} oracle infos`);
+      }
+    }
 
     const driftClient = new DriftClient({
       connection,
@@ -199,12 +223,10 @@ export class PropShopClient {
       },
       activeSubAccountId,
       accountSubscription,
-      spotMarketIndexes: Array.from({ length: 50 }, (_, i) => i),
-      // spotMarketIndexes: [0, 1],
-      // oracleInfos,
+      spotMarketIndexes,
+      oracleInfos,
     });
     const preDriftSub = Date.now();
-    const promises = [];
     await driftClient.subscribe();
     // this takes about 1.2s which can't be reduced much more
     console.log(`DriftClient subscribed in ${Date.now() - preDriftSub}ms`);
@@ -220,7 +242,7 @@ export class PropShopClient {
       const preSub = Date.now();
       await this.subscribe(driftVaultsProgram);
       // takes about 2s for websocket and 4s for polling
-      console.log(`subscribed in ${Date.now() - preSub}ms`);
+      console.log(`Cache subscribed in ${Date.now() - preSub}ms`);
     }
 
     this.loading = false;
@@ -599,12 +621,10 @@ export class PropShopClient {
     }
 
     const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-    const pnlData = await ProxyClient.performance({
+    const vaultPNL = await ProxyClient.performance({
       vault: vault.data,
       daysBack: 100,
-      skipFetching: this.skipFetching,
     });
-    const vaultPNL = VaultPnl.fromHistoricalSettlePNL(pnlData);
     const data = vaultPNL.cumulativeSeriesPNL();
     const title = decodeName(vault.data.name);
     const stats = await this.vaultStats(vault.key);
@@ -644,12 +664,10 @@ export class PropShopClient {
     const fundOverviews: FundOverview[] = [];
     for (const vault of vaults) {
       const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-      const pnlData = await ProxyClient.performance({
+      const vaultPNL = await ProxyClient.performance({
         vault: vault.data,
         daysBack: 100,
-        skipFetching: this.skipFetching,
       });
-      const vaultPNL = VaultPnl.fromHistoricalSettlePNL(pnlData);
       const data = vaultPNL.cumulativeSeriesPNL();
       const title = decodeName(vault.data.name);
       const stats = await this.vaultStats(vault.key);

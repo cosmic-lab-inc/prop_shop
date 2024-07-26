@@ -109,7 +109,9 @@ export function FundOverviewCard({
           }}
         >
           <TableRow hover divider footer square>
-            <Typography variant="h4">{roi < 0 ? "Loss" : "Profit"}</Typography>
+            <Typography variant="h4">
+              {roi < 0 ? "Loss 30d" : "Profit 30d"}
+            </Typography>
             <Typography
               variant="h3"
               sx={{

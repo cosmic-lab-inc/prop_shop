@@ -1,0 +1,156 @@
+[
+  {
+    "marketIndex": 0,
+    "oracle": "En8hkHLkRe9d9DraYmBTrus518BvmVH448YcvmrFM6Ce",
+    "oracleSource": {
+      "pythStableCoinPull": {}
+    }
+  },
+  {
+    "marketIndex": 1,
+    "oracle": "BAtFj4kQttZRVep3UZS2aZRDixkGYgWsbqTBVDbnSsPF",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 2,
+    "oracle": "FAq7hqjn7FWGXKDwJHzsXGgBcydGTcK4kziJpAGWXjDb",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 3,
+    "oracle": "486kr3pmFPfTsS4aZgcsQ7kS4i9rjMsYYZup6HQNSTT4",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 4,
+    "oracle": "6bEp2MiyoiiiDxcVqE8rUHQWwHirXUXtKfAEATTVqNzT",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 5,
+    "oracle": "BekJ3P5G3iFeC97sXHuKnUHofCFj9Sbo7uyF2fkKwvit",
+    "oracleSource": {
+      "pythStableCoinPull": {}
+    }
+  },
+  {
+    "marketIndex": 6,
+    "oracle": "9QE1P5EfzthYDgoQ9oPeTByCEKaRJeZbVVqKJfgU9iau",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 7,
+    "oracle": "GqkCu7CbsPVz1H6W6AAHuReqbJckYG59TXz7Y5HDV7hr",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 8,
+    "oracle": "BmDWPMsytWmYkh9n6o7m79eVshVYf2B5GVaqQ2EWKnGH",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 9,
+    "oracle": "Ffq6ACJ17NAgaxC6ocfMzVXL3K61qxB2xHg6WUawWPfP",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 10,
+    "oracle": "6x6KfE7nY2xoLCRSMPT1u83wQ5fpGXoKNBqFjrCwzsCQ",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 11,
+    "oracle": "AwqRpfJ36jnSZQykyL1jYY35mhMteeEAjh7o8LveRQin",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 12,
+    "oracle": "8TQztfGcNjHGRusX4ejQQtPZs3Ypczt9jWF6pkgQMqUX",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 13,
+    "oracle": "4HbitGsdcFbtFotmYscikQFAAKJ3nYx4t7sV7fTvsk8U",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 14,
+    "oracle": "13jpjpVyU5hGpjsZ4HzCcmBo85wze4N8Au7U6cC3GMip",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 15,
+    "oracle": "23KmX7SNikmUr2axSCy6Zer7XPBnvmVcASALnDGqBVRR",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 16,
+    "oracle": "B7RUYg2zF6UdUSHv2RmpnriPVJccYWojgFydNS1NY5F8",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 17,
+    "oracle": "HJ9K9AamqVMp86j3uQgpA1tdJNRAwfVuL75FD9P3QBrn",
+    "oracleSource": {
+      "switchboard": {}
+    }
+  },
+  {
+    "marketIndex": 18,
+    "oracle": "BPTQgHV4y2x4jvKPPkkd9aS8jY7L3DGZBwjEZC8Vm27o",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 19,
+    "oracle": "pmHEXBam7kbmCCg5ED5V7RNMN8e34sKu338KeuFAGof",
+    "oracleSource": {
+      "switchboard": {}
+    }
+  },
+  {
+    "marketIndex": 20,
+    "oracle": "H3pn43tkNvsG5z3qzmERguSvKoyHZvvY6VPmNrJqiW5X",
+    "oracleSource": {
+      "pythPull": {}
+    }
+  },
+  {
+    "marketIndex": 21,
+    "oracle": "4FG7UyPkszGvcSVCCKaLSZsArGjyxitwhJeQhYu2bFTS",
+    "oracleSource": {
+      "switchboard": {}
+    }
+  }
+]

@@ -17,3 +17,11 @@ export function yyyymmdd(date: Date): string {
   const dayStr = day < 10 ? `0${day}` : `${day}`;
   return `${year}/${monthStr}/${dayStr}`;
 }
+
+export function msToMinutes(ms: number) {
+  return Math.floor(ms / 60 / 1000);
+}
+
+export function msToSeconds(ms: number) {
+  return Math.floor(ms / 1000);
+}

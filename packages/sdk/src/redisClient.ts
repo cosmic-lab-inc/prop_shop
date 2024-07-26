@@ -5,6 +5,7 @@ import {
   RedisDefaultModules,
 } from "redis";
 import { RedisFunctions, RedisModules, RedisScripts } from "@redis/client";
+import { PublicKey } from "@solana/web3.js";
 
 type Client = RedisClientType<
   RedisDefaultModules & RedisModules,
@@ -27,6 +28,14 @@ export class RedisClient {
   private constructor(client: Client) {
     this.client = client;
     this.connected = false;
+  }
+
+  public static vaultPnlKey(vault: PublicKey): string {
+    return vault.toString();
+  }
+
+  public static vaultLastUpdateKey(vault: PublicKey): string {
+    return `${vault.toString()}-last-update`;
   }
 
   /**

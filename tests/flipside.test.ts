@@ -47,7 +47,7 @@ describe("Flipside", () => {
     // Turbocharger Vault
     const user = new PublicKey("2aMcirYcF9W8aTFem6qe8QtvfQ22SLY6KUe6yUQbqfHk");
 
-    const vaultPNL = await flipside.settlePnlData(user, driftProgram as any, 8);
+    const vaultPNL = await flipside.settlePnlData(user, driftProgram as any, 7);
 
     const start = vaultPNL.startDate()
       ? yyyymmdd(vaultPNL.startDate()!)
@@ -56,7 +56,6 @@ describe("Flipside", () => {
       ? yyyymmdd(vaultPNL.endDate()!)
       : "undefined";
 
-    // $-24082714.53058505 pnl, 1789 events, from 2024/07/16 to 2024/07/24
     console.log(
       `$${vaultPNL.cumulativePNL()} pnl, ${vaultPNL.data.length} events, from ${start} to ${end}`,
     );

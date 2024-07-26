@@ -31,7 +31,12 @@ describe("TxClient", () => {
 
   const program = anchor.workspace.DriftVaults as Program<DriftVaults>;
 
-  const client = new PropShopClient(wallet, connection, true, true);
+  const client = new PropShopClient({
+    wallet,
+    connection,
+    disableCache: true,
+    skipFetching: true,
+  });
 
   beforeAll(async () => {
     await client.initialize();

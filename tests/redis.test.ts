@@ -1,17 +1,20 @@
 import * as anchor from "@coral-xyz/anchor";
-import { ConfirmOptions, Connection, Keypair } from "@solana/web3.js";
+import {
+  ConfirmOptions,
+  Connection,
+  Keypair,
+  PublicKey,
+} from "@solana/web3.js";
 import { REDIS_ENDPOINT, REDIS_PASSWORD, RPC_URL } from "../.jest/env";
 import {
+  DriftMarketInfo,
   PropShopClient,
   ProxyClient,
   RedisClient,
-  truncateNumber,
-  VaultPnl,
-  yyyymmdd,
+  SerializedDriftMarketInfo,
 } from "@cosmic-lab/prop-shop-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
 import { exec } from "child_process";
-import { decodeName } from "@drift-labs/sdk";
 
 function killProxy(): Promise<void> {
   // proxy runs on port 5173
@@ -137,7 +140,11 @@ describe("Redis", () => {
     password: REDIS_PASSWORD,
   });
 
-  const client = new PropShopClient(wallet, connection);
+  const client = new PropShopClient({
+    wallet,
+    connection,
+    skipFetching: true,
+  });
 
   beforeAll(async () => {
     await client.initialize();
@@ -153,69 +160,45 @@ describe("Redis", () => {
     await stopProcess(pid);
   });
 
-  it("Set & Get Vault PNLs", async () => {
-    const vaults = await client.fetchVaults();
-    expect(vaults.length).toBeGreaterThan(0);
-
-    for (const vault of vaults) {
-      const key = vault.account.pubkey.toString();
-      // await redis.delete(key);
-      const name = decodeName(vault.account.name);
-      const daysBack = 30;
-      const pnl = await ProxyClient.performance({
-        vault: vault.account,
-        daysBack,
-        usePrefix: true,
-      });
-
-      const data = VaultPnl.fromHistoricalSettlePNL(pnl);
-      if (pnl.length > 0) {
-        const start = data.startDate()
-          ? yyyymmdd(data.startDate()!)
-          : "undefined";
-        const end = data.endDate() ? yyyymmdd(data.endDate()!) : "undefined";
-        console.log(
-          `${name} pnl from ${start} to ${end} amd ${data.data.length} trades: $${truncateNumber(data.cumulativePNL(), 2)}`,
-        );
-      }
-    }
-
-    // const vault = vaults.find(
-    //   (v) => decodeName(v.account.name) === "Supercharger Vault",
-    // );
-    // if (vault) {
-    //   const key = vault.account.pubkey.toString();
-    //   const name = decodeName(vault.account.name);
-    //   const daysBack = 30;
-    //   const pnl = await ProxyClient.performance({
-    //     vault: vault.account,
-    //     daysBack,
-    //     usePrefix: true,
-    //   });
-    //   const value = JSON.stringify(pnl);
-    //   await redis.set(key, value);
-    //   const get = await redis.get(key);
-    //   if (!get) {
-    //     throw new Error("Failed to get vault pnl from redis");
-    //   }
-    //   expect(get).not.toBeNull();
-    //   expect(get).toBe(value);
-    //
-    //   const data: HistoricalSettlePNL[] = JSON.parse(get);
-    //   if (data.length > 0) {
-    //     const hydrated = VaultPnl.fromHistoricalSettlePNL(data);
-    //     const start = hydrated.startDate()
-    //       ? yyyymmdd(hydrated.startDate()!)
-    //       : "undefined";
-    //     console.log(`${name} pnl start date: ${start}`);
-    //     const end = hydrated.endDate()
-    //       ? yyyymmdd(hydrated.endDate()!)
-    //       : "undefined";
-    //     console.log(`${name} pnl end date: ${end}`);
-    //     console.log(
-    //       `${name} pnl over ${data.length} trades: $${truncateNumber(hydrated.cumulativePNL(), 2)}`,
-    //     );
-    //   }
-    // }
+  it("Get Spot Markets", async () => {
+    const raw = await ProxyClient.get("spotMarkets", true);
+    const _spotMarkets: SerializedDriftMarketInfo[] | null = raw;
+    const spotMarkets: DriftMarketInfo[] | undefined = _spotMarkets?.map(
+      (m) => {
+        return {
+          marketIndex: m.marketIndex,
+          oracle: new PublicKey(m.oracle),
+          oracleSource: m.oracleSource,
+        };
+      },
+    );
+    console.log(spotMarkets);
   });
+
+  // it("Set & Get Vault PNLs", async () => {
+  //   const vaults = await client.fetchVaults();
+  //   expect(vaults.length).toBeGreaterThan(0);
+  //
+  //   for (const vault of vaults) {
+  //     const key = vault.account.pubkey.toString();
+  //     // await redis.delete(key);
+  //     const name = decodeName(vault.account.name);
+  //     const daysBack = 30;
+  //     const pnl = await ProxyClient.performance({
+  //       vault: vault.account,
+  //       daysBack,
+  //       usePrefix: true,
+  //     });
+  //
+  //     if (pnl.data.length > 0) {
+  //       const start = pnl.startDate()
+  //         ? yyyymmdd(pnl.startDate()!)
+  //         : "undefined";
+  //       const end = pnl.endDate() ? yyyymmdd(pnl.endDate()!) : "undefined";
+  //       console.log(
+  //         `${name} pnl from ${start} to ${end} amd ${pnl.data.length} trades: $${truncateNumber(pnl.cumulativePNL(), 2)}`,
+  //       );
+  //     }
+  //   }
+  // });
 });

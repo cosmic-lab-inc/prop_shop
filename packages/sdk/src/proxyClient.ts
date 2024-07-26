@@ -1,5 +1,5 @@
 import { Vault } from "@drift-labs/vaults-sdk";
-import { HistoricalSettlePNL } from "./types";
+import { PNL, VaultPnl } from "./types";
 
 export class ProxyClient {
   /**
@@ -12,9 +12,8 @@ export class ProxyClient {
     vault: Vault;
     daysBack: number;
     usePrefix?: boolean;
-    skipFetching?: boolean;
-  }): Promise<HistoricalSettlePNL[]> {
-    const { vault, daysBack, usePrefix, skipFetching } = params;
+  }): Promise<VaultPnl> {
+    const { vault, daysBack, usePrefix } = params;
     try {
       let url = "/api/performance";
       if (usePrefix) {
@@ -27,16 +26,14 @@ export class ProxyClient {
         },
         body: JSON.stringify({
           vaultKey: vault.pubkey.toString(),
-          vaultUser: vault.user.toString(),
           daysBack,
-          skipFetching,
         }),
       });
-      const data: HistoricalSettlePNL[] = await response.json();
-      return data;
+      const data: PNL[] = await response.json();
+      return new VaultPnl(data);
     } catch (error) {
-      console.error("Error fetching data:", error);
-      throw new Error("Error fetching data");
+      console.error(`Error in performance: ${error}`);
+      throw new Error(`Error in performance: ${error}`);
     }
   }
 
@@ -62,8 +59,8 @@ export class ProxyClient {
       });
       return await response.json();
     } catch (error) {
-      console.error("Error fetching data:", error);
-      throw new Error("Error fetching data");
+      console.error(`Error in set: ${error}`);
+      throw new Error(`Error in set: ${error}`);
     }
   }
 
@@ -84,8 +81,8 @@ export class ProxyClient {
       });
       return await response.json();
     } catch (error) {
-      console.error("Error fetching data:", error);
-      throw new Error("Error fetching data");
+      console.error(`Error in get: ${error}`);
+      throw new Error(`Error in get: ${error}`);
     }
   }
 }

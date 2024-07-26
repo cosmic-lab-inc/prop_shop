@@ -3,11 +3,20 @@ import express from "express";
 import cors from "cors";
 import {
   driftVaults,
-  fetchDriftUserHistoricalPnl,
+  FlipsideClient,
+  msToMinutes,
   PropShopClient,
   RedisClient,
+  VaultPnl,
+  yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { Connection, Keypair } from "@solana/web3.js";
+import { QUOTE_PRECISION, SettlePnlRecord } from "@drift-labs/sdk";
+
+// 24 hours
+const UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
+const DAYS_BACK = 30;
+const FORCE_UPDATE = false;
 
 // env in root of workspace
 dotenv.config({
@@ -17,7 +26,8 @@ dotenv.config({
 if (
   !process.env.REDIS_ENDPOINT ||
   !process.env.REDIS_PASSWORD ||
-  !process.env.RPC_URL
+  !process.env.RPC_URL ||
+  !process.env.FLIPSIDE_API_KEY
 ) {
   throw new Error("Missing variables in root .env");
 }
@@ -27,12 +37,19 @@ const wallet = PropShopClient.keypairToWalletContextState(signer);
 
 const connection = new Connection(process.env.RPC_URL);
 
-const client = new PropShopClient(wallet, connection, true, true);
+const client = new PropShopClient({
+  wallet,
+  connection,
+  skipFetching: true,
+  useProxyPrefix: true,
+});
 
 const redis = RedisClient.new({
   endpoint: process.env.REDIS_ENDPOINT,
   password: process.env.REDIS_PASSWORD,
 });
+
+const flipside = new FlipsideClient(process.env.FLIPSIDE_API_KEY);
 
 const app = express();
 const port = 8080;
@@ -53,42 +70,138 @@ app.use(async (_req, _res, next) => {
   next();
 });
 
-// fetch vault PNL from Drift API and store in Redis
+// query SettlePnlRecord events from Flipside historical transactions and store in Redis
 async function update() {
   if (!redis.connected) {
     await redis.connect();
   }
+  if (!client.vaultClient) {
+    await client.initialize();
+  }
   console.log("begin cache update...");
-  const start = Date.now();
+  const pre = Date.now();
   const vaults = await client.fetchVaults();
 
   for (const vault of vaults) {
-    const key = vault.account.pubkey.toString();
-    const name = driftVaults.decodeName(vault.account.name);
-    console.log(`cache \"${name}\" PNL`);
-    const daysBack = 100;
-    const pnl = await fetchDriftUserHistoricalPnl(
-      vault.account.user.toString(),
-      daysBack,
+    const vaultPnlKey = RedisClient.vaultPnlKey(vault.account.pubkey);
+    const vaultLastUpdateKey = RedisClient.vaultLastUpdateKey(
+      vault.account.pubkey,
     );
-    const value = JSON.stringify(pnl);
-    await redis.set(key, value);
+
+    const name = driftVaults.decodeName(vault.account.name);
+    const lastUpdate = await redis.get(vaultLastUpdateKey);
+    if (lastUpdate && !FORCE_UPDATE) {
+      const lastUpdateMs = parseInt(lastUpdate);
+      const diffMs = Date.now() - lastUpdateMs;
+      if (diffMs < UPDATE_INTERVAL) {
+        const minutes = msToMinutes(diffMs);
+        console.log(
+          `\"${name}\", ${vault.account.user.toString()}: skipping, last updated ${minutes} minutes ago`,
+        );
+        continue;
+      }
+    }
+
+    const vaultStats = await client.vaultStats(vault.publicKey);
+    if (
+      vaultStats &&
+      (vaultStats.lifetimePNL === 0 || vaultStats.netDeposits === 0)
+    ) {
+      console.log(
+        `\"${name}\", ${vault.account.user.toString()}: skipping, no pnl history`,
+      );
+      const value = JSON.stringify([]);
+      await redis.set(vaultPnlKey, value);
+      await redis.set(vaultLastUpdateKey, Date.now().toString());
+      continue;
+    }
+
+    if (!client.vaultClient) {
+      throw new Error("vaultClient not initialized");
+    }
+    const driftProgram = client.vaultClient.driftClient.program;
+
+    console.log(
+      `fetching pnl data for \"${name}\" with user: ${vault.account.user.toString()}`,
+    );
+    const preQuery = Date.now();
+    const pnl = await flipside.settlePnlData(
+      vault.account.user,
+      driftProgram as any,
+      DAYS_BACK,
+    );
+    const start = pnl.startDate() ? yyyymmdd(pnl.startDate()!) : "undefined";
+    const end = pnl.endDate() ? yyyymmdd(pnl.endDate()!) : "undefined";
+    console.log(
+      `\"${name}\": $${pnl.cumulativePNL()} pnl, ${pnl.data.length} events, from ${start} to ${end}, in ${msToMinutes(Date.now() - preQuery)} minutes`,
+    );
+
+    const value = JSON.stringify(pnl.data);
+    await redis.set(vaultPnlKey, value);
+    await redis.set(vaultLastUpdateKey, Date.now().toString());
   }
-  console.log(`finished updating cache in ${Date.now() - start}ms`);
+  console.log(
+    `finished updating cache in ${msToMinutes(Date.now() - pre)} minutes`,
+  );
 }
 
-// update every 30 minutes
+async function listenToEvents() {
+  if (!redis.connected) {
+    await redis.connect();
+  }
+  if (!client.vaultClient) {
+    await client.initialize();
+  }
+  if (!client.vaultClient) {
+    throw new Error("vaultClient not initialized");
+  }
+
+  const vaults = await client.fetchVaults();
+  // key is vault user, value is vault pubkey
+  const vaultUserMap = new Map<string, string>();
+  for (const vault of vaults) {
+    vaultUserMap.set(
+      vault.account.user.toString(),
+      vault.account.pubkey.toString(),
+    );
+  }
+
+  const driftProgram = client.vaultClient.driftClient.program;
+  const eventName = "SettlePnlRecord";
+  driftProgram.addEventListener(
+    eventName,
+    async (event: SettlePnlRecord, _slot: number, _signature: string) => {
+      const vault = vaultUserMap.get(event.user.toString());
+      if (!vault) {
+        throw new Error(`vault not found for user: ${event.user.toString()}`);
+      }
+      const cache = await redis.get(vault);
+      if (!cache) {
+        const pnl = VaultPnl.fromSettlePnlRecord([event]);
+        const value = JSON.stringify(pnl.data);
+        await redis.set(vault, value);
+      } else {
+        const pnl = VaultPnl.fromSettlePnlRecord(JSON.parse(cache));
+        pnl.data.push({
+          pnl: Number(event.pnl.toNumber()) / QUOTE_PRECISION.toNumber(),
+          ts: Number(event.ts.toNumber()),
+        });
+        const value = JSON.stringify(pnl.data);
+        await redis.set(vault, value);
+      }
+    },
+  );
+}
+
+// update every 180 minutes
 async function start() {
   await client.initialize();
   await redis.connect();
 
   await update();
-  setInterval(
-    async () => {
-      await update();
-    },
-    30 * 60 * 1000,
-  );
+  setInterval(async () => {
+    await update();
+  }, UPDATE_INTERVAL);
 }
 
 process.on("SIGINT" || "SIGTERM" || "SIGKILL", async () => {

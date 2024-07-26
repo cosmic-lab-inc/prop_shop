@@ -1,10 +1,7 @@
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
-import {
-  fetchDriftUserHistoricalPnl,
-  RedisClient,
-} from "@cosmic-lab/prop-shop-sdk";
+import { RedisClient } from "@cosmic-lab/prop-shop-sdk";
 
 // env in root of workspace
 dotenv.config({
@@ -41,22 +38,17 @@ app.use(async (_req, _res, next) => {
 
 app.post("/api/performance", async (req, res) => {
   try {
-    const { vaultKey, vaultUser, daysBack, skipFetching } = req.body;
-    if (skipFetching) {
+    const { vaultKey } = req.body;
+    const data = await redis.get(vaultKey);
+    if (!data) {
+      console.log(`vault ${vaultKey.toString()} PNL not cached`);
       res.send(JSON.stringify([]));
     } else {
-      let data = await redis.get(vaultKey);
-      if (!data) {
-        const value = await fetchDriftUserHistoricalPnl(vaultUser, daysBack);
-        console.log(`vault PNL not cached, fetched ${value.length} entries`);
-        data = JSON.stringify(value);
-        await redis.set(vaultKey, data);
-      }
       res.send(data);
     }
   } catch (e: any) {
-    console.error(e);
-    throw new Error(e);
+    console.error(`error in proxy: ${e}`);
+    throw new Error(`error in proxy: ${e}`);
   }
 });
 
@@ -66,8 +58,8 @@ app.post("/api/set", async (req, res) => {
     const response = await redis.set(key, value);
     res.send(response);
   } catch (e: any) {
-    console.error(e);
-    throw new Error(e);
+    console.error(`error in proxy: ${e}`);
+    throw new Error(`error in proxy: ${e}`);
   }
 });
 
@@ -77,8 +69,8 @@ app.post("/api/get", async (req, res) => {
     const response = await redis.get(key);
     res.send(response);
   } catch (e: any) {
-    console.error(e);
-    throw new Error(e);
+    console.error(`error in proxy: ${e}`);
+    throw new Error(`error in proxy: ${e}`);
   }
 });
 
