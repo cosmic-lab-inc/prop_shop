@@ -24,3 +24,13 @@ export const FLIPSIDE_API_KEY = "flipside-api-key";
 ## TODO
 
 FundOverviewCard reads observable state of fund overviews rather than static prop
+
+Server reads 86400 txs (last day if transacting every second) to catch up on anything missed during potential downtime.
+Then stream events from there.
+For efficiency:
+
+- stream a batch of events
+- fetch the cached PNL[]
+- concat the new events
+- sort the new array
+- update the cache

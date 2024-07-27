@@ -7,11 +7,9 @@ import {
   msToMinutes,
   PropShopClient,
   RedisClient,
-  VaultPnl,
   yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { Connection, Keypair } from "@solana/web3.js";
-import { QUOTE_PRECISION, SettlePnlRecord } from "@drift-labs/sdk";
 
 // 24 hours
 const UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
@@ -142,54 +140,6 @@ async function update() {
   }
   console.log(
     `finished updating cache in ${msToMinutes(Date.now() - pre)} minutes`,
-  );
-}
-
-async function listenToEvents() {
-  if (!redis.connected) {
-    await redis.connect();
-  }
-  if (!client.vaultClient) {
-    await client.initialize();
-  }
-  if (!client.vaultClient) {
-    throw new Error("vaultClient not initialized");
-  }
-
-  const vaults = await client.fetchVaults();
-  // key is vault user, value is vault pubkey
-  const vaultUserMap = new Map<string, string>();
-  for (const vault of vaults) {
-    vaultUserMap.set(
-      vault.account.user.toString(),
-      vault.account.pubkey.toString(),
-    );
-  }
-
-  const driftProgram = client.vaultClient.driftClient.program;
-  const eventName = "SettlePnlRecord";
-  driftProgram.addEventListener(
-    eventName,
-    async (event: SettlePnlRecord, _slot: number, _signature: string) => {
-      const vault = vaultUserMap.get(event.user.toString());
-      if (!vault) {
-        throw new Error(`vault not found for user: ${event.user.toString()}`);
-      }
-      const cache = await redis.get(vault);
-      if (!cache) {
-        const pnl = VaultPnl.fromSettlePnlRecord([event]);
-        const value = JSON.stringify(pnl.data);
-        await redis.set(vault, value);
-      } else {
-        const pnl = VaultPnl.fromSettlePnlRecord(JSON.parse(cache));
-        pnl.data.push({
-          pnl: Number(event.pnl.toNumber()) / QUOTE_PRECISION.toNumber(),
-          ts: Number(event.ts.toNumber()),
-        });
-        const value = JSON.stringify(pnl.data);
-        await redis.set(vault, value);
-      }
-    },
   );
 }
 
