@@ -1,19 +1,17 @@
-import { Vault } from "@drift-labs/vaults-sdk";
 import { PNL, VaultPnl } from "./types";
 
 export class ProxyClient {
   /**
    * Returns historical pnl data from most recent to oldest
-   * @param vault
+   * @param key
    * @param daysBack
    * @param usePrefix set to true if used outside the vite app
    */
   public static async performance(params: {
-    vault: Vault;
-    daysBack: number;
+    key: string;
     usePrefix?: boolean;
   }): Promise<VaultPnl> {
-    const { vault, daysBack, usePrefix } = params;
+    const { key, usePrefix } = params;
     try {
       let url = "/api/performance";
       if (usePrefix) {
@@ -25,8 +23,7 @@ export class ProxyClient {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          vaultKey: vault.pubkey.toString(),
-          daysBack,
+          key,
         }),
       });
       const data: PNL[] = await response.json();

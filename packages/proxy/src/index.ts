@@ -38,10 +38,10 @@ app.use(async (_req, _res, next) => {
 
 app.post("/api/performance", async (req, res) => {
   try {
-    const { vaultKey } = req.body;
-    const data = await redis.get(vaultKey);
+    const { key } = req.body;
+    const data = await redis.get(key);
     if (!data) {
-      console.log(`vault ${vaultKey.toString()} PNL not cached`);
+      console.log(`vault ${key} PNL not cached`);
       res.send(JSON.stringify([]));
     } else {
       res.send(data);

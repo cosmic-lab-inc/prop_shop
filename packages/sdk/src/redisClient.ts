@@ -30,7 +30,11 @@ export class RedisClient {
     this.connected = false;
   }
 
-  public static vaultPnlKey(vault: PublicKey): string {
+  public static vaultPnlFromDriftKey(vault: PublicKey): string {
+    return `${vault.toString()}-drift`;
+  }
+
+  public static vaultPnlFromFlipsideKey(vault: PublicKey): string {
     return vault.toString();
   }
 

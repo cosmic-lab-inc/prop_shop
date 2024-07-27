@@ -3,10 +3,11 @@ import express from "express";
 import cors from "cors";
 import {
   driftVaults,
-  FlipsideClient,
+  fetchDriftUserHistoricalPnl,
   msToMinutes,
   PropShopClient,
   RedisClient,
+  VaultPnl,
   yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { Connection, Keypair } from "@solana/web3.js";
@@ -24,8 +25,7 @@ dotenv.config({
 if (
   !process.env.REDIS_ENDPOINT ||
   !process.env.REDIS_PASSWORD ||
-  !process.env.RPC_URL ||
-  !process.env.FLIPSIDE_API_KEY
+  !process.env.RPC_URL
 ) {
   throw new Error("Missing variables in root .env");
 }
@@ -47,8 +47,6 @@ const redis = RedisClient.new({
   password: process.env.REDIS_PASSWORD,
 });
 
-const flipside = new FlipsideClient(process.env.FLIPSIDE_API_KEY);
-
 const app = express();
 const port = 8080;
 
@@ -68,7 +66,6 @@ app.use(async (_req, _res, next) => {
   next();
 });
 
-// query SettlePnlRecord events from Flipside historical transactions and store in Redis
 async function update() {
   if (!redis.connected) {
     await redis.connect();
@@ -81,7 +78,7 @@ async function update() {
   const vaults = await client.fetchVaults();
 
   for (const vault of vaults) {
-    const vaultPnlKey = RedisClient.vaultPnlKey(vault.account.pubkey);
+    const vaultPnlKey = RedisClient.vaultPnlFromDriftKey(vault.account.pubkey);
     const vaultLastUpdateKey = RedisClient.vaultLastUpdateKey(
       vault.account.pubkey,
     );
@@ -114,19 +111,15 @@ async function update() {
       continue;
     }
 
-    if (!client.vaultClient) {
-      throw new Error("vaultClient not initialized");
-    }
-    const driftProgram = client.vaultClient.driftClient.program;
-
     console.log(
       `fetching pnl data for \"${name}\" with user: ${vault.account.user.toString()}`,
     );
     const preQuery = Date.now();
-    const pnl = await flipside.settlePnlData(
-      vault.account.user,
-      driftProgram as any,
-      DAYS_BACK,
+    const pnl = VaultPnl.fromHistoricalSettlePNL(
+      await fetchDriftUserHistoricalPnl(
+        vault.account.user.toString(),
+        DAYS_BACK,
+      ),
     );
     const start = pnl.startDate() ? yyyymmdd(pnl.startDate()!) : "undefined";
     const end = pnl.endDate() ? yyyymmdd(pnl.endDate()!) : "undefined";

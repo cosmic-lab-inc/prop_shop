@@ -21,7 +21,6 @@ import {
   encodeName,
   getUserStatsAccountPublicKey,
   IWallet,
-  OracleInfo,
   QUOTE_PRECISION,
   SpotMarketAccount,
   User,
@@ -40,11 +39,9 @@ import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
 import {
   Data,
-  DriftMarketInfo,
   DriftVaultsSubscriber,
   FundOverview,
   PropShopAccountEvents,
-  SerializedDriftMarketInfo,
   SnackInfo,
   WithdrawRequestTimer,
 } from "./types";
@@ -79,6 +76,7 @@ import {
   createAssociatedTokenAccountInstruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
+import { RedisClient } from "./redisClient";
 
 export class PropShopClient {
   private connection: Connection;
@@ -175,46 +173,6 @@ export class PropShopClient {
       provider,
     );
 
-    let spotMarketIndexes: number[] | undefined = undefined;
-    let oracleInfos: OracleInfo[] | undefined = undefined;
-    if (!this.skipFetching) {
-      const preSpotMarket = Date.now();
-      const _spotMarkets: SerializedDriftMarketInfo[] | null =
-        await ProxyClient.get("spotMarkets", this.useProxyPrefix);
-      const spotMarkets: DriftMarketInfo[] | undefined = _spotMarkets?.map(
-        (m) => {
-          return {
-            marketIndex: m.marketIndex,
-            oracle: new PublicKey(m.oracle),
-            oracleSource: m.oracleSource,
-          };
-        },
-      );
-      if (spotMarkets) {
-        console.log(
-          `fetched cached spot markets from redis in ${Date.now() - preSpotMarket}ms`,
-        );
-        spotMarketIndexes = spotMarkets.map((m) => m.marketIndex);
-        console.log(`${spotMarketIndexes.length} spot market indexes`);
-        // oracleInfos = spotMarkets.map((m) => {
-        //   return {
-        //     publicKey: m.oracle,
-        //     source: m.oracleSource,
-        //   };
-        // });
-        const usdcSpotMarket = spotMarkets.find((m) => m.marketIndex === 0);
-        if (usdcSpotMarket) {
-          oracleInfos = [
-            {
-              publicKey: usdcSpotMarket.oracle,
-              source: usdcSpotMarket.oracleSource,
-            },
-          ];
-        }
-        console.log(`${oracleInfos?.length ?? 0} oracle infos`);
-      }
-    }
-
     const driftClient = new DriftClient({
       connection,
       wallet: iWallet,
@@ -223,8 +181,6 @@ export class PropShopClient {
       },
       activeSubAccountId,
       accountSubscription,
-      spotMarketIndexes,
-      oracleInfos,
     });
     const preDriftSub = Date.now();
     await driftClient.subscribe();
@@ -621,9 +577,9 @@ export class PropShopClient {
     }
 
     const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
+    const key = RedisClient.vaultPnlFromDriftKey(vault.data.pubkey);
     const vaultPNL = await ProxyClient.performance({
-      vault: vault.data,
-      daysBack: 100,
+      key,
     });
     const data = vaultPNL.cumulativeSeriesPNL();
     const title = decodeName(vault.data.name);
@@ -664,9 +620,9 @@ export class PropShopClient {
     const fundOverviews: FundOverview[] = [];
     for (const vault of vaults) {
       const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
+      const key = RedisClient.vaultPnlFromDriftKey(vault.data.pubkey);
       const vaultPNL = await ProxyClient.performance({
-        vault: vault.data,
-        daysBack: 100,
+        key,
       });
       const data = vaultPNL.cumulativeSeriesPNL();
       const title = decodeName(vault.data.name);

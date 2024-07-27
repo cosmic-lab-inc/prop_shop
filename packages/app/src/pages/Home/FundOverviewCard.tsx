@@ -91,7 +91,7 @@ export function FundOverviewCard({
               type="monotone"
               dataKey="y"
               stroke={roi < 0 ? customTheme.error : customTheme.success}
-              strokeWidth={5}
+              strokeWidth={2}
               dot={{
                 r: 0,
               }}

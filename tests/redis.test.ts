@@ -12,9 +12,12 @@ import {
   ProxyClient,
   RedisClient,
   SerializedDriftMarketInfo,
+  truncateNumber,
+  yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
 import { exec } from "child_process";
+import { decodeName } from "@drift-labs/sdk";
 
 function killProxy(): Promise<void> {
   // proxy runs on port 5173
@@ -175,30 +178,29 @@ describe("Redis", () => {
     console.log(spotMarkets);
   });
 
-  // it("Set & Get Vault PNLs", async () => {
-  //   const vaults = await client.fetchVaults();
-  //   expect(vaults.length).toBeGreaterThan(0);
-  //
-  //   for (const vault of vaults) {
-  //     const key = vault.account.pubkey.toString();
-  //     // await redis.delete(key);
-  //     const name = decodeName(vault.account.name);
-  //     const daysBack = 30;
-  //     const pnl = await ProxyClient.performance({
-  //       vault: vault.account,
-  //       daysBack,
-  //       usePrefix: true,
-  //     });
-  //
-  //     if (pnl.data.length > 0) {
-  //       const start = pnl.startDate()
-  //         ? yyyymmdd(pnl.startDate()!)
-  //         : "undefined";
-  //       const end = pnl.endDate() ? yyyymmdd(pnl.endDate()!) : "undefined";
-  //       console.log(
-  //         `${name} pnl from ${start} to ${end} amd ${pnl.data.length} trades: $${truncateNumber(pnl.cumulativePNL(), 2)}`,
-  //       );
-  //     }
-  //   }
-  // });
+  it("Set & Get Vault PNLs", async () => {
+    const vaults = await client.fetchVaults();
+    expect(vaults.length).toBeGreaterThan(0);
+
+    for (const vault of vaults) {
+      const key = vault.account.pubkey.toString();
+      // await redis.delete(key);
+      const name = decodeName(vault.account.name);
+      const daysBack = 30;
+      const pnl = await ProxyClient.performance({
+        key: RedisClient.vaultPnlFromDriftKey(vault.publicKey),
+        usePrefix: true,
+      });
+
+      if (pnl.data.length > 0) {
+        const start = pnl.startDate()
+          ? yyyymmdd(pnl.startDate()!)
+          : "undefined";
+        const end = pnl.endDate() ? yyyymmdd(pnl.endDate()!) : "undefined";
+        console.log(
+          `${name} pnl from ${start} to ${end} amd ${pnl.data.length} trades: $${truncateNumber(pnl.cumulativePNL(), 2)}`,
+        );
+      }
+    }
+  });
 });
