@@ -7,8 +7,10 @@ import {
   OutlinedInput,
   Typography,
 } from "@mui/material";
+import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import InputAdornment from "@mui/material/InputAdornment";
 import { SendButton } from "../../../components";
+import { PublicKey } from "@solana/web3.js";
 
 export enum TransferInputAction {
   DEPOSIT = "deposit",
@@ -17,12 +19,16 @@ export enum TransferInputAction {
 }
 
 export function TransferInputDialog({
+  client,
+  vault,
   defaultValue,
   open,
   onClose,
   onChange,
   onSubmit,
 }: {
+  client: PropShopClient;
+  vault: PublicKey;
   defaultValue: number;
   open: boolean;
   onClose: () => void;

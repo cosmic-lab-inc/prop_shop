@@ -51,12 +51,14 @@ export const theme: Theme = createTheme({
   },
   typography: {
     fontFamily: customTheme.font.light,
+
     fontSize: 16,
     h1: {
       fontFamily: customTheme.font.heavy,
       fontSize: 46,
       fontWeight: 900,
       lineHeight: "4rem",
+      color: customTheme.light,
     },
     h2: {
       fontSize: 30,
@@ -64,6 +66,7 @@ export const theme: Theme = createTheme({
       lineHeight: "2rem",
       letterSpacing: "2px",
       fontFamily: customTheme.font.heavy,
+      color: customTheme.light,
     },
     h3: {
       fontSize: 24,
@@ -71,16 +74,19 @@ export const theme: Theme = createTheme({
       lineHeight: "2rem",
       letterSpacing: "2px",
       fontFamily: customTheme.font.heavy,
+      color: customTheme.light,
     },
     h4: {
       fontSize: 20,
       lineHeight: "2rem",
       letterSpacing: "2px",
+      color: customTheme.light,
     },
     body1: {
       fontSize: 16,
       lineHeight: "2rem",
       letterSpacing: "2px",
+      color: customTheme.light,
     },
     button: {
       fontSize: 18,
@@ -89,6 +95,7 @@ export const theme: Theme = createTheme({
       lineHeight: "2rem",
       letterSpacing: "1px",
       fontFamily: customTheme.font.heavy,
+      color: customTheme.light,
     },
   },
   components: {

@@ -113,8 +113,6 @@ export const InvestorStats = observer(
     return (
       <>
         <TransferInputDialog
-          client={client}
-          vault={vault}
           defaultValue={defaultValue!}
           open={open}
           onClose={() => resetDialog()}
