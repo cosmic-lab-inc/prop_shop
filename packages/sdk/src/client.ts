@@ -445,6 +445,7 @@ export class PropShopClient {
     if (res.length === 0) {
       res = await this.fetchFundOverviews(protocolsOnly);
     }
+    res.sort((a, b) => a.lifetimePNL / a.tvl - b.lifetimePNL / b.tvl);
     return res;
   }
 

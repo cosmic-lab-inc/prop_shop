@@ -3,6 +3,7 @@ import { Box } from "@mui/material";
 import { Funds } from "./Funds";
 import { observer } from "mobx-react";
 import { useClient } from "../../lib";
+import { NewFund } from "./NewFund";
 
 export const Home = observer(() => {
   const client = useClient();
@@ -16,7 +17,12 @@ export const Home = observer(() => {
         gap: 2,
       }}
     >
-      {client && <Funds client={client} />}
+      {client && (
+        <>
+          <Funds client={client} />
+          <NewFund client={client} />
+        </>
+      )}
     </Box>
   );
 });

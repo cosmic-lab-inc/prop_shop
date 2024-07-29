@@ -5,8 +5,8 @@ const config: Config = {
   testEnvironment: "node",
   testPathIgnorePatterns: ["<rootDir>/dist"],
   setupFilesAfterEnv: ["jest-expect-message"],
-  testTimeout: 3 * 60 * 1000,
-  openHandlesTimeout: 0,
+  testTimeout: 2 * 60 * 1000,
+  openHandlesTimeout: 5 * 1000,
 };
 
 export default config;
