@@ -20,6 +20,7 @@ export function NewFundDialog({
     enqueueSnackbar(snack.message, {
       variant: snack.variant,
     });
+    onClose();
   }
 
   return (

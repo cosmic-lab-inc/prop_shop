@@ -120,6 +120,7 @@ export class PropShopClient {
     this.useProxyPrefix = config.useProxyPrefix ?? false;
 
     this.eventEmitter.on("vaultUpdate", (payload: Data<PublicKey, Vault>) => {
+      console.log(`vault event: ${payload.key.toString()}`);
       this._vaults.set(payload.key.toString(), payload.data);
     });
     this.eventEmitter.on(
@@ -205,6 +206,7 @@ export class PropShopClient {
       // takes about 2s for websocket and 4s for polling
       console.log(`Cache subscribed in ${Date.now() - preSub}ms`);
     }
+    await this.fetchFundOverviews();
 
     this.loading = false;
     // 3-6s
@@ -384,9 +386,6 @@ export class PropShopClient {
           data,
         };
       }) as Data<PublicKey, Vault>[];
-    console.log(
-      `fetched ${vaults.length} cached vaults in ${Date.now() - preFetch}ms`,
-    );
     return vaults;
   }
 
@@ -431,27 +430,27 @@ export class PropShopClient {
           data,
         };
       }) as Data<PublicKey, VaultDepositor>[];
-    console.log(
-      `fetched ${vds.length} cached vds in ${Date.now() - preFetch}ms`,
-    );
     return vds;
   }
 
-  public async fundOverview(key: PublicKey): Promise<FundOverview> {
-    let res = this._fundOverviews.get(key.toString());
-    if (!res) {
-      res = await this.fetchFundOverview(key);
-    }
+  public async fundOverview(key: PublicKey): Promise<FundOverview | undefined> {
+    return this._fundOverviews.get(key.toString());
+  }
+
+  public fundOverviews(protocolsOnly?: boolean): FundOverview[] {
+    let res = Array.from(this._fundOverviews.values());
+    res = res.sort((a, b) => a.lifetimePNL / a.tvl - b.lifetimePNL / b.tvl);
     return res;
   }
 
-  public async fundOverviews(protocolsOnly?: boolean): Promise<FundOverview[]> {
-    let res = Array.from(this._fundOverviews.values());
-    if (res.length === 0) {
-      res = await this.fetchFundOverviews(protocolsOnly);
+  public async fetchVault(key: PublicKey): Promise<ProgramAccount<Vault>> {
+    if (!this.vaultClient) {
+      throw new Error("VaultClient not initialized");
     }
-    res.sort((a, b) => a.lifetimePNL / a.tvl - b.lifetimePNL / b.tvl);
-    return res;
+    // @ts-ignore ... Vault type omits padding fields, but this is safe.
+    const vault: ProgramAccount<Vault> =
+      await this.vaultClient.program.account.vault.fetch(key);
+    return vault;
   }
 
   public async fetchVaults(
@@ -1192,12 +1191,17 @@ export class PropShopClient {
       encodeName(params.name),
     );
     const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+
+    console.log(`created vault: ${vault.toString()}`);
+    await this._cache?.subscribe();
+    await this.fetchFundOverview(vault);
+
     return {
       vault,
       vaultProtocol,
       snack: {
         variant: "success",
-        message: `Created ${params.name} vault`,
+        message: `Created \"${params.name}\"`,
       },
     };
   }
