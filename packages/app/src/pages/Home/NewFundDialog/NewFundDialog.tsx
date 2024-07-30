@@ -1,8 +1,8 @@
 import React from "react";
-import { Box, Dialog } from "@mui/material";
+import { Dialog } from "@mui/material";
 import { InputFields } from "./InputFields";
-import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
-import { customTheme } from "../../../styles";
+import { CreateVaultConfig, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
+import { useSnackbar } from "notistack";
 
 export function NewFundDialog({
   client,
@@ -13,10 +13,19 @@ export function NewFundDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const { enqueueSnackbar } = useSnackbar();
+
+  async function submit(config: CreateVaultConfig) {
+    const snack = (await client.createVault(config)).snack;
+    enqueueSnackbar(snack.message, {
+      variant: snack.variant,
+    });
+  }
+
   return (
     <>
       <Dialog
-        maxWidth="sm"
+        maxWidth="lg"
         fullWidth={true}
         fullScreen={false}
         scroll="paper"
@@ -31,19 +40,7 @@ export function NewFundDialog({
           backgroundColor: "transparent",
         }}
       >
-        <Box
-          sx={{
-            width: "100%",
-            height: "100%",
-            flexDirection: "column",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            bgcolor: customTheme.grey,
-          }}
-        >
-          <InputFields client={client} />
-        </Box>
+        <InputFields client={client} onSubmit={submit} />
       </Dialog>
     </>
   );

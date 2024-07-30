@@ -1,7 +1,7 @@
 import {
-  adjectives,
   animals,
-  colors,
+  languages,
+  starWars,
   uniqueNamesGenerator,
 } from "unique-names-generator";
 
@@ -14,12 +14,26 @@ export function copyToClipboard(text: string): void {
   navigator.clipboard.writeText(text).catch(console.error);
 }
 
-export function randomName(words: number = 2): string {
-  const id = uniqueNamesGenerator({
-    dictionaries: [adjectives, animals, colors],
+export function randomName(
+  words: number = 2,
+  charLimit: number = 32,
+  separator: string = " ",
+): string {
+  let _name = uniqueNamesGenerator({
+    dictionaries: [languages, starWars, animals],
+    separator,
     length: words,
+    style: "capital",
   });
-  return id.replace("_", "-");
+  while (_name.length > charLimit) {
+    _name = uniqueNamesGenerator({
+      dictionaries: [languages, starWars, animals],
+      separator,
+      length: words,
+      style: "capital",
+    });
+  }
+  return _name;
 }
 
 export function truncateString(str: string, length: number = 10): string {

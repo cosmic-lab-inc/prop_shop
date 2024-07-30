@@ -1,14 +1,40 @@
-import React, { FC, ReactNode } from 'react';
-import {theme} from './theme';
-import {CssBaseline, StyledEngineProvider, ThemeProvider} from '@mui/material';
-import { SnackbarProvider } from 'notistack';
+import React, { FC, ReactNode } from "react";
+import { customTheme, theme } from "./theme";
+import {
+  CssBaseline,
+  styled,
+  StyledEngineProvider,
+  ThemeProvider,
+} from "@mui/material";
+import { MaterialDesignContent, SnackbarProvider } from "notistack";
+
+const CustomSnack = styled(MaterialDesignContent)(() => ({
+  "&.notistack-MuiContent-success": {
+    fontSize: 20,
+    fontFamily: customTheme.font.heavy,
+    borderRadius: "10px",
+    backgroundColor: customTheme.success,
+  },
+  "&.notistack-MuiContent-error": {
+    fontSize: 20,
+    fontFamily: customTheme.font.heavy,
+    borderRadius: "10px",
+    backgroundColor: customTheme.error,
+  },
+}));
 
 export const ThemeWrapper: FC<{ children: ReactNode }> = ({ children }) => {
   return (
     <StyledEngineProvider injectFirst>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <SnackbarProvider>{children}</SnackbarProvider>
+        <SnackbarProvider
+          Components={{
+            error: CustomSnack,
+          }}
+        >
+          {children}
+        </SnackbarProvider>
       </ThemeProvider>
     </StyledEngineProvider>
   );

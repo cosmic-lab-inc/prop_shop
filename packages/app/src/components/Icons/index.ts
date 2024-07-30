@@ -1,6 +1,4 @@
-export * from "./HistorianIcon";
-export * from "./DataMinerIcon";
-export * from "./TimelessIcon";
+export * from "./UsdcIcon";
 export * from "./ArrowsIcon";
 export * from "./AirdropIcon";
 export * from "./PlusIcon";

@@ -2,6 +2,25 @@ import { BN } from "@coral-xyz/anchor";
 import { QUOTE_PRECISION, SettlePnlRecord } from "@drift-labs/sdk";
 import { PublicKey } from "@solana/web3.js";
 
+export interface CreateVaultConfig {
+  // The name of the vault
+  name: string;
+  // The percent of profits to share with the vault manager
+  percentProfitShare: number;
+  // The percent annual fee on assets under management
+  percentAnnualManagementFee: number;
+  // The minimum deposit in USDC required to join a vault as an investor
+  minDepositUSDC?: number;
+  // Whether the vault is invite only
+  permissioned?: boolean;
+  // The period in seconds that investors must wait after requesting to redeem their funds
+  redeemPeriod?: number;
+  // Maximum vault capacity in USDC
+  maxCapacityUSDC?: number;
+  // Delegate with permission to trade on behalf of the vault's user
+  delegate?: PublicKey;
+}
+
 export interface FundOverview {
   vault: PublicKey;
   lifetimePNL: number;

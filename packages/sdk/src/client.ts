@@ -1,4 +1,5 @@
 import {
+  AccountMeta,
   Connection,
   GetProgramAccountsFilter,
   Keypair,
@@ -19,6 +20,7 @@ import {
   DriftClient,
   DriftClientConfig,
   encodeName,
+  getUserAccountPublicKeySync,
   getUserStatsAccountPublicKey,
   IWallet,
   QUOTE_PRECISION,
@@ -38,6 +40,7 @@ import { Drift } from "./idl/drift";
 import { percentToPercentPrecision } from "./utils";
 import { confirmTransactions, formatExplorerLink } from "./rpc";
 import {
+  CreateVaultConfig,
   Data,
   DriftVaultsSubscriber,
   FundOverview,
@@ -47,6 +50,7 @@ import {
 } from "./types";
 import {
   DriftVaults,
+  getTokenVaultAddressSync,
   getVaultAddressSync,
   getVaultDepositorAddressSync,
   getVaultProtocolAddressSync,
@@ -54,6 +58,7 @@ import {
   Vault,
   VaultClient,
   VaultDepositor,
+  VaultParams,
   VaultProtocolParams,
   WithdrawUnit,
 } from "@drift-labs/vaults-sdk";
@@ -1024,25 +1029,104 @@ export class PropShopClient {
   // Manager actions
   //
 
+  public async createVaultWithDelegate(
+    params: {
+      name: number[];
+      spotMarketIndex: number;
+      redeemPeriod: BN;
+      maxTokens: BN;
+      minDepositAmount: BN;
+      managementFee: BN;
+      profitShare: number;
+      hurdleRate: number;
+      permissioned: boolean;
+      vaultProtocol?: VaultProtocolParams;
+    },
+    delegate: PublicKey,
+  ): Promise<string> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    // This is a workaround to make client backwards compatible.
+    // VaultProtocol is optionally undefined, but the anchor type is optionally null.
+    // Old clients will default to undefined which prevents old clients from having to pass in a null value.
+    // Instead, we can cast to null internally.
+    const _params: VaultParams = {
+      ...params,
+      vaultProtocol: params.vaultProtocol ? params.vaultProtocol : null,
+    };
+
+    const vault = getVaultAddressSync(
+      this.vaultClient.program.programId,
+      params.name,
+    );
+    const tokenAccount = getTokenVaultAddressSync(
+      this.vaultClient.program.programId,
+      vault,
+    );
+
+    const driftState = await this.vaultClient.driftClient.getStatePublicKey();
+    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
+      params.spotMarketIndex,
+    );
+    if (!spotMarket) {
+      throw new Error(
+        `Spot market ${params.spotMarketIndex} not found on driftClient`,
+      );
+    }
+
+    const userStatsKey = getUserStatsAccountPublicKey(
+      this.vaultClient.driftClient.program.programId,
+      vault,
+    );
+    const userKey = getUserAccountPublicKeySync(
+      this.vaultClient.driftClient.program.programId,
+      vault,
+    );
+
+    const accounts = {
+      driftSpotMarket: spotMarket.pubkey,
+      driftSpotMarketMint: spotMarket.mint,
+      driftUserStats: userStatsKey,
+      driftUser: userKey,
+      driftState,
+      vault,
+      tokenAccount,
+      driftProgram: this.vaultClient.driftClient.program.programId,
+    };
+
+    const updateDelegateIx = await this.delegateVaultIx(vault, delegate);
+
+    if (params.vaultProtocol) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(
+        getVaultAddressSync(this.vaultClient.program.programId, params.name),
+      );
+      const remainingAccounts: AccountMeta[] = [
+        {
+          pubkey: vaultProtocol,
+          isSigner: false,
+          isWritable: true,
+        },
+      ];
+      return await this.vaultClient.program.methods
+        .initializeVault(_params)
+        .accounts(accounts)
+        .remainingAccounts(remainingAccounts)
+        .postInstructions([updateDelegateIx])
+        .rpc();
+    } else {
+      return await this.vaultClient.program.methods
+        .initializeVault(_params)
+        .accounts(accounts)
+        .postInstructions([updateDelegateIx])
+        .rpc();
+    }
+  }
+
   /**
    * The connected wallet will become the manager of the vault.
    */
-  public async createVault(params: {
-    // The name of the vault
-    name: string;
-    // The percent of profits to share with the vault manager
-    percentProfitShare: number;
-    // The percent annual fee on assets under management
-    percentAnnualManagementFee: number;
-    // The minimum deposit in USDC required to join a vault as an investor
-    minDepositUSDC?: number;
-    // Whether the vault is invite only
-    permissioned?: boolean;
-    // The period in seconds that investors must wait after requesting to redeem their funds
-    redeemPeriod?: number;
-    // Maximum vault capacity in USDC
-    maxCapacityUSDC?: number;
-  }): Promise<{
+  public async createVault(params: CreateVaultConfig): Promise<{
     vault: PublicKey;
     vaultProtocol: PublicKey;
     snack: SnackInfo;
@@ -1091,7 +1175,14 @@ export class PropShopClient {
       permissioned,
       vaultProtocol: vaultProtocolParams,
     };
-    const sig = await this.vaultClient.initializeVault(vaultParams);
+
+    let sig: string;
+    if (params.delegate) {
+      sig = await this.createVaultWithDelegate(vaultParams, params.delegate);
+    } else {
+      sig = await this.vaultClient.initializeVault(vaultParams);
+    }
+
     console.debug(
       "initialize vault:",
       formatExplorerLink(sig, this.connection),
@@ -1109,6 +1200,28 @@ export class PropShopClient {
         message: `Created ${params.name} vault`,
       },
     };
+  }
+
+  public async delegateVaultIx(
+    vault: PublicKey,
+    delegate: PublicKey,
+  ): Promise<TransactionInstruction> {
+    if (!this.vaultClient) {
+      throw new Error("VaultClient not initialized");
+    }
+    const vaultUser = getUserAccountPublicKeySync(
+      this.vaultClient.driftClient.program.programId,
+      vault,
+    );
+
+    return this.vaultClient.program.methods
+      .updateDelegate(delegate)
+      .accounts({
+        vault,
+        driftUser: vaultUser,
+        driftProgram: this.vaultClient.driftClient.program.programId,
+      })
+      .instruction();
   }
 
   public async delegateVault(

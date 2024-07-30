@@ -25,12 +25,11 @@ export const FLIPSIDE_API_KEY = "flipside-api-key";
 
 FundOverviewCard reads observable state of fund overviews rather than static prop
 
-Server reads 86400 txs (last day if transacting every second) to catch up on anything missed during potential downtime.
-Then stream events from there.
-For efficiency:
+Sort funds by criteria: lifetime PNL, TVL, num investors, APY
 
-- stream a batch of events
-- fetch the cached PNL[]
-- concat the new events
-- sort the new array
-- update the cache
+Manage Vaults tab:
+
+- pending redemptions (countdown, equity, investor key)
+- dialog to invite investor
+- FundOverviewCard for managed funds, shows manager equity and button to deposit/withdraw
+- settings (UpdateVaultParams, including delegate!)

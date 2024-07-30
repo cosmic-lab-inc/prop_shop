@@ -7,10 +7,8 @@ export const customTheme = {
   grey2: "#15151a",
   dark: "#0e0907",
 
-  // secondary: "#745476",
   secondary: "#5f8ea0",
-  // blue: "#7ccedd",
-  blue: "#73a4ac",
+  blue: "#5f8ea0",
 
   success: "#5f8ea0",
   error: "#d47755",
