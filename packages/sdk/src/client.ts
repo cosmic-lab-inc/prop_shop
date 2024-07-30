@@ -1020,7 +1020,7 @@ export class PropShopClient {
     const vaultName = decodeName(this.vault(vault)!.data.name);
     return {
       variant: "success",
-      message: `Withdraw from ${vaultName}`,
+      message: `Withdrew from ${vaultName}`,
     };
   }
 

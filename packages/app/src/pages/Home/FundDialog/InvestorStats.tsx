@@ -155,22 +155,20 @@ export const InvestorStats = observer(
                   }
                   onClick={withdraw}
                 >
-                  <Typography variant="button">WITHDRAW</Typography>
+                  Withdraw
                 </ActionButton>
                 <ActionButton onClick={cancelWithdraw}>
-                  <Typography variant="button">CANCEL WITHDRAW</Typography>
+                  Cancel Withdraw
                 </ActionButton>
               </>
             ) : (
               <>
-                <ActionButton onClick={clickDeposit}>
-                  <Typography variant="button">DEPOSIT</Typography>
-                </ActionButton>
+                <ActionButton onClick={clickDeposit}>Deposit</ActionButton>
                 <ActionButton
                   disabled={!client.vaultEquity(vault) || !vd}
                   onClick={clickRequestWithdraw}
                 >
-                  <Typography variant="button">REQUEST WITHDRAW</Typography>
+                  Request Withdraw
                 </ActionButton>
               </>
             )}

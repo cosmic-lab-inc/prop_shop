@@ -31,6 +31,7 @@ export const ThemeWrapper: FC<{ children: ReactNode }> = ({ children }) => {
         <SnackbarProvider
           Components={{
             error: CustomSnack,
+            success: CustomSnack,
           }}
         >
           {children}

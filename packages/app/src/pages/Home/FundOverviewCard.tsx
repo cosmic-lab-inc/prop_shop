@@ -70,12 +70,7 @@ export function FundOverviewCard({
         open={open}
         onClose={() => setOpen(false)}
       />
-      <Container
-        onClick={() => {
-          console.log("clicky click");
-          setOpen(true);
-        }}
-      >
+      <Container onClick={() => setOpen(true)}>
         <Header title={title} investors={investors} />
         <Box
           sx={{

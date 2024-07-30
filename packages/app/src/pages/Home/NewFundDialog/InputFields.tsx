@@ -69,12 +69,10 @@ export function InputFields({
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          width: "30%",
+          width: "20%",
         }}
       >
-        <ActionButton onClick={() => onSubmit(config)}>
-          <Typography variant="button">CREATE</Typography>
-        </ActionButton>
+        <ActionButton onClick={() => onSubmit(config)}>Create</ActionButton>
       </Box>
     </Box>
   );

@@ -40,7 +40,7 @@ export function Toolbar() {
           }}
         >
           <PropShopIcon size={70} />
-          <Typography variant="h2">PROP SHOP</Typography>
+          <Typography variant="h2">Prop Shop</Typography>
         </Box>
         <Box
           sx={{

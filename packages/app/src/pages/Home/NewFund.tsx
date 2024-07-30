@@ -28,12 +28,12 @@ export function NewFund({ client }: { client: PropShopClient }) {
         <Typography variant="h2">Think you can beat the market?</Typography>
         <Box
           sx={{
-            width: "20%",
-            height: "100px",
+            width: "15%",
+            height: "80px",
           }}
         >
           <ActionButton onClick={() => setOpen(true)}>
-            <Typography variant="h3">Create a Fund</Typography>
+            Create a Fund
           </ActionButton>
         </Box>
       </Box>
