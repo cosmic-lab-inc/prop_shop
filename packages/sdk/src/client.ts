@@ -614,7 +614,7 @@ export class PropShopClient {
       investors: investors.length,
       data,
     };
-    this._fundOverviews.set(vault.key, fo);
+    this._fundOverviews.set(vault.key.toString(), fo);
     return fo;
   }
 
@@ -659,7 +659,7 @@ export class PropShopClient {
         data,
       };
       fundOverviews.push(fo);
-      this._fundOverviews.set(vault.key, fo);
+      this._fundOverviews.set(vault.key.toString(), fo);
     }
     return fundOverviews;
   }
