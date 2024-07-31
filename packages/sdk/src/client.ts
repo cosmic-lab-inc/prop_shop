@@ -119,6 +119,20 @@ export class PropShopClient {
     this.disableCache = config.disableCache ?? false;
     this.skipFetching = config.skipFetching ?? false;
     this.useProxyPrefix = config.useProxyPrefix ?? false;
+
+    this.eventEmitter.on(
+      "vaultUpdate",
+      async (payload: Data<PublicKey, Vault>) => {
+        this._vaults.set(payload.key.toString(), payload.data);
+        await this.fetchFundOverview(payload.key);
+      },
+    );
+    this.eventEmitter.on(
+      "vaultDepositorUpdate",
+      (payload: Data<PublicKey, VaultDepositor>) => {
+        this._vaultDepositors.set(payload.key.toString(), payload.data);
+      },
+    );
   }
 
   //
@@ -197,23 +211,25 @@ export class PropShopClient {
       console.log(`cache subscribed in ${Date.now() - preSub}ms`);
     }
     const preFo = Date.now();
-    await this.fetchFundOverviews();
-    console.log(`fetched fund overviews in ${Date.now() - preFo}ms`);
+    const funds = await this.fetchFundOverviews();
+    console.log(
+      `fetched ${funds.length} fund overviews in ${Date.now() - preFo}ms`,
+    );
 
-    this.eventEmitter.on(
-      "vaultUpdate",
-      async (payload: Data<PublicKey, Vault>) => {
-        this._vaults.set(payload.key.toString(), payload.data);
-        console.log(`vault event: ${payload.key.toString()}`);
-        await this.fetchFundOverview(payload.key);
-      },
-    );
-    this.eventEmitter.on(
-      "vaultDepositorUpdate",
-      (payload: Data<PublicKey, VaultDepositor>) => {
-        this._vaultDepositors.set(payload.key.toString(), payload.data);
-      },
-    );
+    // this.eventEmitter.on(
+    //   "vaultUpdate",
+    //   async (payload: Data<PublicKey, Vault>) => {
+    //     this._vaults.set(payload.key.toString(), payload.data);
+    //     console.log(`vault event: ${payload.key.toString()}`);
+    //     await this.fetchFundOverview(payload.key);
+    //   },
+    // );
+    // this.eventEmitter.on(
+    //   "vaultDepositorUpdate",
+    //   (payload: Data<PublicKey, VaultDepositor>) => {
+    //     this._vaultDepositors.set(payload.key.toString(), payload.data);
+    //   },
+    // );
 
     this.loading = false;
     // 3-6s
@@ -370,17 +386,6 @@ export class PropShopClient {
     }
   }
 
-  public get rawVaults(): Data<PublicKey, Vault>[] {
-    // account subscriber fetches upon subscription, so these should never be undefined
-    const vaults = Array.from(this._vaults.entries()).map(([key, data]) => {
-      return {
-        key: new PublicKey(key),
-        data,
-      };
-    }) as Data<PublicKey, Vault>[];
-    return vaults;
-  }
-
   public vaults(protocolsOnly?: boolean): Data<PublicKey, Vault>[] {
     // account subscriber fetches upon subscription, so these should never be undefined
     const vaults = Array.from(this._vaults.entries())
@@ -449,9 +454,9 @@ export class PropShopClient {
   }
 
   public get fundOverviews(): FundOverview[] {
-    let res = Array.from(this._fundOverviews.values());
-    res = res.sort((a, b) => a.lifetimePNL / a.tvl - b.lifetimePNL / b.tvl);
-    return res;
+    return Array.from(this._fundOverviews.values()).sort(
+      (a, b) => a.lifetimePNL / a.tvl - b.lifetimePNL / b.tvl,
+    );
   }
 
   public async fetchVault(key: PublicKey): Promise<ProgramAccount<Vault>> {
@@ -577,6 +582,10 @@ export class PropShopClient {
     };
   }
 
+  private setFundOverview(key: PublicKey, fo: FundOverview) {
+    this._fundOverviews.set(key.toString(), fo);
+  }
+
   public async fetchFundOverview(vaultKey: PublicKey): Promise<FundOverview> {
     const vault = this.vault(vaultKey)!;
     const vds = this.vaultDepositors();
@@ -614,7 +623,7 @@ export class PropShopClient {
       investors: investors.length,
       data,
     };
-    this._fundOverviews.set(vault.key.toString(), fo);
+    this.setFundOverview(vault.key, fo);
     return fo;
   }
 
@@ -659,7 +668,7 @@ export class PropShopClient {
         data,
       };
       fundOverviews.push(fo);
-      this._fundOverviews.set(vault.key.toString(), fo);
+      this.setFundOverview(vault.key, fo);
     }
     return fundOverviews;
   }
