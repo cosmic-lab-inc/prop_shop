@@ -1,40 +1,34 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Box, Button, ButtonProps, styled, Typography } from "@mui/material";
 import { FundOverviewCard } from "./FundOverviewCard";
-import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
+import { FundOverview, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import useEmblaCarousel from "embla-carousel-react";
 import { EmblaCarouselType, EmblaOptionsType } from "embla-carousel";
 import { customTheme } from "../../styles";
+import { mockFundOverviews } from "../../lib";
+import { observer } from "mobx-react";
 
 // todo: fetch vaults and sort by criteria using PropShopClient
-export function Funds({ client }: { client: PropShopClient }) {
-  // const [funds, setFunds] = React.useState<FundOverview[]>([]);
-  //
-  // React.useEffect(() => {
-  //   async function fetchFunds() {
-  //     if (
-  //       process.env.ENV === "dev" ||
-  //       process.env.RPC_URL === "http://localhost:8899"
-  //     ) {
-  //       const _funds = (await client.fundOverviews()).map((fund) => {
-  //         return {
-  //           ...fund,
-  //           data: mockFundOverviews()[0].data,
-  //         };
-  //       });
-  //       setFunds(_funds);
-  //     } else {
-  //       setFunds(await client.fundOverviews());
-  //     }
-  //   }
-  //
-  //   fetchFunds();
-  // }, [client.fundOverviews]);
+export const Funds = observer(({ client }: { client: PropShopClient }) => {
+  const [funds, setFunds] = React.useState<FundOverview[]>([]);
 
   React.useEffect(() => {
-    const res = client.fundOverviews();
-    console.log(`fund overviews: ${res.length}`);
-  });
+    if (
+      process.env.ENV === "dev" ||
+      process.env.RPC_URL === "http://localhost:8899"
+    ) {
+      setFunds(
+        client.fundOverviews.map((fund) => {
+          return {
+            ...fund,
+            data: mockFundOverviews()[0].data,
+          };
+        }),
+      );
+    } else {
+      setFunds(client.fundOverviews);
+    }
+  }, [client.fundOverviews]);
 
   const options: EmblaOptionsType = {
     containScroll: false,
@@ -90,7 +84,7 @@ export function Funds({ client }: { client: PropShopClient }) {
         }}
       >
         <InnerContainer>
-          {client.fundOverviews().map((fund, i) => {
+          {funds.map((fund, i) => {
             return (
               <FundOverviewCard key={i} client={client} fundOverview={fund} />
             );
@@ -104,7 +98,7 @@ export function Funds({ client }: { client: PropShopClient }) {
       </ButtonControls>
     </Box>
   );
-}
+});
 
 const InnerContainer = styled("div")(({ theme }) => ({
   backfaceVisibility: "hidden",

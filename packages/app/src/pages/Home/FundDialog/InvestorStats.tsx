@@ -179,6 +179,7 @@ export const InvestorStats = observer(
   },
 );
 
+// todo: remove useEffect and react mobx computed state
 const Stats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
     const key = client.clientVaultDepositor(vault)?.key;
@@ -188,6 +189,7 @@ const Stats = observer(
     );
     const [equity, setEquity] = React.useState<number | undefined>(undefined);
     React.useEffect(() => {
+      console.log(`use effect equity: ${client.vaultEquity(vault)}`);
       setEquity(client.vaultEquity(vault));
       setTimer(client.withdrawTimer(vault));
     }, [key, client.vaultEquity(vault), client.withdrawTimer(vault)]);

@@ -29,6 +29,14 @@ export interface PropShopAccountEvents {
   error: (e: Error) => void;
 }
 
+// map AccountNamespace<DriftVaults> to PropShopAccountEvents
+export const PropShopAccountEventsMap: {
+  [key: string]: keyof PropShopAccountEvents;
+} = {
+  vault: "vaultUpdate",
+  vaultDepositor: "vaultDepositorUpdate",
+};
+
 export interface AccountSubscription {
   accountName: keyof AccountNamespace<DriftVaults>;
   publicKey: PublicKey;

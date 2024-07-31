@@ -84,25 +84,26 @@ import {
 import { RedisClient } from "./redisClient";
 
 export class PropShopClient {
-  private connection: Connection;
-  private wallet: WalletContextState;
+  private readonly connection: Connection;
+  private readonly wallet: WalletContextState;
   vaultClient: VaultClient | undefined;
-  loading: boolean = false;
+
+  private loading: boolean = false;
+  private readonly disableCache: boolean = false;
+  private readonly skipFetching: boolean = false;
+  private readonly useProxyPrefix: boolean = false;
+
   private eventEmitter: StrictEventEmitter<
     EventEmitter,
     PropShopAccountEvents
   > = new EventEmitter();
-
-  private _fundOverviews: Map<string, FundOverview> = new Map();
   private _cache: DriftVaultsSubscriber | undefined = undefined;
 
-  private readonly disableCache: boolean = false;
-  private readonly skipFetching: boolean = false;
-  private readonly useProxyPrefix: boolean = false;
   private _vaults: Map<string, Vault> = new Map();
   private _vaultDepositors: Map<string, VaultDepositor> = new Map();
   private _timers: Map<string, WithdrawRequestTimer> = new Map();
   private _equities: Map<string, number> = new Map();
+  private _fundOverviews: Map<string, FundOverview> = new Map();
 
   constructor(config: {
     wallet: WalletContextState;
@@ -118,17 +119,6 @@ export class PropShopClient {
     this.disableCache = config.disableCache ?? false;
     this.skipFetching = config.skipFetching ?? false;
     this.useProxyPrefix = config.useProxyPrefix ?? false;
-
-    this.eventEmitter.on("vaultUpdate", (payload: Data<PublicKey, Vault>) => {
-      console.log(`vault event: ${payload.key.toString()}`);
-      this._vaults.set(payload.key.toString(), payload.data);
-    });
-    this.eventEmitter.on(
-      "vaultDepositorUpdate",
-      (payload: Data<PublicKey, VaultDepositor>) => {
-        this._vaultDepositors.set(payload.key.toString(), payload.data);
-      },
-    );
   }
 
   //
@@ -204,9 +194,26 @@ export class PropShopClient {
       const preSub = Date.now();
       await this.subscribe(driftVaultsProgram);
       // takes about 2s for websocket and 4s for polling
-      console.log(`Cache subscribed in ${Date.now() - preSub}ms`);
+      console.log(`cache subscribed in ${Date.now() - preSub}ms`);
     }
+    const preFo = Date.now();
     await this.fetchFundOverviews();
+    console.log(`fetched fund overviews in ${Date.now() - preFo}ms`);
+
+    this.eventEmitter.on(
+      "vaultUpdate",
+      async (payload: Data<PublicKey, Vault>) => {
+        this._vaults.set(payload.key.toString(), payload.data);
+        console.log(`vault event: ${payload.key.toString()}`);
+        await this.fetchFundOverview(payload.key);
+      },
+    );
+    this.eventEmitter.on(
+      "vaultDepositorUpdate",
+      (payload: Data<PublicKey, VaultDepositor>) => {
+        this._vaultDepositors.set(payload.key.toString(), payload.data);
+      },
+    );
 
     this.loading = false;
     // 3-6s
@@ -348,9 +355,6 @@ export class PropShopClient {
     key: PublicKey,
     errorIfMissing: boolean = true,
   ): Data<PublicKey, Vault> | undefined {
-    if (!this.vaultClient || !this._cache) {
-      throw new Error("PropShopClient not initialized");
-    }
     const data = this._vaults.get(key.toString());
     if (!data) {
       if (errorIfMissing) {
@@ -366,11 +370,18 @@ export class PropShopClient {
     }
   }
 
+  public get rawVaults(): Data<PublicKey, Vault>[] {
+    // account subscriber fetches upon subscription, so these should never be undefined
+    const vaults = Array.from(this._vaults.entries()).map(([key, data]) => {
+      return {
+        key: new PublicKey(key),
+        data,
+      };
+    }) as Data<PublicKey, Vault>[];
+    return vaults;
+  }
+
   public vaults(protocolsOnly?: boolean): Data<PublicKey, Vault>[] {
-    if (!this.vaultClient || !this._cache) {
-      throw new Error("PropShopClient not initialized");
-    }
-    const preFetch = Date.now();
     // account subscriber fetches upon subscription, so these should never be undefined
     const vaults = Array.from(this._vaults.entries())
       .filter(([_key, value]) => {
@@ -437,7 +448,7 @@ export class PropShopClient {
     return this._fundOverviews.get(key.toString());
   }
 
-  public fundOverviews(protocolsOnly?: boolean): FundOverview[] {
+  public get fundOverviews(): FundOverview[] {
     let res = Array.from(this._fundOverviews.values());
     res = res.sort((a, b) => a.lifetimePNL / a.tvl - b.lifetimePNL / b.tvl);
     return res;
@@ -585,6 +596,7 @@ export class PropShopClient {
     const key = RedisClient.vaultPnlFromDriftKey(vault.data.pubkey);
     const vaultPNL = await ProxyClient.performance({
       key,
+      usePrefix: this.useProxyPrefix,
     });
     const data = vaultPNL.cumulativeSeriesPNL();
     const title = decodeName(vault.data.name);
@@ -602,7 +614,7 @@ export class PropShopClient {
       investors: investors.length,
       data,
     };
-    this._fundOverviews.set(vault.key.toString(), fo);
+    this._fundOverviews.set(vault.key, fo);
     return fo;
   }
 
@@ -628,6 +640,7 @@ export class PropShopClient {
       const key = RedisClient.vaultPnlFromDriftKey(vault.data.pubkey);
       const vaultPNL = await ProxyClient.performance({
         key,
+        usePrefix: this.useProxyPrefix,
       });
       const data = vaultPNL.cumulativeSeriesPNL();
       const title = decodeName(vault.data.name);
@@ -646,7 +659,7 @@ export class PropShopClient {
         data,
       };
       fundOverviews.push(fo);
-      this._fundOverviews.set(vault.key.toString(), fo);
+      this._fundOverviews.set(vault.key, fo);
     }
     return fundOverviews;
   }
@@ -1193,7 +1206,6 @@ export class PropShopClient {
     const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
 
     console.log(`created vault: ${vault.toString()}`);
-    await this._cache?.subscribe();
     await this.fetchFundOverview(vault);
 
     return {
@@ -1482,14 +1494,10 @@ export class PropShopClient {
   }
 
   public async fetchVaultEquity(vault: PublicKey): Promise<number | undefined> {
-    const key = this.clientVaultDepositor(vault)?.key;
-    if (key) {
-      const usdc = await this.vaultDepositorEquityInDepositAsset(key, vault);
-      this._equities.set(vault.toString(), usdc);
-      return usdc;
-    } else {
-      return undefined;
-    }
+    const key = this.getVaultDepositorAddress(vault);
+    const usdc = await this.vaultDepositorEquityInDepositAsset(key, vault);
+    this._equities.set(vault.toString(), usdc);
+    return usdc;
   }
 
   public vaultEquity(vault: PublicKey): number | undefined {

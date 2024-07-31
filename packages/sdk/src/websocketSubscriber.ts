@@ -20,6 +20,7 @@ import {
   AccountSubscription,
   DriftVaultsSubscriber,
   PropShopAccountEvents,
+  PropShopAccountEventsMap,
   SubscriptionConfig,
 } from "./types";
 import { Buffer } from "buffer";
@@ -460,17 +461,18 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
   ): void {
     for (const account of accounts) {
       const key = account.publicKey.toString();
+      if (account.account.data.length < 8) {
+        console.error(
+          `Invalid account data length (${account.account.data.length}) for account ${key.toString()}`,
+        );
+        continue;
+      }
       // only update accounts that are subscribed
+      // todo: define it if not defined to catch new program accounts!
       let value = this.subscriptions.get(key);
       if (value) {
         const lastSlot = value.dataAndSlot?.slot ?? 0;
         if (context.slot > lastSlot) {
-          if (account.account.data.length < 8) {
-            console.error(
-              `Invalid account data length (${account.account.data.length}) for account ${key.toString()}`,
-            );
-            continue;
-          }
           const _accountName =
             this.program.account[value.accountName].idlAccount.name;
           const decoded = this.program.account[
@@ -492,6 +494,39 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
             data: decoded,
           });
           this.eventEmitter.emit("update");
+        }
+      } else {
+        const actual = account.account.data.subarray(0, 8);
+        for (const accountType in this.program.account) {
+          const namespace =
+            this.program.account[
+              accountType as any as keyof AccountNamespace<DriftVaults>
+            ];
+          const accountName = namespace.idlAccount.name;
+          const expected = BorshAccountsCoder.accountDiscriminator(accountName);
+          if (actual.equals(expected)) {
+            const decoded = namespace.coder.accounts.decodeUnchecked(
+              accountName,
+              account.account.data,
+            );
+            const sub: AccountSubscription = {
+              accountName,
+              eventType: PropShopAccountEventsMap[accountType],
+              publicKey: account.publicKey,
+              dataAndSlot: {
+                data: account.account.data,
+                slot: context.slot,
+              },
+              decoded,
+            };
+            this.subscriptions.set(key, sub);
+            // @ts-ignore
+            this.eventEmitter.emit(sub.eventType, {
+              key: account.publicKey,
+              data: decoded,
+            });
+            this.eventEmitter.emit("update");
+          }
         }
       }
     }
