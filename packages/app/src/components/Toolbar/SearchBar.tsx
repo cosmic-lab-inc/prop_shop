@@ -8,48 +8,25 @@ import {
   SearchInput,
   SearchList,
 } from "./styles";
-import { randomName, Searchable } from "@cosmic-lab/prop-shop-sdk";
-
-function useOutsideClick(callback: () => void) {
-  const [ref, setRef] = React.useState<React.MutableRefObject<any>>(
-    React.useRef(null),
-  );
-
-  React.useEffect(() => {
-    /**
-     * Alert if clicked on outside of element
-     */
-    function handleClickOutside(event: any) {
-      if (ref.current && !ref.current.contains(event.target)) {
-        callback();
-      }
-    }
-
-    // Bind the event listener
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      // Unbind the event listener on clean up
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [ref]);
-
-  return ref;
-}
+import { Searchable } from "@cosmic-lab/prop-shop-sdk";
+import { useOutsideClick } from "../../lib";
 
 export const SearchBar = ({
   search,
   changeSearch,
   placeholder,
+  options,
   show,
   setShow,
-  options,
+  onClick,
 }: {
   search: string;
   changeSearch: (input: string) => void;
   placeholder: string;
+  options: Searchable<unknown>[];
   show: boolean;
   setShow: (show: boolean) => void;
-  options: Searchable<unknown>[];
+  onClick: (value: Searchable<unknown>) => void;
 }) => {
   let results = options.filter((option) => {
     if (search === "") {
@@ -87,10 +64,10 @@ export const SearchBar = ({
       </SearchBarWrapper>
       {show && (
         <SearchList>
-          {results.map((name) => {
+          {results.map((value) => {
             return (
               <ListItem
-                key={name.title}
+                key={value.title}
                 sx={{
                   p: 0,
                   m: 0,
@@ -104,9 +81,12 @@ export const SearchBar = ({
                       bgcolor: customTheme.grey2,
                     },
                   }}
+                  onClick={() => {
+                    onClick(value);
+                  }}
                 >
                   <ListItemText
-                    primary={randomName(2)}
+                    primary={value.title}
                     disableTypography
                     sx={{
                       p: "10px",

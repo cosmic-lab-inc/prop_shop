@@ -88,7 +88,7 @@ export class PropShopClient {
   private readonly wallet: WalletContextState;
   vaultClient: VaultClient | undefined;
 
-  private loading: boolean = false;
+  loading: boolean = false;
   private readonly disableCache: boolean = false;
   private readonly skipFetching: boolean = false;
   private readonly useProxyPrefix: boolean = false;
