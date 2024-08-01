@@ -822,7 +822,7 @@ export class PropShopClient {
       throw new Error("User not initialized");
     }
     const sig = await this.vaultClient.initializeVaultDepositor(vault);
-    console.debug("join vault:", formatExplorerLink(sig, this.connection));
+    console.debug("join vault:", formatExplorerLink(sig));
     await confirmTransactions(this.connection, [sig]);
     const vaultAccount =
       await this.vaultClient.program.account.vault.fetch(vault);
@@ -945,7 +945,7 @@ export class PropShopClient {
       await this.fetchVaultEquity(vault);
       await this.fetchFundOverviews();
 
-      console.debug("deposit:", formatExplorerLink(sig, this.connection));
+      console.debug("deposit:", formatExplorerLink(sig));
       const vaultName = decodeName(this.vault(vault)!.data.name);
       return {
         variant: "success",
@@ -985,10 +985,7 @@ export class PropShopClient {
     // cache timer so frontend can track withdraw request
     await this.createWithdrawTimer(vault);
 
-    console.debug(
-      "request withdraw:",
-      formatExplorerLink(sig, this.connection),
-    );
+    console.debug("request withdraw:", formatExplorerLink(sig));
     const vaultName = decodeName(this.vault(vault)!.data.name);
     return {
       variant: "success",
@@ -1011,10 +1008,7 @@ export class PropShopClient {
     await this.fetchVaultEquity(vault);
     await this.fetchFundOverviews();
 
-    console.debug(
-      "cancel withdraw request:",
-      formatExplorerLink(sig, this.connection),
-    );
+    console.debug("cancel withdraw request:", formatExplorerLink(sig));
     const vaultName = decodeName(this.vault(vault)!.data.name);
     return {
       variant: "success",
@@ -1038,7 +1032,7 @@ export class PropShopClient {
     await this.fetchVaultEquity(vault);
     await this.fetchFundOverviews();
 
-    console.debug("withdraw:", formatExplorerLink(sig, this.connection));
+    console.debug("withdraw:", formatExplorerLink(sig));
     const vaultName = decodeName(this.vault(vault)!.data.name);
     return {
       variant: "success",
@@ -1204,10 +1198,7 @@ export class PropShopClient {
       sig = await this.vaultClient.initializeVault(vaultParams);
     }
 
-    console.debug(
-      "initialize vault:",
-      formatExplorerLink(sig, this.connection),
-    );
+    console.debug("initialize vault:", formatExplorerLink(sig));
     const vault = getVaultAddressSync(
       this.vaultClient.program.programId,
       encodeName(params.name),
@@ -1260,7 +1251,7 @@ export class PropShopClient {
       throw new Error("User not initialized");
     }
     const sig = await this.vaultClient.updateDelegate(vault, delegate);
-    console.debug("delegate vault:", formatExplorerLink(sig, this.connection));
+    console.debug("delegate vault:", formatExplorerLink(sig));
     await confirmTransactions(this.connection, [sig]);
     const vaultAccount =
       await this.vaultClient.program.account.vault.fetch(vault);

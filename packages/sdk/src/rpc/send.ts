@@ -108,10 +108,7 @@ export async function sendTransactionWithSnack(
       message: res.value.error.toString(),
     };
   } else {
-    console.debug(
-      "Transaction:",
-      formatExplorerLink(res.value.value, connection),
-    );
+    console.debug("Transaction:", formatExplorerLink(res.value.value));
     return {
       variant: "success",
       message: res.value.value,

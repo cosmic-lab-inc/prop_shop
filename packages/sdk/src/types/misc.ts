@@ -23,3 +23,8 @@ export interface SerializedDriftMarketInfo {
   oracle: string;
   oracleSource: OracleSource;
 }
+
+export interface Searchable<T> {
+  title: string;
+  data: T;
+}

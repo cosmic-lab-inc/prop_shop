@@ -25,8 +25,6 @@ export function formatExplorerMessageLink(
 
 export function formatExplorerLink(
   signature: TransactionSignature | string,
-  connection: Connection,
 ): string {
-  const clusterUrl = encodeURIComponent(connection.rpcEndpoint);
-  return `https://explorer.solana.com/tx/${signature}?cluster=custom&customUrl=${clusterUrl}`;
+  return `https://solana.fm/tx/${signature}`;
 }

@@ -1,7 +1,10 @@
 import React from "react";
 import { Button, Typography } from "@mui/material";
-import { formatExplorerLink } from "@cosmic-lab/data-source";
-import { SnackElement, SnackInfo } from "@cosmic-lab/prop-shop-sdk";
+import {
+  formatExplorerLink,
+  SnackElement,
+  SnackInfo,
+} from "@cosmic-lab/prop-shop-sdk";
 import { Connection } from "@solana/web3.js";
 
 export function eatSnack(
@@ -10,11 +13,7 @@ export function eatSnack(
 ): SnackElement {
   if (snack.variant === "success") {
     const element = (
-      <Button
-        onClick={() =>
-          window.open(formatExplorerLink(snack.message, connection))
-        }
-      >
+      <Button onClick={() => window.open(formatExplorerLink(snack.message))}>
         <Typography variant="body1">Click to view transaction</Typography>
       </Button>
     );
