@@ -47,9 +47,11 @@ export const SearchBar = ({
   return (
     <Box
       ref={ref}
-      sx={{
-        width: "25%",
-      }}
+      sx={
+        {
+          // width: "100%",
+        }
+      }
     >
       <SearchBarWrapper>
         <SearchIconWrapper>

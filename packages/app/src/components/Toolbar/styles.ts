@@ -5,6 +5,7 @@ export const SearchBarWrapper = styled("div")`
   border-radius: 10px;
   border: 2px solid ${customTheme.grey};
   width: 100%;
+  height: 50px;
 
   display: flex;
   flex-direction: row;
@@ -23,7 +24,6 @@ export const SearchBarWrapper = styled("div")`
 
 export const SearchIconWrapper = styled("div")`
   padding: 5px;
-  height: 100%;
   position: relative;
   pointer-events: none;
   display: flex;
@@ -44,6 +44,7 @@ export const SearchInput = styled("input")`
   border-radius: 10px;
   border: none;
   color: ${customTheme.light};
+  height: 100%;
 `;
 
 export const SearchList = styled("ul")(({ theme }) => ({
@@ -52,9 +53,8 @@ export const SearchList = styled("ul")(({ theme }) => ({
   backgroundColor: customTheme.grey,
   borderRadius: "10px",
   overflow: "auto",
-  maxHeight: "200px",
   verticalAlign: "center",
   zIndex: 1,
   position: "absolute",
-  width: "inherit",
+  width: "25%",
 }));

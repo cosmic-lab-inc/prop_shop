@@ -6,7 +6,7 @@ import { customTheme } from "../../styles";
 import { PropShopIcon } from "../Icons";
 import { SearchBar } from "./SearchBar";
 import {
-  FundOverview,
+  driftVaults,
   PropShopClient,
   Searchable,
 } from "@cosmic-lab/prop-shop-sdk";
@@ -16,7 +16,9 @@ import { PublicKey } from "@solana/web3.js";
 export function Toolbar({ client }: { client: PropShopClient | undefined }) {
   const [searchInput, setSearchInput] = React.useState("");
   const [showSearch, setShowSearch] = React.useState(false);
-  const [funds, setFunds] = React.useState<Searchable<FundOverview>[]>([]);
+  const [vaults, setVaults] = React.useState<Searchable<driftVaults.Vault>[]>(
+    [],
+  );
   const [dialogVault, setDialogVault] = React.useState<PublicKey | undefined>(
     undefined,
   );
@@ -24,27 +26,40 @@ export function Toolbar({ client }: { client: PropShopClient | undefined }) {
 
   React.useEffect(() => {
     if (!client) {
-      setFunds([]);
+      setVaults([]);
       return;
     }
-    const _funds: Searchable<FundOverview>[] = client.fundOverviews.map(
-      (data) => {
-        const entry: Searchable<FundOverview> = {
-          title: data.title,
-          data,
+    const managedVaults = client
+      .vaults({
+        managed: true,
+      })
+      .map((data) => {
+        const entry: Searchable<driftVaults.Vault> = {
+          title: driftVaults.decodeName(data.data.name),
+          data: data.data,
         };
         return entry;
-      },
-    );
-    setFunds(_funds);
-  }, [client, client?.fundOverviews]);
+      });
+    const investedVaults = client
+      .vaults({
+        invested: true,
+      })
+      .map((data) => {
+        const entry: Searchable<driftVaults.Vault> = {
+          title: driftVaults.decodeName(data.data.name),
+          data: data.data,
+        };
+        return entry;
+      });
+    setVaults([...managedVaults, ...investedVaults]);
+  }, [client, client?.vaults]);
 
   const changeSearchInput = (input: string) => {
     setSearchInput(input.toLowerCase());
   };
 
-  const clickSearchItem = (value: Searchable<FundOverview>) => {
-    setDialogVault(value.data.vault);
+  const clickSearchItem = (value: Searchable<driftVaults.Vault>) => {
+    setDialogVault(value.data.pubkey);
     setShowSearch(false);
     setSearchInput("");
     setOpenDialog(true);
@@ -76,6 +91,7 @@ export function Toolbar({ client }: { client: PropShopClient | undefined }) {
             p: 1,
             display: "flex",
             alignItems: "center",
+            justifyContent: "space-between",
             flexDirection: "row",
             height: TOOLBAR_HEIGHT,
             width: "70%",
@@ -89,7 +105,6 @@ export function Toolbar({ client }: { client: PropShopClient | undefined }) {
               flexDirection: "row",
               justifyContent: "left",
               alignItems: "center",
-              flexGrow: 1,
               gap: 2,
             }}
           >
@@ -97,15 +112,21 @@ export function Toolbar({ client }: { client: PropShopClient | undefined }) {
             <Typography variant="h2">Prop Shop</Typography>
           </Box>
 
-          <SearchBar
-            search={searchInput}
-            changeSearch={changeSearchInput}
-            placeholder="My vaults"
-            options={funds}
-            show={showSearch}
-            setShow={setShowSearch}
-            onClick={clickSearchItem}
-          />
+          <Box
+            sx={{
+              width: "25%",
+            }}
+          >
+            <SearchBar
+              search={searchInput}
+              changeSearch={changeSearchInput}
+              placeholder="My vaults"
+              options={vaults}
+              show={showSearch}
+              setShow={setShowSearch}
+              onClick={clickSearchItem}
+            />
+          </Box>
 
           <Box
             sx={{

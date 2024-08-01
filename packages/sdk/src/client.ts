@@ -386,15 +386,25 @@ export class PropShopClient {
     }
   }
 
-  public vaults(protocolsOnly?: boolean): Data<PublicKey, Vault>[] {
-    // account subscriber fetches upon subscription, so these should never be undefined
+  public vaults(filters?: {
+    hasProtocol?: boolean;
+    managed?: boolean;
+    invested?: boolean;
+  }): Data<PublicKey, Vault>[] {
     const vaults = Array.from(this._vaults.entries())
       .filter(([_key, value]) => {
-        if (protocolsOnly) {
-          return value.vaultProtocol !== SystemProgram.programId;
-        } else {
-          return true;
-        }
+        const protocolFilter = filters?.hasProtocol
+          ? value.vaultProtocol !== SystemProgram.programId
+          : true;
+        const managedFilter = filters?.managed
+          ? value.manager.equals(this.publicKey)
+          : true;
+        const investedFilter = filters?.invested
+          ? this.investedVaults()
+              .map((k) => k.toString())
+              .includes(value.pubkey.toString())
+          : true;
+        return protocolFilter && managedFilter && investedFilter;
       })
       .map(([key, data]) => {
         return {
@@ -630,7 +640,9 @@ export class PropShopClient {
   public async fetchFundOverviews(
     protocolsOnly?: boolean,
   ): Promise<FundOverview[]> {
-    const vaults = this.vaults(protocolsOnly);
+    const vaults = this.vaults({
+      hasProtocol: protocolsOnly,
+    });
     const vds = this.vaultDepositors();
     // get count of vds per vault
     const vaultVds = new Map<string, Data<PublicKey, VaultDepositor>[]>();
@@ -678,7 +690,9 @@ export class PropShopClient {
    */
   public managedVaults(protocolsOnly?: boolean): Data<PublicKey, Vault>[] {
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
-    const vaults = this.vaults(protocolsOnly);
+    const vaults = this.vaults({
+      hasProtocol: protocolsOnly,
+    });
     return vaults.filter((v) => {
       return v.data.manager === this.publicKey;
     });
