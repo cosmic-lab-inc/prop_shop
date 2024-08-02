@@ -1,6 +1,5 @@
 import React from "react";
 import { BaseWalletMultiButton } from "./BaseWalletMultiButton";
-// import { BaseWalletMultiButton } from "@solana/wallet-adapter-material-ui";
 
 const LABELS = {
   "change-wallet": "Switch",

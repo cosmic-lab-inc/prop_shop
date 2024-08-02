@@ -133,7 +133,7 @@ export const Toolbar = observer(
             <Box
               sx={{
                 display: "flex",
-                width: "18%",
+                width: "20%",
                 height: "100%",
               }}
             >

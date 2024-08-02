@@ -4,41 +4,75 @@ import {
   LinkOff as DisconnectIcon,
   SwapHoriz as SwitchIcon,
 } from "@mui/icons-material";
-import type { ButtonProps, Theme } from "@mui/material";
-import { Fade, ListItemIcon, Menu, MenuItem, styled } from "@mui/material";
+import {
+  ButtonProps,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  styled,
+} from "@mui/material";
 import { useWalletMultiButton } from "@solana/wallet-adapter-base-ui";
 import { BaseWalletConnectionButton } from "./BaseWalletConnectionButton";
 import { useWalletDialog } from "@solana/wallet-adapter-material-ui";
 import { customTheme } from "../../../styles";
 import Box from "@mui/material/Box";
 import { darken } from "@mui/system/colorManipulator";
+import { useOutsideClick } from "../../../lib";
 
-const StyledMenu = styled(Menu)(({ theme }: { theme: Theme }) => ({
-  "& .MuiList-root": {
-    padding: 0,
-  },
-  "& .MuiListItemIcon-root": {
-    width: "unset",
-    "& .MuiSvgIcon-root": {
-      width: 20,
-      color: customTheme.light,
-    },
-  },
-  "& .MuiMenu-paper": {
-    width: "inherit",
-    position: "absolute",
-  },
+const List = styled("ul")(({ theme }) => ({
+  marginTop: 100,
+  padding: 0,
+  backgroundColor: customTheme.grey,
+  borderRadius: "10px",
+  overflow: "auto",
+  verticalAlign: "center",
+  zIndex: 1,
+  position: "absolute",
+  width: "100%",
 }));
 
-const WalletActionMenuItem = styled(MenuItem)(
-  ({ theme }: { theme: Theme }) => ({
-    width: "100%",
-    backgroundColor: customTheme.grey,
-    "&:hover": {
-      backgroundColor: customTheme.grey2,
-    },
-  }),
-);
+function ListEntry({
+  onClick,
+  icon,
+  text,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  text: string | React.ReactNode;
+}) {
+  return (
+    <ListItem
+      sx={{
+        p: 0,
+        m: 0,
+      }}
+    >
+      <ListItemButton
+        sx={{
+          p: 1,
+          m: 0,
+          "&:hover": {
+            bgcolor: customTheme.grey2,
+          },
+        }}
+        onClick={onClick}
+      >
+        <ListItemIcon sx={{ color: customTheme.light }}>{icon}</ListItemIcon>
+        <ListItemText
+          primary={text}
+          disableTypography
+          sx={{
+            m: 0,
+            fontFamily: customTheme.font.light,
+            fontWeight: 300,
+            fontSize: 16,
+          }}
+        />
+      </ListItemButton>
+    </ListItem>
+  );
+}
 
 type Props = ButtonProps & {
   labels: Omit<
@@ -83,9 +117,18 @@ export function BaseWalletMultiButton({ children, labels, ...props }: Props) {
       return labels["no-wallet"];
     }
   }, [buttonState, children, labels, publicKey]);
+
+  const ref = useOutsideClick(() => {
+    setMenuOpen(false);
+    setModalVisible(false);
+  });
+
   return (
     <Box
+      ref={ref}
       sx={{
+        position: "relative",
+        display: "flex",
         width: "100%",
       }}
     >
@@ -113,7 +156,6 @@ export function BaseWalletMultiButton({ children, labels, ...props }: Props) {
         walletIcon={walletIcon}
         walletName={walletName}
         sx={{
-          width: "100%",
           bgcolor: customTheme.secondary,
           borderRadius: "10px",
           "&:hover": {
@@ -123,59 +165,40 @@ export function BaseWalletMultiButton({ children, labels, ...props }: Props) {
       >
         {content}
       </BaseWalletConnectionButton>
-      <StyledMenu
-        id="wallet-menu"
-        anchorEl={
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          () => anchorRef.current!
-        }
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        marginThreshold={0}
-        TransitionComponent={Fade}
-        transitionDuration={250}
-        keepMounted
-      >
-        {/*<Collapse in={menuOpen}>*/}
-        {publicKey && (
-          <WalletActionMenuItem
-            onClick={async () => {
-              setMenuOpen(false);
-              await navigator.clipboard.writeText(publicKey.toBase58());
-            }}
-          >
-            <ListItemIcon>
-              <CopyIcon />
-            </ListItemIcon>
-            {labels["copy-address"]}
-          </WalletActionMenuItem>
-        )}
-        <WalletActionMenuItem
-          onClick={() => {
-            setMenuOpen(false);
-            setModalVisible(true);
-          }}
-        >
-          <ListItemIcon>
-            <SwitchIcon />
-          </ListItemIcon>
-          {labels["change-wallet"]}
-        </WalletActionMenuItem>
-        {onDisconnect && (
-          <WalletActionMenuItem
+      {menuOpen && (
+        <List>
+          {publicKey && (
+            <ListEntry
+              onClick={async () => {
+                setMenuOpen(false);
+                await navigator.clipboard.writeText(publicKey.toBase58());
+              }}
+              icon={<CopyIcon />}
+              text={labels["copy-address"]}
+            />
+          )}
+
+          <ListEntry
             onClick={() => {
               setMenuOpen(false);
-              onDisconnect();
+              setModalVisible(true);
             }}
-          >
-            <ListItemIcon>
-              <DisconnectIcon />
-            </ListItemIcon>
-            {labels["disconnect"]}
-          </WalletActionMenuItem>
-        )}
-        {/*</Collapse>*/}
-      </StyledMenu>
+            icon={<SwitchIcon />}
+            text={labels["change-wallet"]}
+          />
+
+          {onDisconnect && (
+            <ListEntry
+              onClick={() => {
+                setMenuOpen(false);
+                onDisconnect();
+              }}
+              icon={<DisconnectIcon />}
+              text={labels["disconnect"]}
+            />
+          )}
+        </List>
+      )}
     </Box>
   );
 }
