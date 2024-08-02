@@ -1,6 +1,4 @@
 import React from "react";
-import { customTheme } from "../../../styles";
-import { darken } from "@mui/system/colorManipulator";
 import { BaseWalletMultiButton } from "./BaseWalletMultiButton";
 // import { BaseWalletMultiButton } from "@solana/wallet-adapter-material-ui";
 
@@ -14,18 +12,5 @@ const LABELS = {
 } as const;
 
 export function WalletButton() {
-  return (
-    <BaseWalletMultiButton
-      fullWidth
-      variant="contained"
-      labels={LABELS}
-      sx={{
-        bgcolor: customTheme.secondary,
-        borderRadius: "10px",
-        "&:hover": {
-          bgcolor: darken(customTheme.secondary, 0.2),
-        },
-      }}
-    />
-  );
+  return <BaseWalletMultiButton labels={LABELS} />;
 }

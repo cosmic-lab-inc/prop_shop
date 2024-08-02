@@ -192,7 +192,7 @@ const Stats = observer(
       console.log(`use effect equity: ${client.vaultEquity(vault)}`);
       setEquity(client.vaultEquity(vault));
       setTimer(client.withdrawTimer(vault));
-    }, [key, client.vaultEquity(vault), client.withdrawTimer(vault)]);
+    }, [client.vaultEquity(vault), client.withdrawTimer(vault)]);
 
     return (
       <Box

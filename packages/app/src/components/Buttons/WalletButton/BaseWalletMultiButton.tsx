@@ -5,18 +5,13 @@ import {
   SwapHoriz as SwitchIcon,
 } from "@mui/icons-material";
 import type { ButtonProps, Theme } from "@mui/material";
-import {
-  Collapse,
-  Fade,
-  ListItemIcon,
-  Menu,
-  MenuItem,
-  styled,
-} from "@mui/material";
+import { Fade, ListItemIcon, Menu, MenuItem, styled } from "@mui/material";
 import { useWalletMultiButton } from "@solana/wallet-adapter-base-ui";
 import { BaseWalletConnectionButton } from "./BaseWalletConnectionButton";
 import { useWalletDialog } from "@solana/wallet-adapter-material-ui";
 import { customTheme } from "../../../styles";
+import Box from "@mui/material/Box";
+import { darken } from "@mui/system/colorManipulator";
 
 const StyledMenu = styled(Menu)(({ theme }: { theme: Theme }) => ({
   "& .MuiList-root": {
@@ -29,10 +24,15 @@ const StyledMenu = styled(Menu)(({ theme }: { theme: Theme }) => ({
       color: customTheme.light,
     },
   },
+  "& .MuiMenu-paper": {
+    width: "inherit",
+    position: "absolute",
+  },
 }));
 
 const WalletActionMenuItem = styled(MenuItem)(
   ({ theme }: { theme: Theme }) => ({
+    width: "100%",
     backgroundColor: customTheme.grey,
     "&:hover": {
       backgroundColor: customTheme.grey2,
@@ -84,9 +84,14 @@ export function BaseWalletMultiButton({ children, labels, ...props }: Props) {
     }
   }, [buttonState, children, labels, publicKey]);
   return (
-    <>
+    <Box
+      sx={{
+        width: "100%",
+      }}
+    >
       <BaseWalletConnectionButton
-        {...props}
+        fullWidth
+        variant="contained"
         aria-controls="wallet-menu"
         aria-haspopup="true"
         onClick={() => {
@@ -107,6 +112,14 @@ export function BaseWalletMultiButton({ children, labels, ...props }: Props) {
         ref={anchorRef}
         walletIcon={walletIcon}
         walletName={walletName}
+        sx={{
+          width: "100%",
+          bgcolor: customTheme.secondary,
+          borderRadius: "10px",
+          "&:hover": {
+            bgcolor: darken(customTheme.secondary, 0.2),
+          },
+        }}
       >
         {content}
       </BaseWalletConnectionButton>
@@ -122,55 +135,47 @@ export function BaseWalletMultiButton({ children, labels, ...props }: Props) {
         TransitionComponent={Fade}
         transitionDuration={250}
         keepMounted
-        slotProps={{
-          paper: {
-            style: {
-              backgroundColor: customTheme.grey,
-              borderRadius: "10px",
-            },
-          },
-        }}
       >
-        <Collapse in={menuOpen}>
-          {publicKey ? (
-            <WalletActionMenuItem
-              onClick={async () => {
-                setMenuOpen(false);
-                await navigator.clipboard.writeText(publicKey.toBase58());
-              }}
-            >
-              <ListItemIcon>
-                <CopyIcon />
-              </ListItemIcon>
-              {labels["copy-address"]}
-            </WalletActionMenuItem>
-          ) : null}
+        {/*<Collapse in={menuOpen}>*/}
+        {publicKey && (
           <WalletActionMenuItem
-            onClick={() => {
+            onClick={async () => {
               setMenuOpen(false);
-              setModalVisible(true);
+              await navigator.clipboard.writeText(publicKey.toBase58());
             }}
           >
             <ListItemIcon>
-              <SwitchIcon />
+              <CopyIcon />
             </ListItemIcon>
-            {labels["change-wallet"]}
+            {labels["copy-address"]}
           </WalletActionMenuItem>
-          {onDisconnect ? (
-            <WalletActionMenuItem
-              onClick={() => {
-                setMenuOpen(false);
-                onDisconnect();
-              }}
-            >
-              <ListItemIcon>
-                <DisconnectIcon />
-              </ListItemIcon>
-              {labels["disconnect"]}
-            </WalletActionMenuItem>
-          ) : null}
-        </Collapse>
+        )}
+        <WalletActionMenuItem
+          onClick={() => {
+            setMenuOpen(false);
+            setModalVisible(true);
+          }}
+        >
+          <ListItemIcon>
+            <SwitchIcon />
+          </ListItemIcon>
+          {labels["change-wallet"]}
+        </WalletActionMenuItem>
+        {onDisconnect && (
+          <WalletActionMenuItem
+            onClick={() => {
+              setMenuOpen(false);
+              onDisconnect();
+            }}
+          >
+            <ListItemIcon>
+              <DisconnectIcon />
+            </ListItemIcon>
+            {labels["disconnect"]}
+          </WalletActionMenuItem>
+        )}
+        {/*</Collapse>*/}
       </StyledMenu>
-    </>
+    </Box>
   );
 }
