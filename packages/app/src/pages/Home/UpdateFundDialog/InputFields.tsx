@@ -90,43 +90,79 @@ function Fields({
   }
 
   function changeProfitShare(value: number) {
+    if (value >= (defaultConfig.percentProfitShare ?? 0)) {
+      enqueueSnackbar(
+        `Profit share must be less than current value ${defaultConfig.percentProfitShare}%`,
+        {
+          variant: "error",
+        },
+      );
+      return;
+    }
     if (value < 0 || value > 100) {
       enqueueSnackbar(`Profit share must be 0-100%`, {
         variant: "error",
       });
-    } else {
-      setConfig({ ...config, percentProfitShare: value });
+      return;
     }
+    setConfig({ ...config, percentProfitShare: value });
   }
 
   function changeAnnualFee(value: number) {
+    if (value >= (defaultConfig.percentAnnualManagementFee ?? 0)) {
+      enqueueSnackbar(
+        `Annual management fee must be less than current value ${defaultConfig.percentAnnualManagementFee}%`,
+        {
+          variant: "error",
+        },
+      );
+      return;
+    }
     if (value < 0 || value > 100) {
       enqueueSnackbar(`Annual fee must be 0-100%`, {
         variant: "error",
       });
-    } else {
-      setConfig({ ...config, percentAnnualManagementFee: value });
+      return;
     }
+    setConfig({ ...config, percentAnnualManagementFee: value });
   }
 
   function changeMaxFundDeposits(value: number) {
+    if (value >= (defaultConfig.maxCapacityUSDC ?? 0)) {
+      enqueueSnackbar(
+        `Fund capacity must be less than current value $${defaultConfig.maxCapacityUSDC}`,
+        {
+          variant: "error",
+        },
+      );
+      return;
+    }
     if (value < 0) {
       enqueueSnackbar(`Max fund deposits must be positive`, {
         variant: "error",
       });
-    } else {
-      setConfig({ ...config, maxCapacityUSDC: value });
+      return;
     }
+    setConfig({ ...config, maxCapacityUSDC: value });
   }
 
   function changeMinDepositPerUser(value: number) {
+    if (value >= (defaultConfig.percentAnnualManagementFee ?? 0)) {
+      enqueueSnackbar(
+        `Minimum deposit per user must be less than current value $${defaultConfig.minDepositUSDC}`,
+        {
+          variant: "error",
+        },
+      );
+      return;
+    }
     if (value < 0) {
-      enqueueSnackbar(`Min deposit per user must be positive`, {
+      enqueueSnackbar(`Mininimum deposit per user must be positive`, {
         variant: "error",
       });
-    } else {
-      setConfig({ ...config, minDepositUSDC: value });
+      return;
     }
+    setConfig({ ...config, minDepositUSDC: value });
   }
 
   function changeInviteOnly(value: boolean) {
@@ -134,13 +170,24 @@ function Fields({
   }
 
   function changeRedeemPeriod(days: number) {
+    const seconds = days * SECONDS_PER_DAY;
+    const currentDays = (defaultConfig.redeemPeriod ?? 0) / SECONDS_PER_DAY;
+    if (seconds >= (defaultConfig.redeemPeriod ?? 0)) {
+      enqueueSnackbar(
+        `Redeem period must be less than current value ${defaultConfig.redeemPeriod} seconds (${currentDays} days)`,
+        {
+          variant: "error",
+        },
+      );
+      return;
+    }
     if (days < 0 || days > 90) {
-      enqueueSnackbar(`Redeem period must be 0-90 days`, {
+      enqueueSnackbar(`Redeem period must be less than 90 days`, {
         variant: "error",
       });
-    } else {
-      setConfig({ ...config, redeemPeriod: days * SECONDS_PER_DAY });
+      return;
     }
+    setConfig({ ...config, redeemPeriod: days * SECONDS_PER_DAY });
   }
 
   return (
