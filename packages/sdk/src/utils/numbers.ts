@@ -82,3 +82,8 @@ export function randomNumber(min: number, max: number): number {
 export function percentToPercentPrecision(percent: number): BN {
   return new BN((percent / 100) * PERCENTAGE_PRECISION.toNumber());
 }
+
+// Example: 100_000 = 10%, so 10% / 100 = 0.1 * PERCENTAGE_PRECISION = 100_000
+export function percentPrecisionToPercent(value: number): number {
+  return (value / PERCENTAGE_PRECISION.toNumber()) * 100;
+}

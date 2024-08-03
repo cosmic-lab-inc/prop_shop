@@ -17,6 +17,15 @@ export function FundDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  React.useEffect(() => {
+    async function run() {
+      await client.createWithdrawTimer(vault);
+      await client.fetchVaultEquity(vault);
+    }
+
+    run();
+  }, []);
+
   return (
     <>
       <Dialog

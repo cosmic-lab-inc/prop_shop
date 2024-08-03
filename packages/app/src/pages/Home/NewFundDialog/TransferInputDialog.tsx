@@ -11,6 +11,7 @@ import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import InputAdornment from "@mui/material/InputAdornment";
 import { SendButton } from "../../../components";
 import { PublicKey } from "@solana/web3.js";
+import { observer } from "mobx-react";
 
 export enum TransferInputAction {
   DEPOSIT = "deposit",
@@ -18,51 +19,53 @@ export enum TransferInputAction {
   UNKNOWN = "unknown",
 }
 
-export function TransferInputDialog({
-  client,
-  vault,
-  defaultValue,
-  open,
-  onClose,
-  onChange,
-  onSubmit,
-}: {
-  client: PropShopClient;
-  vault: PublicKey;
-  defaultValue: number;
-  open: boolean;
-  onClose: () => void;
-  onChange: (value: number) => void;
-  onSubmit: () => Promise<void>;
-}) {
-  return (
-    <>
-      <Dialog
-        maxWidth="xs"
-        fullWidth={true}
-        fullScreen={false}
-        scroll="paper"
-        open={open}
-        onClose={onClose}
-        PaperProps={{
-          style: {
-            background: customTheme.grey,
-            borderRadius: "10px",
-          },
-        }}
-        sx={{
-          bgcolor: "transparent",
-        }}
-      >
-        <Input
-          defaultValue={defaultValue}
-          onChange={onChange}
-          onSubmit={onSubmit}
-        />
-      </Dialog>
-    </>
-  );
-}
+export const TransferInputDialog = observer(
+  ({
+    client,
+    vault,
+    defaultValue,
+    open,
+    onClose,
+    onChange,
+    onSubmit,
+  }: {
+    client: PropShopClient;
+    vault: PublicKey;
+    defaultValue: number;
+    open: boolean;
+    onClose: () => void;
+    onChange: (value: number) => void;
+    onSubmit: () => Promise<void>;
+  }) => {
+    return (
+      <>
+        <Dialog
+          maxWidth="xs"
+          fullWidth={true}
+          fullScreen={false}
+          scroll="paper"
+          open={open}
+          onClose={onClose}
+          PaperProps={{
+            style: {
+              background: customTheme.grey,
+              borderRadius: "10px",
+            },
+          }}
+          sx={{
+            bgcolor: "transparent",
+          }}
+        >
+          <Input
+            defaultValue={defaultValue}
+            onChange={onChange}
+            onSubmit={onSubmit}
+          />
+        </Dialog>
+      </>
+    );
+  },
+);
 
 function Input({
   defaultValue,

@@ -20,22 +20,14 @@ import {
   TransferInputAction,
   TransferInputDialog,
 } from "./TransferInputDialog";
+import { UpdateFundDialog } from "../UpdateFundDialog";
 
 // todo: useState for timer and equity, and rerender on changes
 export const InvestorStats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
-    React.useEffect(() => {
-      async function run() {
-        await client.createWithdrawTimer(vault);
-        await client.fetchVaultEquity(vault);
-      }
-
-      run();
-    }, []);
-
     // DIALOG STATE
     const { enqueueSnackbar } = useSnackbar();
-    const [open, setOpen] = React.useState(false);
+    const [openTransferDialog, setOpenTransferDialog] = React.useState(false);
     const [input, setInput] = React.useState(0);
     const [defaultValue, setDefaultValue] = React.useState<number | undefined>(
       undefined,
@@ -43,11 +35,22 @@ export const InvestorStats = observer(
     const [action, setAction] = React.useState<TransferInputAction>(
       TransferInputAction.UNKNOWN,
     );
+    const [openSettingsDialog, setOpenSettingsDialog] =
+      React.useState<boolean>(false);
+
     React.useEffect(() => {
       if (action !== TransferInputAction.UNKNOWN) {
-        setOpen(true);
+        setOpenTransferDialog(true);
       }
     }, [defaultValue]);
+
+    const [isManager, setIsManager] = React.useState<boolean>(false);
+    React.useEffect(() => {
+      const result = client.isManager(vault);
+      if (!result.isErr()) {
+        setIsManager(result.value);
+      }
+    });
 
     // CLIENT ACTIONS
     async function requestWithdraw() {
@@ -93,8 +96,12 @@ export const InvestorStats = observer(
       setDefaultValue(equity ?? 0);
     }
 
-    function resetDialog() {
-      setOpen(false);
+    async function clickManageSettings() {
+      setOpenSettingsDialog(true);
+    }
+
+    function resetTransferDialog() {
+      setOpenTransferDialog(false);
       setAction(TransferInputAction.UNKNOWN);
       setDefaultValue(undefined);
     }
@@ -107,15 +114,21 @@ export const InvestorStats = observer(
       } else {
         console.error("Invalid action on submit");
       }
-      resetDialog();
+      resetTransferDialog();
     }
 
     return (
       <>
+        <UpdateFundDialog
+          client={client}
+          vault={vault}
+          open={openSettingsDialog}
+          onClose={() => setOpenSettingsDialog(false)}
+        />
         <TransferInputDialog
           defaultValue={defaultValue!}
-          open={open}
-          onClose={() => resetDialog()}
+          open={openTransferDialog}
+          onClose={() => resetTransferDialog()}
           onChange={(value: number) => setInput(value)}
           onSubmit={async () => {
             await submit();
@@ -172,6 +185,24 @@ export const InvestorStats = observer(
               </>
             )}
           </Box>
+
+          {isManager && (
+            <Box
+              sx={{
+                height: "100px",
+                borderRadius: "10px",
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 1,
+                width: "100%",
+              }}
+            >
+              <ActionButton onClick={clickManageSettings}>
+                Manage Settings
+              </ActionButton>
+            </Box>
+          )}
         </Box>
       </>
     );

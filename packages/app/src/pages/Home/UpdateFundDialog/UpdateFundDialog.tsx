@@ -4,14 +4,17 @@ import { InputFields } from "./InputFields";
 import { CreateVaultConfig, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import { useSnackbar } from "notistack";
 import { observer } from "mobx-react";
+import { PublicKey } from "@solana/web3.js";
 
-export const NewFundDialog = observer(
+export const UpdateFundDialog = observer(
   ({
     client,
+    vault,
     open,
     onClose,
   }: {
     client: PropShopClient;
+    vault: PublicKey;
     open: boolean;
     onClose: () => void;
   }) => {
@@ -43,7 +46,7 @@ export const NewFundDialog = observer(
             backgroundColor: "transparent",
           }}
         >
-          <InputFields client={client} onSubmit={submit} />
+          <InputFields client={client} vault={vault} onSubmit={submit} />
         </Dialog>
       </>
     );

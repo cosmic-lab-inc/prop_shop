@@ -9,11 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import { customTheme } from "../../../styles";
-import {
-  CreateVaultConfig,
-  PropShopClient,
-  randomName,
-} from "@cosmic-lab/prop-shop-sdk";
+import { PropShopClient, UpdateVaultConfig } from "@cosmic-lab/prop-shop-sdk";
 import { ActionButton, UsdcIcon } from "../../../components";
 import InputAdornment from "@mui/material/InputAdornment";
 import { PublicKey } from "@solana/web3.js";
@@ -24,23 +20,16 @@ const SECONDS_PER_DAY = 60 * 60 * 24;
 
 export function InputFields({
   client,
+  vault,
   onSubmit,
 }: {
   client: PropShopClient;
-  onSubmit: (params: CreateVaultConfig) => void;
+  vault: PublicKey;
+  onSubmit: (params: UpdateVaultConfig) => void;
 }) {
-  const defaultConfig: CreateVaultConfig = {
-    name: randomName(2, 32),
-    delegate: client.publicKey,
-    percentProfitShare: 20,
-    percentAnnualManagementFee: 2,
-    maxCapacityUSDC: 100_000_000,
-    minDepositUSDC: 0,
-    permissioned: false,
-    redeemPeriod: 60 * 60 * 24,
-  };
+  const defaultConfig = client.defaultUpdateVaultConfig(vault);
 
-  const [config, setConfig] = React.useState<CreateVaultConfig>(defaultConfig);
+  const [config, setConfig] = React.useState<UpdateVaultConfig>(defaultConfig);
 
   return (
     <Box
@@ -72,7 +61,7 @@ export function InputFields({
           width: "20%",
         }}
       >
-        <ActionButton onClick={() => onSubmit(config)}>Create</ActionButton>
+        <ActionButton onClick={() => onSubmit(config)}>Update</ActionButton>
       </Box>
     </Box>
   );
@@ -83,22 +72,11 @@ function Fields({
   config,
   setConfig,
 }: {
-  defaultConfig: CreateVaultConfig;
-  config: CreateVaultConfig;
-  setConfig: (config: CreateVaultConfig) => void;
+  defaultConfig: UpdateVaultConfig;
+  config: UpdateVaultConfig;
+  setConfig: (config: UpdateVaultConfig) => void;
 }) {
   const { enqueueSnackbar } = useSnackbar();
-
-  function changeName(value: string) {
-    if (value.length > 32) {
-      enqueueSnackbar(`Name must be less than 32 characters`, {
-        variant: "error",
-      });
-      setConfig({ ...config, name: defaultConfig.name });
-    } else {
-      setConfig({ ...config, name: value });
-    }
-  }
 
   function changeDelegate(value: string) {
     try {
@@ -177,15 +155,6 @@ function Fields({
       }}
     >
       <TableRow hover>
-        <Typography variant="h4">Name</Typography>
-        <TextInput
-          defaultValue={defaultConfig.name}
-          value={config.name}
-          onChange={changeName}
-        />
-      </TableRow>
-
-      <TableRow hover>
         <Typography variant="h4">Delegate (Trader)</Typography>
         <TextInput
           defaultValue={defaultConfig.delegate!.toString()}
@@ -197,8 +166,8 @@ function Fields({
       <TableRow hover>
         <Typography variant="h4">Profit Share</Typography>
         <PercentInput
-          defaultValue={defaultConfig.percentProfitShare}
-          value={config.percentProfitShare}
+          defaultValue={defaultConfig.percentProfitShare ?? 0}
+          value={config.percentProfitShare ?? 0}
           onChange={changeProfitShare}
         />
       </TableRow>
@@ -206,8 +175,8 @@ function Fields({
       <TableRow hover>
         <Typography variant="h4">Annual Fee</Typography>
         <PercentInput
-          defaultValue={defaultConfig.percentAnnualManagementFee}
-          value={config.percentAnnualManagementFee}
+          defaultValue={defaultConfig.percentAnnualManagementFee ?? 0}
+          value={config.percentAnnualManagementFee ?? 0}
           onChange={changeAnnualFee}
         />
       </TableRow>

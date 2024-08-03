@@ -40,7 +40,7 @@ import {
 } from "./constants";
 import { getAssociatedTokenAddress } from "./programs";
 import { Drift } from "./idl/drift";
-import { percentToPercentPrecision } from "./utils";
+import { percentPrecisionToPercent, percentToPercentPrecision } from "./utils";
 import {
   confirmTransactions,
   formatExplorerLink,
@@ -53,6 +53,7 @@ import {
   FundOverview,
   PropShopAccountEvents,
   SnackInfo,
+  UpdateVaultConfig,
   WithdrawRequestTimer,
 } from "./types";
 import {
@@ -61,6 +62,7 @@ import {
   getVaultAddressSync,
   getVaultDepositorAddressSync,
   IDL as DRIFT_VAULTS_IDL,
+  UpdateVaultParams,
   Vault,
   VaultClient,
   VaultDepositor,
@@ -1038,7 +1040,7 @@ export class PropShopClient {
     return ok(ixs);
   }
 
-  private async isProtocol(
+  public async isProtocol(
     vault: PublicKey,
   ): Promise<Result<boolean, SnackInfo>> {
     if (!this.vaultClient) {
@@ -1068,7 +1070,7 @@ export class PropShopClient {
     return ok(false);
   }
 
-  private isManager(vault: PublicKey): Result<boolean, SnackInfo> {
+  public isManager(vault: PublicKey): Result<boolean, SnackInfo> {
     const vaultAcct = this.vault(vault)?.data;
     if (!vaultAcct) {
       return err({
@@ -1637,11 +1639,134 @@ export class PropShopClient {
     };
   }
 
+  public async updateVaultIx(vault: PublicKey, config: UpdateVaultConfig) {
+    if (!this.vaultClient) {
+      throw new Error("VaultClient not initialized");
+    }
+    if (config.redeemPeriod && config.redeemPeriod > ONE_DAY * 90) {
+      throw new Error("Redeem period must be less than 90 days");
+    }
+
+    const profitShare = percentToPercentPrecision(
+      config.percentProfitShare ?? 0,
+    ).toNumber();
+    const managementFee = percentToPercentPrecision(
+      config.percentAnnualManagementFee ?? 0,
+    );
+    const minDepositAmount = new BN(
+      (config.minDepositUSDC ?? 0) * QUOTE_PRECISION.toNumber(),
+    );
+    const permissioned = config.permissioned ?? false;
+    const redeemPeriod = new BN(config.redeemPeriod ?? ONE_DAY);
+    const maxTokens = new BN(
+      (config.maxCapacityUSDC ?? 0) * QUOTE_PRECISION.toNumber(),
+    );
+    const params: UpdateVaultParams = {
+      redeemPeriod,
+      maxTokens,
+      minDepositAmount,
+      managementFee,
+      profitShare,
+      hurdleRate: null,
+      permissioned,
+      vaultProtocol: null,
+    };
+    const vaultAcct = this.vault(vault)?.data;
+    if (!vaultAcct) {
+      throw new Error(`Vault ${vault.toString()} not found`);
+    }
+
+    let ix: TransactionInstruction;
+    if (!vaultAcct.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      const remainingAccounts: AccountMeta[] = [
+        {
+          pubkey: vaultProtocol,
+          isSigner: false,
+          isWritable: true,
+        },
+      ];
+      ix = await this.vaultClient.program.methods
+        .updateVault(params)
+        .accounts({
+          vault,
+          manager: this.publicKey,
+        })
+        .remainingAccounts(remainingAccounts)
+        .instruction();
+    } else {
+      ix = await this.vaultClient.program.methods
+        .updateVault(params)
+        .accounts({
+          vault,
+          manager: this.publicKey,
+        })
+        .instruction();
+    }
+    return ix;
+  }
+
+  public defaultUpdateVaultConfig(vault: PublicKey) {
+    const vaultAcct = this.vault(vault)?.data;
+    if (!vaultAcct) {
+      throw new Error(`Vault ${vault.toString()} not found`);
+    }
+    const percentProfitShare = percentPrecisionToPercent(vaultAcct.profitShare);
+    const percentAnnualManagementFee = percentPrecisionToPercent(
+      vaultAcct.managementFee.toNumber(),
+    );
+    const minDepositUSDC =
+      vaultAcct.minDepositAmount.toNumber() / QUOTE_PRECISION.toNumber();
+    const maxCapacityUSDC =
+      vaultAcct.maxTokens.toNumber() / QUOTE_PRECISION.toNumber();
+    const config: UpdateVaultConfig = {
+      redeemPeriod: vaultAcct.redeemPeriod.toNumber(),
+      maxCapacityUSDC,
+      percentAnnualManagementFee,
+      minDepositUSDC,
+      percentProfitShare,
+      permissioned: vaultAcct.permissioned,
+      delegate: vaultAcct.delegate,
+    };
+    return config;
+  }
+
   /**
    * Can only reduce the profit share, management fee, or redeem period.
    * Unable to modify protocol fees.
    */
-  public async updateVault(): Promise<void> {}
+  public async updateVault(
+    vault: PublicKey,
+    params: UpdateVaultConfig,
+  ): Promise<SnackInfo> {
+    if (!this.vaultClient) {
+      throw new Error("VaultClient not initialized");
+    }
+
+    const ixs: TransactionInstruction[] = [];
+    if (params.delegate) {
+      ixs.push(await this.delegateVaultIx(vault, params.delegate));
+    }
+    ixs.push(await this.updateVaultIx(vault, params));
+
+    const result = await this.sendTx(ixs);
+    if (result.isErr()) {
+      return {
+        variant: "error",
+        message: result.error,
+      };
+    }
+    console.debug("update vault:", formatExplorerLink(result.value));
+    await this.fetchFundOverview(vault);
+    const vaultAcct = this.vault(vault)?.data;
+    if (!vaultAcct) {
+      throw new Error(`Vault ${vault.toString()} not found`);
+    }
+    return {
+      variant: "success",
+      message: `Updated \"${decodeName(vaultAcct.name)}\"`,
+    };
+  }
 
   private async managerDepositIx(
     vault: PublicKey,

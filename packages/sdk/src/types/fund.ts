@@ -21,6 +21,17 @@ export interface CreateVaultConfig {
   delegate?: PublicKey;
 }
 
+export interface UpdateVaultConfig {
+  // The period in seconds that investors must wait after requesting to redeem their funds
+  redeemPeriod?: number;
+  maxCapacityUSDC?: number;
+  percentAnnualManagementFee?: number;
+  minDepositUSDC?: number;
+  percentProfitShare?: number;
+  permissioned?: boolean;
+  delegate?: PublicKey;
+}
+
 export interface FundOverview {
   vault: PublicKey;
   lifetimePNL: number;
