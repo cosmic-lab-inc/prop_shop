@@ -49,8 +49,8 @@ import {
   getCompetitionAddressSync,
   getCompetitorAddressSync,
 } from "@drift-labs/competitions-sdk";
-import { TEST_VAULT_DEPOSITOR } from "@cosmic-lab/prop-shop-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
+import { TEST_MANAGER, TEST_VAULT_DEPOSITOR } from "@cosmic-lab/prop-shop-sdk";
 
 describe("driftProtocolVaults", () => {
   const opts: ConfirmOptions = {
@@ -69,7 +69,7 @@ describe("driftProtocolVaults", () => {
 
   let adminClient: AdminClient;
 
-  let manager: Keypair;
+  const manager = TEST_MANAGER;
   let managerClient: VaultClient;
   let managerUser: User;
 
@@ -79,18 +79,18 @@ describe("driftProtocolVaults", () => {
   const vd = TEST_VAULT_DEPOSITOR;
   let vdClient: VaultClient;
   let vdUser: User;
-  let vdUserUSDCAccount: Keypair;
+  let vdUserUSDCAccount: PublicKey;
 
   let vd2: Keypair;
   let vd2Client: VaultClient;
-  let vd2UserUSDCAccount: Keypair;
+  let vd2UserUSDCAccount: PublicKey;
 
   let delegate: Keypair;
   let delegateClient: VaultClient;
 
   let protocol: Keypair;
   let protocolClient: VaultClient;
-  let protocolVdUserUSDCAccount: Keypair;
+  let protocolVdUserUSDCAccount: PublicKey;
 
   // ammInvariant == k == x * y
   const mantissaSqrtScale = new BN(100_000);
@@ -168,6 +168,8 @@ describe("driftProtocolVaults", () => {
       programId: program.programId,
       usdcMint,
       usdcAmount,
+      signer: manager,
+      depositCollateral: false,
       driftClientConfig: {
         accountSubscription: {
           type: "websocket",
@@ -180,7 +182,6 @@ describe("driftProtocolVaults", () => {
         oracleInfos,
       },
     });
-    manager = bootstrapManager.signer;
     managerClient = bootstrapManager.vaultClient;
     managerUser = bootstrapManager.user;
 
@@ -247,7 +248,6 @@ describe("driftProtocolVaults", () => {
         oracleInfos,
       },
     });
-    // vd = bootstrapVD.signer;
     vdClient = bootstrapVD.vaultClient;
     vdUser = bootstrapVD.user;
     vdUserUSDCAccount = bootstrapVD.userUSDCAccount;
@@ -317,8 +317,7 @@ describe("driftProtocolVaults", () => {
 
     bulkAccountLoader.stopPolling();
 
-    // end test
-    process.exit();
+    // process.exit();
   });
 
   //
@@ -326,22 +325,27 @@ describe("driftProtocolVaults", () => {
   //
 
   it("Initialize Vault", async () => {
-    console.log("initialize vault...");
-    await managerClient.initializeVault({
-      name: encodeName(vaultName),
-      spotMarketIndex: 0,
-      redeemPeriod: ZERO,
-      maxTokens: ZERO,
-      managementFee: ZERO,
-      profitShare: 0,
-      hurdleRate: 0,
-      permissioned: false,
-      minDepositAmount: ZERO,
-    });
+    try {
+      console.log("initialize vault...");
+      await managerClient.initializeVault({
+        name: encodeName(vaultName),
+        spotMarketIndex: 0,
+        redeemPeriod: ZERO,
+        maxTokens: ZERO,
+        managementFee: ZERO,
+        profitShare: 0,
+        hurdleRate: 0,
+        permissioned: false,
+        minDepositAmount: ZERO,
+      });
 
-    await adminClient.fetchAccounts();
-    assert(adminClient.getStateAccount().numberOfAuthorities.eq(new BN(7)));
-    assert(adminClient.getStateAccount().numberOfSubAccounts.eq(new BN(7)));
+      await adminClient.fetchAccounts();
+      assert(adminClient.getStateAccount().numberOfAuthorities.eq(new BN(7)));
+      assert(adminClient.getStateAccount().numberOfSubAccounts.eq(new BN(7)));
+    } catch (e) {
+      console.error(e);
+      assert(false);
+    }
   });
 
   it("Initialize Vault Depositor", async () => {
@@ -363,7 +367,7 @@ describe("driftProtocolVaults", () => {
     const txSig = await vd2Client.program.methods
       .deposit(usdcAmount)
       .accounts({
-        userTokenAccount: vd2UserUSDCAccount.publicKey,
+        userTokenAccount: vd2UserUSDCAccount,
         vault,
         vaultDepositor,
         vaultTokenAccount: vaultAccount.tokenAccount,
@@ -434,7 +438,7 @@ describe("driftProtocolVaults", () => {
       const txSig = await vd2Client.program.methods
         .withdraw()
         .accounts({
-          userTokenAccount: vd2UserUSDCAccount.publicKey,
+          userTokenAccount: vd2UserUSDCAccount,
           vault,
           vaultDepositor,
           vaultTokenAccount: vaultAccount.tokenAccount,
@@ -748,7 +752,7 @@ describe("driftProtocolVaults", () => {
         driftUserStats: vaultAccount.userStats,
         driftUser: vaultAccount.user,
         driftState: await adminClient.getStatePublicKey(),
-        userTokenAccount: vdUserUSDCAccount.publicKey,
+        userTokenAccount: vdUserUSDCAccount,
         driftSpotMarketVault: adminClient.getSpotMarketAccount(0)!.vault,
         driftProgram: adminClient.program.programId,
       })
@@ -929,7 +933,7 @@ describe("driftProtocolVaults", () => {
 
     const postOD = adminClient.getOracleDataForPerpMarket(0);
     const priceAfter = postOD.price.toNumber() / PRICE_PRECISION.toNumber();
-    console.log("price after:", priceAfter);
+    console.log(`price after: ${priceAfter}`);
     assert(priceAfter === finalSolPerpPrice);
   });
 
@@ -1035,6 +1039,7 @@ describe("driftProtocolVaults", () => {
     await delegateActiveUser.fetchAccounts();
     const vaultPosition = delegateActiveUser.getPerpPosition(0)!;
     assert(vaultPosition.baseAssetAmount.eq(ZERO));
+    console.log("shorted SOL-PERP");
   });
 
   it("Settle Pnl", async () => {

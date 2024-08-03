@@ -2,10 +2,12 @@ import * as anchor from "@coral-xyz/anchor";
 import { AnchorProvider, Program, Provider } from "@coral-xyz/anchor";
 import {
   AccountLayout,
+  createAssociatedTokenAccountInstruction,
   createInitializeAccountInstruction,
   createInitializeMintInstruction,
   createMintToInstruction,
   createWrappedNativeAccount,
+  getAssociatedTokenAddressSync,
   getMinimumBalanceForRentExemptAccount,
   getMinimumBalanceForRentExemptMint,
   MintLayout,
@@ -119,6 +121,55 @@ export async function mockUSDCMint(
     },
   );
   return fakeUSDCMint;
+}
+
+export async function mockUserUSDCAssociatedTokenAccount(
+  fakeUSDCMint: Keypair,
+  usdcMintAmount: BN,
+  provider: Provider,
+  owner: PublicKey,
+): Promise<PublicKey> {
+  const fakeUSDCTx = new Transaction();
+
+  const userUSDCAccount = getAssociatedTokenAddressSync(
+    fakeUSDCMint.publicKey,
+    owner,
+    true,
+  );
+  const userAtaExists =
+    await provider.connection.getAccountInfo(userUSDCAccount);
+  if (userAtaExists === null) {
+    const ix = createAssociatedTokenAccountInstruction(
+      // @ts-ignore
+      provider.wallet.publicKey,
+      userUSDCAccount,
+      owner,
+      fakeUSDCMint.publicKey,
+    );
+    fakeUSDCTx.add(ix);
+  }
+
+  const mintToUserAccountTx = createMintToInstruction(
+    fakeUSDCMint.publicKey,
+    userUSDCAccount,
+    // @ts-ignore
+    provider.wallet.publicKey,
+    usdcMintAmount.toNumber(),
+  );
+  fakeUSDCTx.add(mintToUserAccountTx);
+
+  await sendAndConfirmTransaction(
+    provider.connection,
+    fakeUSDCTx,
+    // @ts-ignore
+    [provider.wallet.payer],
+    {
+      skipPreflight: false,
+      commitment: "recent",
+      preflightCommitment: "recent",
+    },
+  );
+  return userUSDCAccount;
 }
 
 export async function mockUserUSDCAccount(
@@ -924,7 +975,7 @@ export async function bootstrapSignerClientAndUser(params: {
 }): Promise<{
   signer: Keypair;
   user: User;
-  userUSDCAccount: Keypair;
+  userUSDCAccount: PublicKey;
   driftClient: DriftClient;
   vaultClient: VaultClient;
   provider: AnchorProvider;
@@ -981,17 +1032,18 @@ export async function bootstrapSignerClientAndUser(params: {
     program,
     cliMode: vaultClientCliMode ?? true,
   });
-  const userUSDCAccount = await mockUserUSDCAccount(
+  const userUSDCAccount = await mockUserUSDCAssociatedTokenAccount(
     usdcMint,
     usdcAmount,
     payer,
     signer.publicKey,
   );
+
   await driftClient.subscribe();
   if (depositCollateral) {
     await driftClient.initializeUserAccountAndDepositCollateral(
       usdcAmount,
-      userUSDCAccount.publicKey,
+      userUSDCAccount,
       0,
       activeSubAccountId,
     );

@@ -26,6 +26,8 @@ import {
   IWallet,
   QUOTE_PRECISION,
   SpotMarketAccount,
+  TEN,
+  unstakeSharesToAmount as depositSharesToVaultAmount,
   User,
   UserStatsAccount,
 } from "@drift-labs/sdk";
@@ -132,17 +134,6 @@ export class PropShopClient {
     this.useProxyPrefix = config.useProxyPrefix ?? false;
   }
 
-  public getVaultClient(): Result<VaultClient, SnackInfo> {
-    if (!this.vaultClient) {
-      return err({
-        variant: "error",
-        message: "PropShopClient not initialized",
-      });
-    } else {
-      return ok(this.vaultClient);
-    }
-  }
-
   //
   // Initialization and setup
   //
@@ -221,7 +212,6 @@ export class PropShopClient {
         );
         if (update !== existing) {
           this._vaults.set(payload.key.toString(), payload.data);
-          console.log(`vaultUpdate: ${payload.key.toString()}`);
           await this.fetchFundOverview(payload.key);
         }
       },
@@ -613,7 +603,6 @@ export class PropShopClient {
   }
 
   private setFundOverview(key: PublicKey, fo: FundOverview) {
-    console.log(`set fund overview, vault: ${key.toString()}`);
     this._fundOverviews.set(key.toString(), fo);
   }
 
@@ -779,6 +768,85 @@ export class PropShopClient {
     return usdc;
   }
 
+  public async managerEquityInDepositAsset(
+    vault: PublicKey,
+  ): Promise<number | undefined> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vaultAccount = this.vault(vault)?.data;
+    if (!vaultAccount) {
+      return undefined;
+    }
+    const vaultTotalEquity = await this.vaultClient.calculateVaultEquity({
+      vault: vaultAccount,
+    });
+    let vpShares = new BN(0);
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      const vpAccount =
+        await this.vaultClient.program.account.vaultProtocol.fetch(
+          vaultProtocol,
+        );
+      vpShares = vpAccount.protocolProfitAndFeeShares;
+    }
+    const managerShares = vaultAccount.totalShares
+      .sub(vpShares)
+      .sub(vaultAccount.userShares);
+    const managerEquity = depositSharesToVaultAmount(
+      managerShares,
+      vaultAccount.totalShares,
+      vaultTotalEquity,
+    );
+
+    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
+      vaultAccount.spotMarketIndex,
+    );
+    const spotOracle = this.vaultClient.driftClient.getOracleDataForSpotMarket(
+      vaultAccount.spotMarketIndex,
+    );
+    const spotPrecision = TEN.pow(new BN(spotMarket!.decimals));
+
+    const usdcBN = managerEquity.mul(spotPrecision).div(spotOracle.price);
+    return usdcBN.toNumber() / QUOTE_PRECISION.toNumber();
+  }
+
+  public async protocolEquityInDepositAsset(
+    vault: PublicKey,
+  ): Promise<number | undefined> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vaultAccount = this.vault(vault)?.data;
+    if (!vaultAccount) {
+      return undefined;
+    }
+    if (vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      return undefined;
+    }
+    const vaultTotalEquity = await this.vaultClient.calculateVaultEquity({
+      vault: vaultAccount,
+    });
+    const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+    const vpAccount =
+      await this.vaultClient.program.account.vaultProtocol.fetch(vaultProtocol);
+    const equity = depositSharesToVaultAmount(
+      vpAccount.protocolProfitAndFeeShares,
+      vaultAccount.totalShares,
+      vaultTotalEquity,
+    );
+    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
+      vaultAccount.spotMarketIndex,
+    );
+    const spotOracle = this.vaultClient.driftClient.getOracleDataForSpotMarket(
+      vaultAccount.spotMarketIndex,
+    );
+    const spotPrecision = TEN.pow(new BN(spotMarket!.decimals));
+
+    const usdcBN = equity.mul(spotPrecision).div(spotOracle.price);
+    return usdcBN.toNumber() / QUOTE_PRECISION.toNumber();
+  }
+
   public async vaultDepositorEquityInDepositAsset(
     vdKey: PublicKey,
     vaultKey: PublicKey,
@@ -786,8 +854,13 @@ export class PropShopClient {
     if (!this.vaultClient) {
       throw new Error("VaultClient not initialized");
     }
-    const vault = this.vault(vaultKey)!;
-    const vd = this.vaultDepositor(vdKey);
+    const vault = this.vault(vaultKey);
+    if (!vault) {
+      throw new Error(
+        `Vault ${vaultKey.toString()} not found in equity calculation`,
+      );
+    }
+    const vd = this.vaultDepositor(vdKey, false);
     if (!vd) {
       return undefined;
     }
@@ -1060,11 +1133,11 @@ export class PropShopClient {
         };
       }
       const sig = res.value;
-      console.debug("deposit:", formatExplorerLink(sig));
+      console.debug("manager deposit:", formatExplorerLink(sig));
       const vaultName = decodeName(this.vault(vault)!.data.name);
       return {
         variant: "success",
-        message: `Deposited to ${vaultName}`,
+        message: `Manager deposited to ${vaultName}`,
       };
     }
 
@@ -2199,7 +2272,9 @@ export class PropShopClient {
     return this._timers.get(vault.toString());
   }
 
-  public async createWithdrawTimer(vault: PublicKey): Promise<void> {
+  private async createVaultDepositorWithdrawTimer(
+    vault: PublicKey,
+  ): Promise<void> {
     const vaultAcct = this.vault(vault)!.data;
     const vdKey = this.getVaultDepositorAddress(vault);
 
@@ -2237,6 +2312,100 @@ export class PropShopClient {
     }, 1000);
   }
 
+  private async createManagerWithdrawTimer(vault: PublicKey): Promise<void> {
+    const isManager = this.isManager(vault).unwrapOr(false);
+    if (!isManager) {
+      return;
+    }
+    // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
+    await this._cache?.fetch();
+
+    const vaultAcct = this.vault(vault)!.data;
+
+    const reqTs = vaultAcct.lastManagerWithdrawRequest.ts.toNumber();
+
+    if (
+      vaultAcct.lastManagerWithdrawRequest.value.toNumber() === 0 ||
+      reqTs === 0
+    ) {
+      this.removeWithdrawTimer(vault);
+      return;
+    }
+
+    const equity =
+      vaultAcct.lastManagerWithdrawRequest.value.toNumber() /
+      QUOTE_PRECISION.toNumber();
+
+    const checkTime = () => {
+      const now = Math.floor(Date.now() / 1000);
+      const timeSinceReq = now - reqTs;
+      const redeemPeriod = vaultAcct.redeemPeriod.toNumber();
+      return Math.max(redeemPeriod - timeSinceReq, 0);
+    };
+
+    const timer = setInterval(() => {
+      this._timers.set(vault.toString(), {
+        timer,
+        secondsRemaining: checkTime(),
+        equity,
+      });
+    }, 1000);
+  }
+
+  private async createProtocolWithdrawTimer(vault: PublicKey): Promise<void> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const isProtocol = (await this.isProtocol(vault)).unwrapOr(false);
+    if (!isProtocol) {
+      return;
+    }
+    // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
+    await this._cache?.fetch();
+
+    const vaultAcct = this.vault(vault)!.data;
+    if (vaultAcct.vaultProtocol.equals(SystemProgram.programId)) {
+      return;
+    }
+    const vpAcct = (await this.vaultClient.program.account.vaultProtocol.fetch(
+      vaultAcct.vaultProtocol,
+    )) as VaultProtocol;
+
+    const reqTs = vpAcct.lastProtocolWithdrawRequest.ts.toNumber();
+    if (
+      vpAcct.lastProtocolWithdrawRequest.value.toNumber() === 0 ||
+      reqTs === 0
+    ) {
+      this.removeWithdrawTimer(vault);
+      return;
+    }
+
+    const equity =
+      vpAcct.lastProtocolWithdrawRequest.value.toNumber() /
+      QUOTE_PRECISION.toNumber();
+
+    const checkTime = () => {
+      const now = Math.floor(Date.now() / 1000);
+      const timeSinceReq = now - reqTs;
+      const redeemPeriod = vaultAcct.redeemPeriod.toNumber();
+      return Math.max(redeemPeriod - timeSinceReq, 0);
+    };
+
+    const timer = setInterval(() => {
+      this._timers.set(vault.toString(), {
+        timer,
+        secondsRemaining: checkTime(),
+        equity,
+      });
+    }, 1000);
+  }
+
+  public async createWithdrawTimer(vault: PublicKey): Promise<void> {
+    await this.createManagerWithdrawTimer(vault);
+    await this.createProtocolWithdrawTimer(vault);
+    await this.createVaultDepositorWithdrawTimer(vault);
+  }
+
   private removeWithdrawTimer(vault: PublicKey) {
     const result = this._timers.get(vault.toString());
     if (result) {
@@ -2259,6 +2428,26 @@ export class PropShopClient {
   }
 
   public async fetchVaultEquity(vault: PublicKey): Promise<number | undefined> {
+    const isManager = this.isManager(vault).unwrapOr(false);
+    if (isManager) {
+      const usdc = await this.managerEquityInDepositAsset(vault);
+      if (!usdc) {
+        return undefined;
+      }
+      this._equities.set(vault.toString(), usdc);
+      return usdc;
+    }
+
+    const isProtocol = this.isManager(vault).unwrapOr(false);
+    if (isProtocol) {
+      const usdc = await this.protocolEquityInDepositAsset(vault);
+      if (!usdc) {
+        return undefined;
+      }
+      this._equities.set(vault.toString(), usdc);
+      return usdc;
+    }
+
     const key = this.getVaultDepositorAddress(vault);
     const usdc = await this.vaultDepositorEquityInDepositAsset(key, vault);
     if (!usdc) {

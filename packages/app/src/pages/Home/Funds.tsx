@@ -13,7 +13,6 @@ export const Funds = observer(({ client }: { client: PropShopClient }) => {
   const [funds, setFunds] = React.useState<FundOverview[]>([]);
 
   React.useEffect(() => {
-    console.log("render Funds");
     if (
       process.env.ENV === "dev" ||
       process.env.RPC_URL === "http://localhost:8899"

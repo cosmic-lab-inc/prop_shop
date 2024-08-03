@@ -21,9 +21,9 @@ import {
   TransferInputDialog,
 } from "./TransferInputDialog";
 
+// todo: useState for timer and equity, and rerender on changes
 export const InvestorStats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
-    const vd = client.clientVaultDepositor(vault);
     React.useEffect(() => {
       async function run() {
         await client.createWithdrawTimer(vault);
@@ -150,7 +150,6 @@ export const InvestorStats = observer(
               <>
                 <ActionButton
                   disabled={
-                    !vd ||
                     (client.withdrawTimer(vault)?.secondsRemaining ?? 0) > 0
                   }
                   onClick={withdraw}
@@ -165,7 +164,7 @@ export const InvestorStats = observer(
               <>
                 <ActionButton onClick={clickDeposit}>Deposit</ActionButton>
                 <ActionButton
-                  disabled={!client.vaultEquity(vault) || !vd}
+                  disabled={!client.vaultEquity(vault)}
                   onClick={clickRequestWithdraw}
                 >
                   Request Withdraw

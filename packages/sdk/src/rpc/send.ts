@@ -92,21 +92,14 @@ export async function sendTransactionWithResult(
     commitment: "confirmed",
   });
 
-  console.debug(
-    "Message:",
-    formatExplorerMessageLink(trx.transaction, connection),
-  );
-
   const res = await sendTransaction(trx, connection, {
     sendOptions: {
       skipPreflight: true,
     },
   });
   if (res.value.isErr()) {
-    console.error("Transaction failed", res.value.error);
     return err(res.value.error.toString());
   } else {
-    console.debug("Transaction:", formatExplorerLink(res.value.value));
     return ok(res.value.value);
   }
 }
