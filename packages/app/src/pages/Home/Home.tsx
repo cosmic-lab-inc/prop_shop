@@ -5,25 +5,19 @@ import { observer } from "mobx-react";
 import { NewFund } from "./NewFund";
 import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 
-export const Home = observer(
-  ({ client }: { client: PropShopClient | undefined }) => {
-    return (
-      <Box
-        sx={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          flexDirection: "column",
-          gap: 2,
-        }}
-      >
-        {client && (
-          <>
-            <Funds client={client} />
-            <NewFund client={client} />
-          </>
-        )}
-      </Box>
-    );
-  },
-);
+export const Home = observer(({ client }: { client: PropShopClient }) => {
+  return (
+    <Box
+      sx={{
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        flexDirection: "column",
+        gap: 2,
+      }}
+    >
+      <Funds client={client} />
+      <NewFund client={client} />
+    </Box>
+  );
+});

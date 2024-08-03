@@ -96,7 +96,7 @@ const Content = observer(() => {
           alignItems: "center",
         }}
       >
-        <Home client={client} />
+        {client && <Home client={client} />}
       </Box>
     </Box>
   );

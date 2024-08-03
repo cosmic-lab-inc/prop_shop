@@ -1,9 +1,10 @@
 import React from "react";
-import { Box, Dialog } from "@mui/material";
+import { Dialog } from "@mui/material";
 import { InvestorStats } from "./InvestorStats";
 import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import { PublicKey } from "@solana/web3.js";
 import { customTheme } from "../../../styles";
+import Box from "@mui/material/Box";
 
 export function FundDialog({
   client,
@@ -31,7 +32,7 @@ export function FundDialog({
           },
         }}
         sx={{
-          backgroundColor: "transparent",
+          bgcolor: "transparent",
         }}
       >
         <Box

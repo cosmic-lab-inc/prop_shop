@@ -33,8 +33,23 @@ export const InvestorStats = observer(
       run();
     }, []);
 
+    // DIALOG STATE
     const { enqueueSnackbar } = useSnackbar();
+    const [open, setOpen] = React.useState(false);
+    const [input, setInput] = React.useState(0);
+    const [defaultValue, setDefaultValue] = React.useState<number | undefined>(
+      undefined,
+    );
+    const [action, setAction] = React.useState<TransferInputAction>(
+      TransferInputAction.UNKNOWN,
+    );
+    React.useEffect(() => {
+      if (action !== TransferInputAction.UNKNOWN) {
+        setOpen(true);
+      }
+    }, [defaultValue]);
 
+    // CLIENT ACTIONS
     async function requestWithdraw() {
       const snack = await client.requestWithdraw(vault, input);
       enqueueSnackbar(snack.message, {
@@ -63,22 +78,7 @@ export const InvestorStats = observer(
       });
     }
 
-    // dialog state
-    const [open, setOpen] = React.useState(false);
-    const [input, setInput] = React.useState(0);
-    const [defaultValue, setDefaultValue] = React.useState<number | undefined>(
-      undefined,
-    );
-    const [action, setAction] = React.useState<TransferInputAction>(
-      TransferInputAction.UNKNOWN,
-    );
-
-    React.useEffect(() => {
-      if (action !== TransferInputAction.UNKNOWN) {
-        setOpen(true);
-      }
-    }, [defaultValue]);
-
+    // ON CLICK
     async function clickDeposit() {
       setAction(TransferInputAction.DEPOSIT);
       const usdc = await client.fetchWalletUSDC();
@@ -189,7 +189,6 @@ const Stats = observer(
     );
     const [equity, setEquity] = React.useState<number | undefined>(undefined);
     React.useEffect(() => {
-      console.log(`use effect equity: ${client.vaultEquity(vault)}`);
       setEquity(client.vaultEquity(vault));
       setTimer(client.withdrawTimer(vault));
     }, [client.vaultEquity(vault), client.withdrawTimer(vault)]);

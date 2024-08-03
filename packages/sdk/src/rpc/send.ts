@@ -9,6 +9,7 @@ import {
 import { formatExplorerLink, formatExplorerMessageLink } from ".";
 import { sleep } from "..";
 import { SnackInfo } from "../types";
+import { err, ok, Result } from "neverthrow";
 
 /**
  * Send a large batch of instructions at once
@@ -80,6 +81,35 @@ export const confirmTransactions = async (
     await sleep(1000);
   }
 };
+
+export async function sendTransactionWithResult(
+  instructions: InstructionReturn[],
+  funder: AsyncSigner,
+  connection: Connection,
+): Promise<Result<string, string>> {
+  const trx = await buildAndSignTransaction(instructions, funder, {
+    connection: connection,
+    commitment: "confirmed",
+  });
+
+  console.debug(
+    "Message:",
+    formatExplorerMessageLink(trx.transaction, connection),
+  );
+
+  const res = await sendTransaction(trx, connection, {
+    sendOptions: {
+      skipPreflight: true,
+    },
+  });
+  if (res.value.isErr()) {
+    console.error("Transaction failed", res.value.error);
+    return err(res.value.error.toString());
+  } else {
+    console.debug("Transaction:", formatExplorerLink(res.value.value));
+    return ok(res.value.value);
+  }
+}
 
 export async function sendTransactionWithSnack(
   instructions: InstructionReturn[],

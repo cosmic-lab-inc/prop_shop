@@ -33,3 +33,5 @@ Manage Vaults tab:
 - dialog to invite investor
 - FundOverviewCard for managed funds, shows manager equity and button to deposit/withdraw
 - settings (UpdateVaultParams, including delegate!)
+
+All client instructions check if user DNE and add ix to tx if needed

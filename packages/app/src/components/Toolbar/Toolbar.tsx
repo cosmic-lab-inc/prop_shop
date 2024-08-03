@@ -4,7 +4,7 @@ import { TOOLBAR_HEIGHT } from "../../constants";
 import { WalletButton } from "../Buttons";
 import { customTheme } from "../../styles";
 import { PropShopIcon } from "../Icons";
-import { SearchBar } from "./SearchBar";
+import { SearchBar } from "../SearchBar";
 import {
   driftVaults,
   PropShopClient,
@@ -135,6 +135,7 @@ export const Toolbar = observer(
                 display: "flex",
                 width: "20%",
                 height: "100%",
+                p: 1,
               }}
             >
               <WalletButton />

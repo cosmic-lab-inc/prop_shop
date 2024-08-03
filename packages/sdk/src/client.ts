@@ -20,6 +20,7 @@ import {
   DriftClient,
   DriftClientConfig,
   encodeName,
+  getUserAccountPublicKey,
   getUserAccountPublicKeySync,
   getUserStatsAccountPublicKey,
   IWallet,
@@ -38,7 +39,11 @@ import {
 import { getAssociatedTokenAddress } from "./programs";
 import { Drift } from "./idl/drift";
 import { percentToPercentPrecision } from "./utils";
-import { confirmTransactions, formatExplorerLink } from "./rpc";
+import {
+  confirmTransactions,
+  formatExplorerLink,
+  sendTransactionWithResult,
+} from "./rpc";
 import {
   CreateVaultConfig,
   Data,
@@ -53,12 +58,12 @@ import {
   getTokenVaultAddressSync,
   getVaultAddressSync,
   getVaultDepositorAddressSync,
-  getVaultProtocolAddressSync,
   IDL as DRIFT_VAULTS_IDL,
   Vault,
   VaultClient,
   VaultDepositor,
   VaultParams,
+  VaultProtocol,
   VaultProtocolParams,
   WithdrawUnit,
 } from "@drift-labs/vaults-sdk";
@@ -80,8 +85,14 @@ import { WebSocketSubscriber } from "./websocketSubscriber";
 import {
   createAssociatedTokenAccountInstruction,
   getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { RedisClient } from "./redisClient";
+import { err, ok, Result } from "neverthrow";
+import {
+  InstructionReturn,
+  walletAdapterToAsyncSigner,
+} from "@cosmic-lab/data-source";
 
 export class PropShopClient {
   private readonly connection: Connection;
@@ -119,20 +130,17 @@ export class PropShopClient {
     this.disableCache = config.disableCache ?? false;
     this.skipFetching = config.skipFetching ?? false;
     this.useProxyPrefix = config.useProxyPrefix ?? false;
+  }
 
-    this.eventEmitter.on(
-      "vaultUpdate",
-      async (payload: Data<PublicKey, Vault>) => {
-        this._vaults.set(payload.key.toString(), payload.data);
-        await this.fetchFundOverview(payload.key);
-      },
-    );
-    this.eventEmitter.on(
-      "vaultDepositorUpdate",
-      (payload: Data<PublicKey, VaultDepositor>) => {
-        this._vaultDepositors.set(payload.key.toString(), payload.data);
-      },
-    );
+  public getVaultClient(): Result<VaultClient, SnackInfo> {
+    if (!this.vaultClient) {
+      return err({
+        variant: "error",
+        message: "PropShopClient not initialized",
+      });
+    } else {
+      return ok(this.vaultClient);
+    }
   }
 
   //
@@ -204,6 +212,33 @@ export class PropShopClient {
       cliMode: true,
     });
 
+    this.eventEmitter.on(
+      "vaultUpdate",
+      async (payload: Data<PublicKey, Vault>) => {
+        const update = JSON.stringify(payload.data);
+        const existing = JSON.stringify(
+          this._vaults.get(payload.key.toString()),
+        );
+        if (update !== existing) {
+          this._vaults.set(payload.key.toString(), payload.data);
+          console.log(`vaultUpdate: ${payload.key.toString()}`);
+          await this.fetchFundOverview(payload.key);
+        }
+      },
+    );
+    this.eventEmitter.on(
+      "vaultDepositorUpdate",
+      (payload: Data<PublicKey, VaultDepositor>) => {
+        const update = JSON.stringify(payload.data);
+        const existing = JSON.stringify(
+          this._vaultDepositors.get(payload.key.toString()),
+        );
+        if (update !== existing) {
+          this._vaultDepositors.set(payload.key.toString(), payload.data);
+        }
+      },
+    );
+
     if (!this.disableCache) {
       const preSub = Date.now();
       await this.subscribe(driftVaultsProgram);
@@ -215,21 +250,6 @@ export class PropShopClient {
     console.log(
       `fetched ${funds.length} fund overviews in ${Date.now() - preFo}ms`,
     );
-
-    // this.eventEmitter.on(
-    //   "vaultUpdate",
-    //   async (payload: Data<PublicKey, Vault>) => {
-    //     this._vaults.set(payload.key.toString(), payload.data);
-    //     console.log(`vault event: ${payload.key.toString()}`);
-    //     await this.fetchFundOverview(payload.key);
-    //   },
-    // );
-    // this.eventEmitter.on(
-    //   "vaultDepositorUpdate",
-    //   (payload: Data<PublicKey, VaultDepositor>) => {
-    //     this._vaultDepositors.set(payload.key.toString(), payload.data);
-    //   },
-    // );
 
     this.loading = false;
     // 3-6s
@@ -593,6 +613,7 @@ export class PropShopClient {
   }
 
   private setFundOverview(key: PublicKey, fo: FundOverview) {
+    console.log(`set fund overview, vault: ${key.toString()}`);
     this._fundOverviews.set(key.toString(), fo);
   }
 
@@ -761,12 +782,15 @@ export class PropShopClient {
   public async vaultDepositorEquityInDepositAsset(
     vdKey: PublicKey,
     vaultKey: PublicKey,
-  ): Promise<number> {
+  ): Promise<number | undefined> {
     if (!this.vaultClient) {
       throw new Error("VaultClient not initialized");
     }
     const vault = this.vault(vaultKey)!;
-    const vd = this.vaultDepositor(vdKey)!;
+    const vd = this.vaultDepositor(vdKey);
+    if (!vd) {
+      return undefined;
+    }
     const amount =
       await this.vaultClient.calculateWithdrawableVaultDepositorEquityInDepositAsset(
         {
@@ -847,35 +871,68 @@ export class PropShopClient {
     };
   }
 
-  public async deposit(vault: PublicKey, usdc: number): Promise<SnackInfo> {
+  private async depositIx(
+    vault: PublicKey,
+    usdc: number,
+  ): Promise<Result<TransactionInstruction[], SnackInfo>> {
     if (!this.vaultClient) {
-      console.error("PropShopClient not initialized");
-      return {
-        variant: "error",
-        message: "Client not initialized",
-      };
+      throw new Error("PropShopClient not initialized");
     }
-    if (!this.userInitialized()) {
-      console.error("User not initialized");
-      // todo: init user ix
-    }
-    const vaultDepositor = this.getVaultDepositorAddress(vault);
-    const vaultAccount = this.vault(vault, false)?.data;
+    const vaultAccount = this.vault(vault)?.data;
     if (!vaultAccount) {
-      console.error("Vault not found in deposit instruction");
-      return {
+      return err({
         variant: "error",
-        message: "Vault not found",
-      };
+        message: "Vault not found in deposit instruction",
+      });
     }
-    const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [],
+        writableSpotMarketIndexes: [0],
+      },
+    );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
 
-    let preIxs: TransactionInstruction[] = [];
+    const ixs: TransactionInstruction[] = [];
 
+    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
+      vaultAccount.spotMarketIndex,
+    );
+    if (!spotMarket) {
+      return err({
+        variant: "error",
+        message: "Spot market not found",
+      });
+    }
+
+    const userAta = getAssociatedTokenAddressSync(
+      spotMarket.mint,
+      this.publicKey,
+      true,
+    );
+    const userAtaExists = await this.connection.getAccountInfo(userAta);
+    if (userAtaExists === null) {
+      ixs.push(
+        createAssociatedTokenAccountInstruction(
+          this.publicKey,
+          userAta,
+          this.publicKey,
+          spotMarket.mint,
+        ),
+      );
+    }
+
+    const vaultDepositor = this.getVaultDepositorAddress(vault);
     const vdExists = this.vaultDepositor(vaultDepositor, false)?.data;
     if (!vdExists) {
-      console.log("create vault depositor");
-      preIxs.push(
+      ixs.push(
         await this.vaultClient.program.methods
           .initializeVaultDepositor()
           .accounts({
@@ -887,54 +944,8 @@ export class PropShopClient {
       );
     }
 
-    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
-      vaultAccount.spotMarketIndex,
-    );
-    if (!spotMarket) {
-      console.error("Spot market not found in deposit instruction");
-      return {
-        variant: "error",
-        message: "Spot market not found",
-      };
-    }
-
-    const userAta = getAssociatedTokenAddressSync(
-      spotMarket.mint,
-      this.publicKey,
-      true,
-    );
-    const userAtaExists = await this.connection.getAccountInfo(userAta);
-    if (userAtaExists === null) {
-      console.log("user ata DNE");
-      preIxs.push(
-        createAssociatedTokenAccountInstruction(
-          this.publicKey,
-          userAta,
-          this.publicKey,
-          spotMarket.mint,
-        ),
-      );
-    }
-
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [],
-        writableSpotMarketIndexes: [0],
-      },
-    );
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
-      const vaultProtocol = getVaultProtocolAddressSync(
-        this.vaultClient.program.programId,
-        vault,
-      );
-      remainingAccounts.push({
-        pubkey: vaultProtocol,
-        isSigner: false,
-        isWritable: true,
-      });
-    }
-
-    let obj = this.vaultClient.program.methods
+    const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
+    const depositIx = await this.vaultClient.program.methods
       .deposit(amount)
       .accounts({
         vault,
@@ -947,32 +958,136 @@ export class PropShopClient {
         driftSpotMarketVault: spotMarket.vault,
         driftProgram: this.vaultClient.driftClient.program.programId,
       })
-      .remainingAccounts(remainingAccounts);
+      .remainingAccounts(remainingAccounts)
+      .instruction();
 
-    if (preIxs.length > 0) {
-      obj = obj.preInstructions(preIxs);
+    ixs.push(depositIx);
+    return ok(ixs);
+  }
+
+  private async isProtocol(
+    vault: PublicKey,
+  ): Promise<Result<boolean, SnackInfo>> {
+    if (!this.vaultClient) {
+      return err({
+        variant: "error",
+        message: "PropShopClient not initialized",
+      });
+    }
+    const vaultAcct = this.vault(vault)?.data;
+    if (!vaultAcct) {
+      return err({
+        variant: "error",
+        message: `Vault ${vault.toString()} not found`,
+      });
     }
 
-    try {
-      const sig = await obj.rpc();
+    // check if wallet is protocol
+    if (!vaultAcct.vaultProtocol.equals(SystemProgram.programId)) {
+      const vpAcct =
+        (await this.vaultClient.program.account.vaultProtocol.fetch(
+          vaultAcct.vaultProtocol,
+        )) as VaultProtocol;
+      if (vpAcct.protocol.equals(this.publicKey)) {
+        return ok(true);
+      }
+    }
+    return ok(false);
+  }
 
-      await this.fetchVaultEquity(vault);
-      await this.fetchFundOverviews();
+  private isManager(vault: PublicKey): Result<boolean, SnackInfo> {
+    const vaultAcct = this.vault(vault)?.data;
+    if (!vaultAcct) {
+      return err({
+        variant: "error",
+        message: `Vault ${vault.toString()} not found`,
+      });
+    }
+    // check if wallet is manager
+    if (vaultAcct.manager.equals(this.publicKey)) {
+      return ok(true);
+    }
+    return ok(false);
+  }
 
+  public async deposit(vault: PublicKey, usdc: number): Promise<SnackInfo> {
+    if (!this.vaultClient) {
+      console.error("PropShopClient not initialized");
+      return {
+        variant: "error",
+        message: "Client not initialized",
+      };
+    }
+    if (!this.userInitialized()) {
+      console.error("User not initialized");
+      // todo: init user ix
+    }
+
+    const vaultAcct = this.vault(vault)?.data;
+    if (!vaultAcct) {
+      return {
+        variant: "error",
+        message: "Vault not found in deposit instruction",
+      };
+    }
+
+    // check if wallet is protocol
+    const isProtocolResult = await this.isProtocol(vault);
+    if (isProtocolResult.isErr()) {
+      return isProtocolResult.error;
+    }
+    if (isProtocolResult.value) {
+      return {
+        variant: "error",
+        message: "Protocol not allowed to deposit to vault",
+      };
+    }
+
+    const isManagerResult = this.isManager(vault);
+    if (isManagerResult.isErr()) {
+      return isManagerResult.error;
+    }
+    if (isManagerResult.value) {
+      const result = await this.managerDepositIx(vault, usdc);
+      if (result.isErr()) {
+        return result.error;
+      }
+      const res = await this.sendTx([result.value]);
+      if (res.isErr()) {
+        return {
+          variant: "error",
+          message: res.error,
+        };
+      }
+      const sig = res.value;
       console.debug("deposit:", formatExplorerLink(sig));
       const vaultName = decodeName(this.vault(vault)!.data.name);
       return {
         variant: "success",
         message: `Deposited to ${vaultName}`,
       };
-    } catch (e: any) {
-      console.error("deposit error:", e);
-      this.printProgramLogs(e);
+    }
+
+    // wallet is investor
+    const result = await this.depositIx(vault, usdc);
+    if (result.isErr()) {
+      return result.error;
+    }
+    const res = await this.sendTx(result.value);
+    if (res.isErr()) {
       return {
         variant: "error",
-        message: `Deposit failed: ${e}`,
+        message: res.error,
       };
     }
+    const sig = res.value;
+
+    console.debug("deposit:", formatExplorerLink(sig));
+    const vaultName = decodeName(this.vault(vault)!.data.name);
+    return {
+      variant: "success",
+      message: `Deposited to ${vaultName}`,
+    };
   }
 
   public async requestWithdraw(
@@ -987,6 +1102,69 @@ export class PropShopClient {
     }
     const vaultDepositor = this.getVaultDepositorAddress(vault);
     const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
+
+    // check if wallet is protocol
+    const isProtocolResult = await this.isProtocol(vault);
+    if (isProtocolResult.isErr()) {
+      return isProtocolResult.error;
+    }
+    if (isProtocolResult.value) {
+      const ix = await this.protocolRequestWithdrawIx(vault, usdc);
+      if (ix.isErr()) {
+        return ix.error;
+      }
+      const res = await this.sendTx([ix.value]);
+      if (res.isErr()) {
+        return {
+          variant: "error",
+          message: res.error,
+        };
+      }
+      const sig = res.value;
+      await this.fetchVaultEquity(vault);
+      await this.fetchFundOverviews();
+
+      // cache timer so frontend can track withdraw request
+      await this.createWithdrawTimer(vault);
+
+      console.debug("protocol request withdraw:", formatExplorerLink(sig));
+      const vaultName = decodeName(this.vault(vault)!.data.name);
+      return {
+        variant: "success",
+        message: `Protocol requested withdraw from ${vaultName}`,
+      };
+    }
+
+    const isManagerResult = this.isManager(vault);
+    if (isManagerResult.isErr()) {
+      return isManagerResult.error;
+    }
+    if (isManagerResult.value) {
+      const ix = await this.managerRequestWithdrawIx(vault, usdc);
+      if (ix.isErr()) {
+        return ix.error;
+      }
+      const res = await this.sendTx([ix.value]);
+      if (res.isErr()) {
+        return {
+          variant: "error",
+          message: res.error,
+        };
+      }
+      const sig = res.value;
+      await this.fetchVaultEquity(vault);
+      await this.fetchFundOverviews();
+
+      // cache timer so frontend can track withdraw request
+      await this.createWithdrawTimer(vault);
+
+      console.debug("manager request withdraw:", formatExplorerLink(sig));
+      const vaultName = decodeName(this.vault(vault)!.data.name);
+      return {
+        variant: "success",
+        message: `Manager requested withdraw from ${vaultName}`,
+      };
+    }
 
     const sig = await this.vaultClient.requestWithdraw(
       vaultDepositor,
@@ -1015,18 +1193,74 @@ export class PropShopClient {
       throw new Error("User not initialized");
     }
     const vaultDepositor = this.getVaultDepositorAddress(vault);
-    const sig = await this.vaultClient.cancelRequestWithdraw(vaultDepositor);
 
+    const isProtocolResult = await this.isProtocol(vault);
+    if (isProtocolResult.isErr()) {
+      return isProtocolResult.error;
+    }
+    if (isProtocolResult.value) {
+      const ix = await this.protocolCancelWithdrawRequestIx(vault);
+      if (ix.isErr()) {
+        return ix.error;
+      }
+      const res = await this.sendTx([ix.value]);
+      if (res.isErr()) {
+        return {
+          variant: "error",
+          message: res.error,
+        };
+      }
+      this.removeWithdrawTimer(vault);
+      await this.fetchVaultEquity(vault);
+      await this.fetchFundOverviews();
+      console.debug("cancel withdraw request:", formatExplorerLink(res.value));
+      const vaultName = decodeName(this.vault(vault)!.data.name);
+      return {
+        variant: "success",
+        message: `Protocol canceled withdraw request for ${vaultName}`,
+      };
+    }
+
+    const isManagerResult = this.isManager(vault);
+    if (isManagerResult.isErr()) {
+      return isManagerResult.error;
+    }
+    if (isManagerResult.value) {
+      const ix = await this.managerCancelWithdrawRequestIx(vault);
+      if (ix.isErr()) {
+        return ix.error;
+      }
+      const res = await this.sendTx([ix.value]);
+      if (res.isErr()) {
+        return {
+          variant: "error",
+          message: res.error,
+        };
+      }
+      this.removeWithdrawTimer(vault);
+      await this.fetchVaultEquity(vault);
+      await this.fetchFundOverviews();
+      console.debug(
+        "manager cancel withdraw request:",
+        formatExplorerLink(res.value),
+      );
+      const vaultName = decodeName(this.vault(vault)!.data.name);
+      return {
+        variant: "success",
+        message: `Manager canceled withdraw request for ${vaultName}`,
+      };
+    }
+
+    const sig = await this.vaultClient.cancelRequestWithdraw(vaultDepositor);
     // successful withdraw means no more withdraw request
     this.removeWithdrawTimer(vault);
     await this.fetchVaultEquity(vault);
     await this.fetchFundOverviews();
-
     console.debug("cancel withdraw request:", formatExplorerLink(sig));
     const vaultName = decodeName(this.vault(vault)!.data.name);
     return {
       variant: "success",
-      message: `Cancel withdraw request for ${vaultName}`,
+      message: `Canceled withdraw request for ${vaultName}`,
     };
   }
 
@@ -1039,9 +1273,63 @@ export class PropShopClient {
     }
     const vaultDepositor = this.getVaultDepositorAddress(vault);
 
-    const sig = await this.vaultClient.withdraw(vaultDepositor);
+    const isProtocolResult = await this.isProtocol(vault);
+    if (isProtocolResult.isErr()) {
+      return isProtocolResult.error;
+    }
+    if (isProtocolResult.value) {
+      const ix = await this.protocolWithdrawIx(vault);
+      if (ix.isErr()) {
+        return ix.error;
+      }
+      const res = await this.sendTx([ix.value]);
+      if (res.isErr()) {
+        return {
+          variant: "error",
+          message: res.error,
+        };
+      }
+      this.removeWithdrawTimer(vault);
+      await this.fetchVaultEquity(vault);
+      await this.fetchFundOverviews();
 
-    // successful withdraw means no more withdraw request
+      console.debug("protocol withdraw:", formatExplorerLink(res.value));
+      const vaultName = decodeName(this.vault(vault)!.data.name);
+      return {
+        variant: "success",
+        message: `Protocol withdrew from ${vaultName}`,
+      };
+    }
+
+    const isManagerResult = this.isManager(vault);
+    if (isManagerResult.isErr()) {
+      return isManagerResult.error;
+    }
+    if (isManagerResult.value) {
+      const ix = await this.managerWithdrawIx(vault);
+      if (ix.isErr()) {
+        return ix.error;
+      }
+      const res = await this.sendTx([ix.value]);
+      if (res.isErr()) {
+        return {
+          variant: "error",
+          message: res.error,
+        };
+      }
+      this.removeWithdrawTimer(vault);
+      await this.fetchVaultEquity(vault);
+      await this.fetchFundOverviews();
+
+      console.debug("manager withdraw:", formatExplorerLink(res.value));
+      const vaultName = decodeName(this.vault(vault)!.data.name);
+      return {
+        variant: "success",
+        message: `Manager withdrew from ${vaultName}`,
+      };
+    }
+
+    const sig = await this.vaultClient.withdraw(vaultDepositor);
     this.removeWithdrawTimer(vault);
     await this.fetchVaultEquity(vault);
     await this.fetchFundOverviews();
@@ -1282,19 +1570,482 @@ export class PropShopClient {
    */
   public async updateVault(): Promise<void> {}
 
-  public async managerDeposit(usdc: number): Promise<void> {}
+  private async managerDepositIx(
+    vault: PublicKey,
+    usdc: number,
+  ): Promise<Result<TransactionInstruction, SnackInfo>> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vaultAccount = this.vault(vault, true)!.data;
+    if (!vaultAccount) {
+      throw new Error(
+        `Vault ${vault.toString()} not found during manager deposit`,
+      );
+    }
+    const driftSpotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
+      vaultAccount.spotMarketIndex,
+    );
+    if (!driftSpotMarket) {
+      return err({
+        variant: "error",
+        message: `Spot market ${vaultAccount.spotMarketIndex} not found`,
+      });
+    }
 
-  public async managerRequestWithdraw(usdc: number): Promise<void> {}
+    const user = await this.vaultClient.getSubscribedVaultUser(
+      vaultAccount.user,
+    );
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [user.getUserAccount()],
+        writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
+      },
+    );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
 
-  public async managerWithdraw(usdc: number): Promise<void> {}
+    const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
+    return ok(
+      await this.vaultClient.program.methods
+        .managerDeposit(amount)
+        .accounts({
+          vault,
+          vaultTokenAccount: vaultAccount.tokenAccount,
+          driftUser: await getUserAccountPublicKey(
+            this.vaultClient.driftClient.program.programId,
+            vault,
+          ),
+          driftProgram: this.vaultClient.driftClient.program.programId,
+          driftUserStats: getUserStatsAccountPublicKey(
+            this.vaultClient.driftClient.program.programId,
+            vault,
+          ),
+          driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+          driftSpotMarketVault: driftSpotMarket.vault,
+          userTokenAccount: getAssociatedTokenAddressSync(
+            driftSpotMarket.mint,
+            this.publicKey,
+          ),
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts(remainingAccounts)
+        .instruction(),
+    );
+  }
+
+  private async managerRequestWithdrawIx(
+    vault: PublicKey,
+    usdc: number,
+  ): Promise<Result<TransactionInstruction, SnackInfo>> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vaultAccount = this.vault(vault, true)!.data;
+
+    if (!this.publicKey.equals(vaultAccount.manager)) {
+      return err({
+        variant: "error",
+        message: "Only the manager can request a manager withdraw",
+      });
+    }
+
+    const user = await this.vaultClient.getSubscribedVaultUser(
+      vaultAccount.user,
+    );
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [user.getUserAccount()],
+        writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
+      },
+    );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
+
+    const accounts = {
+      vault,
+      driftUserStats: getUserStatsAccountPublicKey(
+        this.vaultClient.driftClient.program.programId,
+        vault,
+      ),
+      driftUser: vaultAccount.user,
+      driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+    };
+
+    const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
+    const withdrawUnit = WithdrawUnit.TOKEN;
+    return ok(
+      await this.vaultClient.program.methods
+        // @ts-ignore, 0.29.0 anchor issues..
+        .managerRequestWithdraw(amount, withdrawUnit)
+        .accounts(accounts)
+        .remainingAccounts(remainingAccounts)
+        .instruction(),
+    );
+  }
+
+  private async managerCancelWithdrawRequestIx(
+    vault: PublicKey,
+  ): Promise<Result<TransactionInstruction, SnackInfo>> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vaultAccount = this.vault(vault)?.data;
+    if (!vaultAccount) {
+      return err({
+        variant: "error",
+        message: `Vault ${vault.toString()} not found during manager withdraw`,
+      });
+    }
+
+    if (!this.publicKey.equals(vaultAccount.manager)) {
+      return err({
+        variant: "error",
+        message: "Only the manager can cancel a manager withdraw request",
+      });
+    }
+
+    const accounts = {
+      manager: this.publicKey,
+      vault,
+      driftUserStats: getUserStatsAccountPublicKey(
+        this.vaultClient.driftClient.program.programId,
+        vault,
+      ),
+      driftUser: vaultAccount.user,
+      driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+    };
+
+    const user = await this.vaultClient.getSubscribedVaultUser(
+      vaultAccount.user,
+    );
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [user.getUserAccount()],
+      },
+    );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
+
+    return ok(
+      await this.vaultClient.program.methods
+        .mangerCancelWithdrawRequest()
+        .accounts(accounts)
+        .remainingAccounts(remainingAccounts)
+        .instruction(),
+    );
+  }
+
+  private async managerWithdrawIx(
+    vault: PublicKey,
+  ): Promise<Result<TransactionInstruction, SnackInfo>> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vaultAccount = this.vault(vault)?.data;
+    if (!vaultAccount) {
+      return err({
+        variant: "error",
+        message: `Vault ${vault.toString()} not found during manager withdraw`,
+      });
+    }
+
+    if (!this.publicKey.equals(vaultAccount.manager)) {
+      return err({
+        variant: "error",
+        message: "Only the manager can manager withdraw",
+      });
+    }
+
+    const user = await this.vaultClient.getSubscribedVaultUser(
+      vaultAccount.user,
+    );
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [user.getUserAccount()],
+        writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
+      },
+    );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
+
+    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
+      vaultAccount.spotMarketIndex,
+    );
+    if (!spotMarket) {
+      return err({
+        variant: "error",
+        message: `Spot market ${vaultAccount.spotMarketIndex} not found`,
+      });
+    }
+
+    return ok(
+      await this.vaultClient.program.methods
+        .managerWithdraw()
+        .accounts({
+          vault,
+          manager: this.publicKey,
+          vaultTokenAccount: vaultAccount.tokenAccount,
+          driftUser: await getUserAccountPublicKey(
+            this.vaultClient.driftClient.program.programId,
+            vault,
+          ),
+          driftProgram: this.vaultClient.driftClient.program.programId,
+          driftUserStats: getUserStatsAccountPublicKey(
+            this.vaultClient.driftClient.program.programId,
+            vault,
+          ),
+          driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+          driftSpotMarketVault: spotMarket.vault,
+          userTokenAccount: getAssociatedTokenAddressSync(
+            spotMarket.mint,
+            this.publicKey,
+          ),
+          driftSigner: this.vaultClient.driftClient.getStateAccount().signer,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts(remainingAccounts)
+        .instruction(),
+    );
+  }
 
   //
   // Protocol actions
   //
 
-  public async protocolRequestWithdraw(usdc: number): Promise<void> {}
+  private async protocolRequestWithdrawIx(
+    vault: PublicKey,
+    usdc: number,
+  ): Promise<Result<TransactionInstruction, SnackInfo>> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vaultAccount = this.vault(vault)?.data;
+    if (!vaultAccount) {
+      return err({
+        variant: "error",
+        message: `Vault ${vault.toString()} not found during protocol withdraw request`,
+      });
+    }
 
-  public async protocolWithdraw(): Promise<void> {}
+    if (vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      return err({
+        variant: "error",
+        message: `Protocol unable to request withdraw from non-protocol vault ${vault.toString()}`,
+      });
+    }
+
+    const vpAccount =
+      (await this.vaultClient.program.account.vaultProtocol.fetch(
+        vaultAccount.vaultProtocol,
+      )) as VaultProtocol;
+    if (!this.publicKey.equals(vpAccount.protocol)) {
+      return err({
+        variant: "error",
+        message: "Only the protocol can request a protocol withdraw",
+      });
+    }
+
+    const user = await this.vaultClient.getSubscribedVaultUser(
+      vaultAccount.user,
+    );
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [user.getUserAccount()],
+        writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
+      },
+    );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
+
+    const accounts = {
+      vault,
+      driftUserStats: getUserStatsAccountPublicKey(
+        this.vaultClient.driftClient.program.programId,
+        vault,
+      ),
+      driftUser: vaultAccount.user,
+      driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+    };
+
+    const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
+    const withdrawUnit = WithdrawUnit.TOKEN;
+    return ok(
+      await this.vaultClient.program.methods
+        // @ts-ignore, 0.29.0 anchor issues..
+        .managerRequestWithdraw(amount, withdrawUnit)
+        .accounts(accounts)
+        .remainingAccounts(remainingAccounts)
+        .instruction(),
+    );
+  }
+
+  private async protocolCancelWithdrawRequestIx(
+    vault: PublicKey,
+  ): Promise<Result<TransactionInstruction, SnackInfo>> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vaultAccount = this.vault(vault)?.data;
+    if (!vaultAccount) {
+      return err({
+        variant: "error",
+        message: `Vault ${vault.toString()} not found during protocol withdraw request`,
+      });
+    }
+
+    if (vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      return err({
+        variant: "error",
+        message: `Protocol unable to cancel withdraw request from non-protocol vault ${vault.toString()}`,
+      });
+    }
+
+    const accounts = {
+      manager: this.publicKey,
+      vault,
+      driftUserStats: getUserStatsAccountPublicKey(
+        this.vaultClient.driftClient.program.programId,
+        vault,
+      ),
+      driftUser: vaultAccount.user,
+      driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+    };
+
+    const user = await this.vaultClient.getSubscribedVaultUser(
+      vaultAccount.user,
+    );
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [user.getUserAccount()],
+      },
+    );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
+
+    return ok(
+      await this.vaultClient.program.methods
+        .mangerCancelWithdrawRequest()
+        .accounts(accounts)
+        .remainingAccounts(remainingAccounts)
+        .instruction(),
+    );
+  }
+
+  private async protocolWithdrawIx(
+    vault: PublicKey,
+  ): Promise<Result<TransactionInstruction, SnackInfo>> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const vaultAccount = this.vault(vault)?.data;
+    if (!vaultAccount) {
+      return err({
+        variant: "error",
+        message: `Vault ${vault.toString()} not found during protocol withdraw request`,
+      });
+    }
+
+    if (vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      return err({
+        variant: "error",
+        message: `Protocol unable to withdraw from non-protocol vault ${vault.toString()}`,
+      });
+    }
+
+    const user = await this.vaultClient.getSubscribedVaultUser(
+      vaultAccount.user,
+    );
+    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [user.getUserAccount()],
+        writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
+      },
+    );
+    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
+
+    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
+      vaultAccount.spotMarketIndex,
+    );
+    if (!spotMarket) {
+      return err({
+        variant: "error",
+        message: `Spot market ${vaultAccount.spotMarketIndex} not found`,
+      });
+    }
+
+    return ok(
+      await this.vaultClient.program.methods
+        .managerWithdraw()
+        .accounts({
+          vault,
+          manager: this.vaultClient.driftClient.wallet.publicKey,
+          vaultTokenAccount: vaultAccount.tokenAccount,
+          driftUser: await getUserAccountPublicKey(
+            this.vaultClient.driftClient.program.programId,
+            vault,
+          ),
+          driftProgram: this.vaultClient.driftClient.program.programId,
+          driftUserStats: getUserStatsAccountPublicKey(
+            this.vaultClient.driftClient.program.programId,
+            vault,
+          ),
+          driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+          driftSpotMarketVault: spotMarket.vault,
+          userTokenAccount: getAssociatedTokenAddressSync(
+            spotMarket.mint,
+            this.vaultClient.driftClient.wallet.publicKey,
+          ),
+          driftSigner: this.vaultClient.driftClient.getStateAccount().signer,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts(remainingAccounts)
+        .instruction(),
+    );
+  }
 
   //
   // Static utils
@@ -1510,6 +2261,9 @@ export class PropShopClient {
   public async fetchVaultEquity(vault: PublicKey): Promise<number | undefined> {
     const key = this.getVaultDepositorAddress(vault);
     const usdc = await this.vaultDepositorEquityInDepositAsset(key, vault);
+    if (!usdc) {
+      return undefined;
+    }
     this._equities.set(vault.toString(), usdc);
     return usdc;
   }
@@ -1536,5 +2290,20 @@ export class PropShopClient {
       // so return undefined instead of throwing an error
       return undefined;
     }
+  }
+
+  private async sendTx(
+    ixs: TransactionInstruction[],
+  ): Promise<Result<string, string>> {
+    const _ixs: InstructionReturn[] = ixs.map((ix) => {
+      return () => {
+        return Promise.resolve({
+          instruction: ix,
+          signers: [],
+        });
+      };
+    });
+    const funder = walletAdapterToAsyncSigner(this.wallet);
+    return sendTransactionWithResult(_ixs, funder, this.connection);
   }
 }

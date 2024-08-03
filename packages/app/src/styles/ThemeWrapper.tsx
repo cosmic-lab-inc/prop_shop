@@ -33,6 +33,7 @@ export const ThemeWrapper: FC<{ children: ReactNode }> = ({ children }) => {
             error: CustomSnack,
             success: CustomSnack,
           }}
+          autoHideDuration={5000}
         >
           {children}
         </SnackbarProvider>

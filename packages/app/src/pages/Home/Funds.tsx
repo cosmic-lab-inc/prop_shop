@@ -5,14 +5,15 @@ import { FundOverview, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import useEmblaCarousel from "embla-carousel-react";
 import { EmblaCarouselType, EmblaOptionsType } from "embla-carousel";
 import { customTheme } from "../../styles";
-import { mockFundOverviews } from "../../lib";
 import { observer } from "mobx-react";
+import { mockFundOverviews } from "../../lib";
 
 // todo: fetch vaults and sort by criteria using PropShopClient
 export const Funds = observer(({ client }: { client: PropShopClient }) => {
   const [funds, setFunds] = React.useState<FundOverview[]>([]);
 
   React.useEffect(() => {
+    console.log("render Funds");
     if (
       process.env.ENV === "dev" ||
       process.env.RPC_URL === "http://localhost:8899"

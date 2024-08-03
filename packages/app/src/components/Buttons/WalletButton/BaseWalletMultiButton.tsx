@@ -21,7 +21,7 @@ import { darken } from "@mui/system/colorManipulator";
 import { useOutsideClick } from "../../../lib";
 
 const List = styled("ul")(({ theme }) => ({
-  marginTop: 100,
+  marginTop: 85,
   padding: 0,
   backgroundColor: customTheme.grey,
   borderRadius: "10px",
