@@ -19,6 +19,7 @@ import { customTheme } from "../../../styles";
 import Box from "@mui/material/Box";
 import { darken } from "@mui/system/colorManipulator";
 import { useOutsideClick } from "../../../lib";
+import { AirdropIcon } from "../../Icons";
 
 const List = styled("ul")(({ theme }) => ({
   marginTop: 85,
@@ -75,6 +76,9 @@ function ListEntry({
 }
 
 type Props = ButtonProps & {
+  airdropSol?: () => Promise<void>;
+  airdropUsdc?: () => Promise<void>;
+  initUser?: () => Promise<void>;
   labels: Omit<
     {
       [TButtonState in ReturnType<
@@ -89,7 +93,13 @@ type Props = ButtonProps & {
   };
 };
 
-export function BaseWalletMultiButton({ children, labels, ...props }: Props) {
+export function BaseWalletMultiButton({
+  children,
+  labels,
+  airdropSol,
+  airdropUsdc,
+  ...props
+}: Props) {
   const { setOpen: setModalVisible } = useWalletDialog();
   const anchorRef = React.createRef<HTMLButtonElement>();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -195,6 +205,22 @@ export function BaseWalletMultiButton({ children, labels, ...props }: Props) {
               }}
               icon={<DisconnectIcon />}
               text={labels["disconnect"]}
+            />
+          )}
+
+          {airdropSol && (
+            <ListEntry
+              onClick={airdropSol}
+              icon={<AirdropIcon color={customTheme.light} size={30} />}
+              text={"Airdrop SOL"}
+            />
+          )}
+
+          {airdropUsdc && (
+            <ListEntry
+              onClick={airdropUsdc}
+              icon={<AirdropIcon color={customTheme.light} size={30} />}
+              text={"Airdrop USDC"}
             />
           )}
         </List>

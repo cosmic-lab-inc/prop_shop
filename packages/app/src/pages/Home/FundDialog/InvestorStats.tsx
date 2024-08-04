@@ -212,8 +212,6 @@ export const InvestorStats = observer(
 // todo: remove useEffect and react mobx computed state
 const Stats = observer(
   ({ client, vault }: { client: PropShopClient; vault: PublicKey }) => {
-    const key = client.clientVaultDepositor(vault)?.key;
-
     const [timer, setTimer] = React.useState<WithdrawRequestTimer | undefined>(
       undefined,
     );

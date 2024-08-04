@@ -138,7 +138,7 @@ export const Toolbar = observer(
                 p: 1,
               }}
             >
-              <WalletButton />
+              <WalletButton client={client} />
             </Box>
           </MuiToolbar>
         </AppBar>

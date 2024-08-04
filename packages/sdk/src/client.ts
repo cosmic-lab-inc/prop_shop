@@ -3,9 +3,11 @@ import {
   Connection,
   GetProgramAccountsFilter,
   Keypair,
+  LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionError,
   TransactionInstruction,
   type TransactionSignature,
   TransactionVersion,
@@ -28,7 +30,6 @@ import {
   SpotMarketAccount,
   TEN,
   unstakeSharesToAmount as depositSharesToVaultAmount,
-  User,
   UserStatsAccount,
 } from "@drift-labs/sdk";
 import {
@@ -37,6 +38,8 @@ import {
   PROP_SHOP_PERCENT_ANNUAL_FEE,
   PROP_SHOP_PERCENT_PROFIT_SHARE,
   PROP_SHOP_PROTOCOL,
+  TEST_USDC_MINT,
+  TEST_USDC_MINT_AUTHORITY,
 } from "./constants";
 import { getAssociatedTokenAddress } from "./programs";
 import { Drift } from "./idl/drift";
@@ -88,6 +91,7 @@ import { ProxyClient } from "./proxyClient";
 import { WebSocketSubscriber } from "./websocketSubscriber";
 import {
   createAssociatedTokenAccountInstruction,
+  createMintToInstruction,
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
@@ -95,6 +99,7 @@ import { RedisClient } from "./redisClient";
 import { err, ok, Result } from "neverthrow";
 import {
   InstructionReturn,
+  keypairToAsyncSigner,
   walletAdapterToAsyncSigner,
 } from "@cosmic-lab/data-source";
 
@@ -293,60 +298,130 @@ export class PropShopClient {
     );
   }
 
+  private async checkIfAccountExists(account: PublicKey): Promise<boolean> {
+    try {
+      const accountInfo = await this.connection.getAccountInfo(account);
+      return accountInfo != null;
+    } catch (e) {
+      // Doesn't already exist
+      return false;
+    }
+  }
+
+  private async initUserIxs(
+    subAccountId = 0,
+  ): Promise<TransactionInstruction[]> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialize");
+    }
+    const ixs = [];
+    const userKey = getUserAccountPublicKeySync(
+      this.vaultClient.driftClient.program.programId,
+      this.publicKey,
+      subAccountId,
+    );
+
+    if (subAccountId === 0) {
+      if (
+        !(await this.checkIfAccountExists(
+          this.vaultClient.driftClient.getUserStatsAccountPublicKey(),
+        ))
+      ) {
+        ixs.push(await this.vaultClient.driftClient.getInitializeUserStatsIx());
+      }
+    }
+
+    if (!(await this.checkIfAccountExists(userKey))) {
+      const [_, ix] =
+        await this.vaultClient.driftClient.getInitializeUserInstructions(
+          subAccountId,
+        );
+      ixs.push(ix);
+    }
+    return ixs;
+  }
+
   /**
    * Initialize the User for the connected wallet,
    * and optionally deposit USDC as collateral.
    * Call this before joining or depositing to a vault.
    */
-  async initUser(depositUsdc?: number): Promise<{
-    user: User;
-    usdcMint: PublicKey;
-    usdcAta: PublicKey;
-  }> {
+  public async initUser(subAccountId = 0): Promise<void> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialize");
     }
-    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(0);
-    if (!spotMarket) {
-      throw new Error("USDC spot market not found in DriftClient");
-    }
-    const usdcMint = spotMarket.mint;
-    const usdcAta = getAssociatedTokenAddress(usdcMint, this.publicKey);
-    const user = new User({
-      // @ts-ignore
-      driftClient: this.vaultClient.driftClient,
-      userAccountPublicKey:
-        await this.vaultClient!.driftClient.getUserAccountPublicKey(),
-    });
-    // only init if this is the first time (not already subscribed)
-    if (!user.isSubscribed) {
-      if (depositUsdc) {
-        await this.vaultClient!.driftClient.initializeUserAccountAndDepositCollateral(
-          new BN(depositUsdc * QUOTE_PRECISION.toNumber()),
-          usdcAta,
-          0,
-          this.vaultClient!.driftClient.activeSubAccountId,
-        );
-      } else {
-        await this.vaultClient!.driftClient.initializeUserAccount(
-          this.vaultClient!.driftClient.activeSubAccountId ?? 0,
-        );
+    const ixs = [];
+    const userKey = getUserAccountPublicKeySync(
+      this.vaultClient.driftClient.program.programId,
+      this.publicKey,
+      subAccountId,
+    );
+
+    if (subAccountId === 0) {
+      if (
+        !(await this.checkIfAccountExists(
+          this.vaultClient.driftClient.getUserStatsAccountPublicKey(),
+        ))
+      ) {
+        ixs.push(await this.vaultClient.driftClient.getInitializeUserStatsIx());
       }
-      await user.subscribe();
     }
-    return {
-      user,
-      usdcMint,
-      usdcAta,
-    };
+
+    if (!(await this.checkIfAccountExists(userKey))) {
+      const [_, ix] =
+        await this.vaultClient.driftClient.getInitializeUserInstructions(
+          subAccountId,
+        );
+      ixs.push(ix);
+    }
+    const sig = await this.sendTx(ixs);
+    if (sig.isErr()) {
+      throw new Error("Failed to initialize user");
+    }
+    console.debug("init user:", formatExplorerLink(sig.value));
   }
+
+  // async initUser(): Promise<{
+  //   user: User;
+  //   usdcMint: PublicKey;
+  //   usdcAta: PublicKey;
+  // }> {
+  //   if (!this.vaultClient) {
+  //     throw new Error("VaultClient not initialized");
+  //   }
+  //   const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(0);
+  //   if (!spotMarket) {
+  //     throw new Error("USDC spot market not found in DriftClient");
+  //   }
+  //   const usdcMint = spotMarket.mint;
+  //   const usdcAta = getAssociatedTokenAddress(usdcMint, this.publicKey);
+  //   const user = new User({
+  //     // @ts-ignore
+  //     driftClient: this.vaultClient.driftClient,
+  //     userAccountPublicKey:
+  //       await this.vaultClient.driftClient.getUserAccountPublicKey(),
+  //   });
+  //   // only init if this is the first time (not already subscribed)
+  //   if (!user.isSubscribed) {
+  //     await this.vaultClient.driftClient.initializeUserAccount(
+  //       this.vaultClient!.driftClient.activeSubAccountId ?? 0,
+  //     );
+  //
+  //     await user.subscribe();
+  //   }
+  //   return {
+  //     user,
+  //     usdcMint,
+  //     usdcAta,
+  //   };
+  // }
 
   /**
    * Uses the active subAccountId and connected wallet as the authority.
    */
   public userInitialized(): boolean {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     const user = this.vaultClient.driftClient.getUserAccount();
     return !!user;
@@ -511,6 +586,20 @@ export class PropShopClient {
     } else {
       return vaults;
     }
+  }
+
+  /**
+   * VaultDepositors the connected wallet is the authority of.
+   */
+  public async fetchVaultDepositor(key: PublicKey): Promise<VaultDepositor> {
+    if (!this.vaultClient) {
+      throw new Error("VaultClient not initialized");
+    }
+    const preFetch = Date.now();
+    const vd: VaultDepositor =
+      await this.vaultClient.program.account.vaultDepositor.fetch(key);
+    console.log(`fetched vd from RPC in ${Date.now() - preFetch}ms`);
+    return vd;
   }
 
   /**
@@ -852,6 +941,7 @@ export class PropShopClient {
   public async vaultDepositorEquityInDepositAsset(
     vdKey: PublicKey,
     vaultKey: PublicKey,
+    forceFetch: boolean = false,
   ): Promise<number | undefined> {
     if (!this.vaultClient) {
       throw new Error("VaultClient not initialized");
@@ -862,7 +952,16 @@ export class PropShopClient {
         `Vault ${vaultKey.toString()} not found in equity calculation`,
       );
     }
-    const vd = this.vaultDepositor(vdKey, false);
+    let vd: Data<PublicKey, VaultDepositor> | undefined = undefined;
+    if (forceFetch) {
+      const data = await this.fetchVaultDepositor(vdKey);
+      vd = {
+        key: vdKey,
+        data,
+      };
+    } else {
+      vd = this.vaultDepositor(vdKey, false);
+    }
     if (!vd) {
       return undefined;
     }
@@ -944,6 +1043,29 @@ export class PropShopClient {
       variant: "success",
       message: `Joined ${vaultName}`,
     };
+  }
+
+  private async createUsdcAtaIx(
+    mint: PublicKey,
+  ): Promise<InstructionReturn | undefined> {
+    const userAta = getAssociatedTokenAddressSync(mint, this.publicKey, true);
+    const userAtaExists = await this.connection.getAccountInfo(userAta);
+    if (userAtaExists === null) {
+      const funder = walletAdapterToAsyncSigner(this.wallet);
+      const ix: InstructionReturn = () => {
+        return Promise.resolve({
+          instruction: createAssociatedTokenAccountInstruction(
+            this.publicKey,
+            userAta,
+            this.publicKey,
+            mint,
+          ),
+          signers: [funder],
+        });
+      };
+      return ix;
+    }
+    return undefined;
   }
 
   private async depositIx(
@@ -1035,7 +1157,6 @@ export class PropShopClient {
       })
       .remainingAccounts(remainingAccounts)
       .instruction();
-
     ixs.push(depositIx);
     return ok(ixs);
   }
@@ -1087,15 +1208,7 @@ export class PropShopClient {
 
   public async deposit(vault: PublicKey, usdc: number): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      console.error("PropShopClient not initialized");
-      return {
-        variant: "error",
-        message: "Client not initialized",
-      };
-    }
-    if (!this.userInitialized()) {
-      console.error("User not initialized");
-      // todo: init user ix
+      throw new Error("PropShopClient not initialized");
     }
 
     const vaultAcct = this.vault(vault)?.data;
@@ -1104,6 +1217,18 @@ export class PropShopClient {
         variant: "error",
         message: "Vault not found in deposit instruction",
       };
+    }
+
+    const ixs = [];
+
+    const userKey = getUserAccountPublicKeySync(
+      this.vaultClient.driftClient.program.programId,
+      this.publicKey,
+    );
+
+    if (!(await this.checkIfAccountExists(userKey))) {
+      const initUserIxs = await this.initUserIxs();
+      ixs.push(...initUserIxs);
     }
 
     // check if wallet is protocol
@@ -1118,47 +1243,34 @@ export class PropShopClient {
       };
     }
 
-    const isManagerResult = this.isManager(vault);
-    if (isManagerResult.isErr()) {
-      return isManagerResult.error;
-    }
-    if (isManagerResult.value) {
+    const isManager = this.isManager(vault).unwrapOr(false);
+    if (isManager) {
       const result = await this.managerDepositIx(vault, usdc);
       if (result.isErr()) {
         return result.error;
       }
-      const res = await this.sendTx([result.value]);
-      if (res.isErr()) {
-        return {
-          variant: "error",
-          message: res.error,
-        };
+      ixs.push(result.value);
+    } else {
+      const result = await this.depositIx(vault, usdc);
+      if (result.isErr()) {
+        return result.error;
       }
-      const sig = res.value;
-      console.debug("manager deposit:", formatExplorerLink(sig));
-      const vaultName = decodeName(this.vault(vault)!.data.name);
-      return {
-        variant: "success",
-        message: `Manager deposited to ${vaultName}`,
-      };
+      ixs.push(...result.value);
     }
 
-    // wallet is investor
-    const result = await this.depositIx(vault, usdc);
-    if (result.isErr()) {
-      return result.error;
-    }
-    const res = await this.sendTx(result.value);
+    const res = await this.sendTx(ixs);
     if (res.isErr()) {
+      console.error(res.error);
       return {
         variant: "error",
-        message: res.error,
+        message: "Failed to deposit",
       };
     }
     const sig = res.value;
-
     console.debug("deposit:", formatExplorerLink(sig));
     const vaultName = decodeName(this.vault(vault)!.data.name);
+    await this.fetchVaultEquity(vault);
+    await this.fetchFundOverview(vault);
     return {
       variant: "success",
       message: `Deposited to ${vaultName}`,
@@ -1190,9 +1302,10 @@ export class PropShopClient {
       }
       const res = await this.sendTx([ix.value]);
       if (res.isErr()) {
+        console.error(res.error);
         return {
           variant: "error",
-          message: res.error,
+          message: "Protocol failed to request withdraw",
         };
       }
       const sig = res.value;
@@ -1221,9 +1334,10 @@ export class PropShopClient {
       }
       const res = await this.sendTx([ix.value]);
       if (res.isErr()) {
+        console.error(res.error);
         return {
           variant: "error",
-          message: res.error,
+          message: "Manager failed to request withdraw",
         };
       }
       const sig = res.value;
@@ -1280,9 +1394,10 @@ export class PropShopClient {
       }
       const res = await this.sendTx([ix.value]);
       if (res.isErr()) {
+        console.error(res.error);
         return {
           variant: "error",
-          message: res.error,
+          message: "Protocol failed to cancel withdraw request",
         };
       }
       this.removeWithdrawTimer(vault);
@@ -1307,9 +1422,10 @@ export class PropShopClient {
       }
       const res = await this.sendTx([ix.value]);
       if (res.isErr()) {
+        console.error(res.error);
         return {
           variant: "error",
-          message: res.error,
+          message: "Manager failed to cancel withdraw request",
         };
       }
       this.removeWithdrawTimer(vault);
@@ -1359,9 +1475,10 @@ export class PropShopClient {
       }
       const res = await this.sendTx([ix.value]);
       if (res.isErr()) {
+        console.error(res.error);
         return {
           variant: "error",
-          message: res.error,
+          message: "Protocol failed to withdraw",
         };
       }
       this.removeWithdrawTimer(vault);
@@ -1387,9 +1504,10 @@ export class PropShopClient {
       }
       const res = await this.sendTx([ix.value]);
       if (res.isErr()) {
+        console.error(res.error);
         return {
           variant: "error",
-          message: res.error,
+          message: "Manager failed to withdraw",
         };
       }
       this.removeWithdrawTimer(vault);
@@ -1753,7 +1871,7 @@ export class PropShopClient {
     if (result.isErr()) {
       return {
         variant: "error",
-        message: result.error,
+        message: "Failed to update vault",
       };
     }
     console.debug("update vault:", formatExplorerLink(result.value));
@@ -2563,7 +2681,7 @@ export class PropShopClient {
       return usdc;
     }
 
-    const isProtocol = this.isManager(vault).unwrapOr(false);
+    const isProtocol = (await this.isProtocol(vault)).unwrapOr(false);
     if (isProtocol) {
       const usdc = await this.protocolEquityInDepositAsset(vault);
       if (!usdc) {
@@ -2574,7 +2692,11 @@ export class PropShopClient {
     }
 
     const key = this.getVaultDepositorAddress(vault);
-    const usdc = await this.vaultDepositorEquityInDepositAsset(key, vault);
+    const usdc = await this.vaultDepositorEquityInDepositAsset(
+      key,
+      vault,
+      true,
+    );
     if (!usdc) {
       return undefined;
     }
@@ -2608,7 +2730,7 @@ export class PropShopClient {
 
   private async sendTx(
     ixs: TransactionInstruction[],
-  ): Promise<Result<string, string>> {
+  ): Promise<Result<string, TransactionError>> {
     const _ixs: InstructionReturn[] = ixs.map((ix) => {
       return () => {
         return Promise.resolve({
@@ -2619,5 +2741,96 @@ export class PropShopClient {
     });
     const funder = walletAdapterToAsyncSigner(this.wallet);
     return sendTransactionWithResult(_ixs, funder, this.connection);
+  }
+
+  public async airdropSol(): Promise<SnackInfo> {
+    try {
+      const sig = await this.connection.requestAirdrop(
+        this.publicKey,
+        LAMPORTS_PER_SOL,
+      );
+      await this.connection.confirmTransaction(sig);
+      console.debug(`airdrop sol: ${formatExplorerLink(sig)}`);
+      return {
+        variant: "success",
+        message: "Airdropped 1 SOL",
+      };
+    } catch (e: any) {
+      console.error(e);
+      return {
+        variant: "error",
+        message: e.toString(),
+      };
+    }
+  }
+
+  public async airdropUsdc(): Promise<SnackInfo> {
+    const mintSigner = keypairToAsyncSigner(TEST_USDC_MINT);
+    const mintAuthSigner = keypairToAsyncSigner(TEST_USDC_MINT_AUTHORITY);
+    const funderSigner = walletAdapterToAsyncSigner(this.wallet);
+
+    const ixs: InstructionReturn[] = [];
+    // USDC has 6 decimals which happens to be the same as the QUOTE_PRECISION
+    const usdcAmount = new BN(1_000).mul(QUOTE_PRECISION);
+
+    const userUSDCAccount = getAssociatedTokenAddressSync(
+      mintSigner.publicKey(),
+      this.publicKey,
+      true,
+    );
+    const userAtaExists = await this.connection.getAccountInfo(userUSDCAccount);
+    if (userAtaExists === null) {
+      const createAtaIx: InstructionReturn = () => {
+        return Promise.resolve({
+          instruction: createAssociatedTokenAccountInstruction(
+            this.publicKey,
+            userUSDCAccount,
+            this.publicKey,
+            mintSigner.publicKey(),
+          ),
+          signers: [funderSigner],
+        });
+      };
+      ixs.push(createAtaIx);
+    }
+
+    const mintToUserAccountIx: InstructionReturn = () => {
+      return Promise.resolve({
+        instruction: createMintToInstruction(
+          mintSigner.publicKey(),
+          userUSDCAccount,
+          mintAuthSigner.publicKey(),
+          usdcAmount.toNumber(),
+        ),
+        signers: [mintAuthSigner],
+      });
+    };
+    ixs.push(mintToUserAccountIx);
+
+    try {
+      const sig = await sendTransactionWithResult(
+        ixs,
+        funderSigner,
+        this.connection,
+      );
+      if (sig.isErr()) {
+        console.error(sig.error);
+        return {
+          variant: "error",
+          message: "Failed to airdrop USDC",
+        };
+      }
+      console.debug(`airdrop usdc: ${formatExplorerLink(sig.value)}`);
+      return {
+        variant: "success",
+        message: "Airdropped 1000 USDC",
+      };
+    } catch (e: any) {
+      console.error(e);
+      return {
+        variant: "error",
+        message: e.toString(),
+      };
+    }
   }
 }

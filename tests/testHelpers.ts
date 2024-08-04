@@ -22,6 +22,7 @@ import {
   sendAndConfirmTransaction,
   SystemProgram,
   Transaction,
+  TransactionError,
   TransactionSignature,
 } from "@solana/web3.js";
 import { assert } from "chai";
@@ -44,6 +45,16 @@ import {
   Wallet,
 } from "@drift-labs/sdk";
 import { IDL, VaultClient } from "@drift-labs/vaults-sdk";
+import {
+  formatExplorerLink,
+  sendTransactionWithResult,
+} from "@cosmic-lab/prop-shop-sdk";
+import {
+  AsyncSigner,
+  InstructionReturn,
+  keypairToAsyncSigner,
+  walletToAsyncSigner,
+} from "@cosmic-lab/data-source";
 
 export async function mockOracle(
   price: number = 50 * 10e7,
@@ -81,6 +92,7 @@ export async function mockOracle(
 export async function mockUSDCMint(
   provider: Provider,
   mint?: Keypair,
+  mintAuth?: Keypair,
 ): Promise<Keypair> {
   let fakeUSDCMint: Keypair;
   if (mint) {
@@ -88,7 +100,25 @@ export async function mockUSDCMint(
   } else {
     fakeUSDCMint = anchor.web3.Keypair.generate();
   }
-  const createUSDCMintAccountIx = SystemProgram.createAccount({
+
+  // @ts-ignore
+  const wallet = provider.wallet;
+
+  console.log(`wallet: ${wallet.publicKey.toString()}`);
+  console.log(`mintAuth: ${mintAuth?.publicKey.toString()}`);
+  console.log(`mint: ${fakeUSDCMint.publicKey.toString()}`);
+
+  const funderSigner = walletToAsyncSigner(wallet);
+  const mintSigner = keypairToAsyncSigner(fakeUSDCMint);
+
+  let mintAuthSigner: AsyncSigner;
+  if (mintAuth) {
+    mintAuthSigner = keypairToAsyncSigner(mintAuth);
+  } else {
+    mintAuthSigner = walletToAsyncSigner(wallet);
+  }
+
+  const instruction = SystemProgram.createAccount({
     // @ts-ignore
     fromPubkey: provider.wallet.publicKey,
     newAccountPubkey: fakeUSDCMint.publicKey,
@@ -96,40 +126,49 @@ export async function mockUSDCMint(
     space: MintLayout.span,
     programId: TOKEN_PROGRAM_ID,
   });
-  const initCollateralMintIx = createInitializeMintInstruction(
-    fakeUSDCMint.publicKey,
-    6,
-    // @ts-ignore
-    provider.wallet.publicKey,
-    // @ts-ignore
-    provider.wallet.publicKey,
-  );
+  const createUSDCMintAccountIx: InstructionReturn = () => {
+    return Promise.resolve({
+      instruction,
+      signers: [funderSigner, mintSigner],
+    });
+  };
 
-  const fakeUSDCTx = new Transaction();
-  fakeUSDCTx.add(createUSDCMintAccountIx);
-  fakeUSDCTx.add(initCollateralMintIx);
+  const initCollateralMintIx: InstructionReturn = () => {
+    return Promise.resolve({
+      instruction: createInitializeMintInstruction(
+        fakeUSDCMint.publicKey,
+        6,
+        mintAuthSigner.publicKey(),
+        mintAuthSigner.publicKey(),
+      ),
+      signers: [mintSigner],
+    });
+  };
 
-  await sendAndConfirmTransaction(
+  const res = await sendTransactionWithResult(
+    [createUSDCMintAccountIx, initCollateralMintIx],
+    funderSigner,
     provider.connection,
-    fakeUSDCTx,
-    // @ts-ignore
-    [provider.wallet.payer, fakeUSDCMint],
-    {
-      skipPreflight: false,
-      commitment: "recent",
-      preflightCommitment: "recent",
-    },
   );
+  if (res.isErr()) {
+    throw new Error(`Error creating USDC mint: ${res.error}`);
+  }
+  console.debug("USDC mint created:", formatExplorerLink(res.value));
   return fakeUSDCMint;
 }
 
 export async function mockUserUSDCAssociatedTokenAccount(
   fakeUSDCMint: Keypair,
+  fakeUSDCMintAuth: Keypair,
   usdcMintAmount: BN,
   provider: Provider,
   owner: PublicKey,
 ): Promise<PublicKey> {
-  const fakeUSDCTx = new Transaction();
+  const mintAuthSigner = keypairToAsyncSigner(fakeUSDCMintAuth);
+  // @ts-ignore
+  const funderSigner = walletToAsyncSigner(provider.wallet);
+
+  const ixs: InstructionReturn[] = [];
 
   const userUSDCAccount = getAssociatedTokenAddressSync(
     fakeUSDCMint.publicKey,
@@ -139,36 +178,45 @@ export async function mockUserUSDCAssociatedTokenAccount(
   const userAtaExists =
     await provider.connection.getAccountInfo(userUSDCAccount);
   if (userAtaExists === null) {
-    const ix = createAssociatedTokenAccountInstruction(
-      // @ts-ignore
-      provider.wallet.publicKey,
-      userUSDCAccount,
-      owner,
-      fakeUSDCMint.publicKey,
-    );
-    fakeUSDCTx.add(ix);
+    const createAtaIx: InstructionReturn = () => {
+      return Promise.resolve({
+        instruction: createAssociatedTokenAccountInstruction(
+          funderSigner.publicKey(),
+          userUSDCAccount,
+          owner,
+          fakeUSDCMint.publicKey,
+        ),
+        signers: [funderSigner],
+      });
+    };
+    ixs.push(createAtaIx);
   }
 
-  const mintToUserAccountTx = createMintToInstruction(
-    fakeUSDCMint.publicKey,
-    userUSDCAccount,
-    // @ts-ignore
-    provider.wallet.publicKey,
-    usdcMintAmount.toNumber(),
-  );
-  fakeUSDCTx.add(mintToUserAccountTx);
+  const mintToUserAccountIx: InstructionReturn = () => {
+    return Promise.resolve({
+      instruction: createMintToInstruction(
+        fakeUSDCMint.publicKey,
+        userUSDCAccount,
+        mintAuthSigner.publicKey(),
+        usdcMintAmount.toNumber(),
+      ),
+      signers: [mintAuthSigner],
+    });
+  };
+  ixs.push(mintToUserAccountIx);
 
-  await sendAndConfirmTransaction(
+  const res = await sendTransactionWithResult(
+    ixs,
+    funderSigner,
     provider.connection,
-    fakeUSDCTx,
-    // @ts-ignore
-    [provider.wallet.payer],
-    {
-      skipPreflight: false,
-      commitment: "recent",
-      preflightCommitment: "recent",
-    },
   );
+  if (res.isErr()) {
+    throw new Error(
+      `Error creating user ATA: ${JSON.stringify(res.error as TransactionError)}`,
+    );
+  }
+  console.debug("User ATA created", formatExplorerLink(res.value));
+
   return userUSDCAccount;
 }
 
@@ -268,15 +316,17 @@ export async function createUSDCAccountForUser(
   provider: AnchorProvider,
   userKeyPair: Keypair,
   usdcMint: Keypair,
+  usdcMintAuth: Keypair,
   usdcAmount: BN,
 ): Promise<PublicKey> {
-  const userUSDCAccount = await mockUserUSDCAccount(
+  const userUSDCAccount = await mockUserUSDCAssociatedTokenAccount(
     usdcMint,
+    usdcMintAuth,
     usdcAmount,
     provider,
     userKeyPair.publicKey,
   );
-  return userUSDCAccount.publicKey;
+  return userUSDCAccount;
 }
 
 export async function initializeAndSubscribeDriftClient(
@@ -316,6 +366,7 @@ export async function initializeAndSubscribeDriftClient(
 export async function createUserWithUSDCAccount(
   provider: AnchorProvider,
   usdcMint: Keypair,
+  usdcMintAuth: Keypair,
   chProgram: Program,
   usdcAmount: BN,
   marketIndexes: number[],
@@ -324,11 +375,12 @@ export async function createUserWithUSDCAccount(
   accountLoader?: BulkAccountLoader,
 ): Promise<[TestClient, PublicKey, Keypair]> {
   const userKeyPair = await createFundedKeyPair(provider.connection);
-  const usdcAccount = await createUSDCAccountForUser(
-    provider,
-    userKeyPair,
+  const usdcAccount = await mockUserUSDCAssociatedTokenAccount(
     usdcMint,
+    usdcMintAuth,
     usdcAmount,
+    provider,
+    userKeyPair.publicKey,
   );
   const driftClient = await initializeAndSubscribeDriftClient(
     provider.connection,
@@ -365,6 +417,7 @@ export async function createWSolTokenAccountForUser(
 export async function createUserWithUSDCAndWSOLAccount(
   provider: AnchorProvider,
   usdcMint: Keypair,
+  usdcMintAuth: Keypair,
   chProgram: Program,
   solAmount: BN,
   usdcAmount: BN,
@@ -379,11 +432,12 @@ export async function createUserWithUSDCAndWSOLAccount(
     userKeyPair,
     solAmount,
   );
-  const usdcAccount = await createUSDCAccountForUser(
-    provider,
-    userKeyPair,
+  const usdcAccount = await mockUserUSDCAssociatedTokenAccount(
     usdcMint,
+    usdcMintAuth,
     usdcAmount,
+    provider,
+    userKeyPair.publicKey,
   );
   const driftClient = await initializeAndSubscribeDriftClient(
     provider.connection,
@@ -967,6 +1021,7 @@ export async function bootstrapSignerClientAndUser(params: {
   payer: AnchorProvider;
   programId: PublicKey;
   usdcMint: Keypair;
+  usdcMintAuth: Keypair;
   usdcAmount: BN;
   driftClientConfig: Omit<DriftClientConfig, "connection" | "wallet">;
   depositCollateral?: boolean;
@@ -984,6 +1039,7 @@ export async function bootstrapSignerClientAndUser(params: {
     payer,
     programId,
     usdcMint,
+    usdcMintAuth,
     usdcAmount,
     depositCollateral,
     vaultClientCliMode,
@@ -1034,6 +1090,7 @@ export async function bootstrapSignerClientAndUser(params: {
   });
   const userUSDCAccount = await mockUserUSDCAssociatedTokenAccount(
     usdcMint,
+    usdcMintAuth,
     usdcAmount,
     payer,
     signer.publicKey,

@@ -50,7 +50,12 @@ import {
   getCompetitorAddressSync,
 } from "@drift-labs/competitions-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
-import { TEST_MANAGER, TEST_VAULT_DEPOSITOR } from "@cosmic-lab/prop-shop-sdk";
+import {
+  TEST_MANAGER,
+  TEST_USDC_MINT,
+  TEST_USDC_MINT_AUTHORITY,
+  TEST_VAULT_DEPOSITOR,
+} from "@cosmic-lab/prop-shop-sdk";
 
 describe("driftProtocolVaults", () => {
   const opts: ConfirmOptions = {
@@ -101,7 +106,8 @@ describe("driftProtocolVaults", () => {
     mantissaSqrtScale,
   );
 
-  let usdcMint: Keypair;
+  const usdcMint = TEST_USDC_MINT;
+  const usdcMintAuth = TEST_USDC_MINT_AUTHORITY;
   let solPerpOracle: PublicKey;
 
   const vaultName = "crisp vault";
@@ -121,185 +127,196 @@ describe("driftProtocolVaults", () => {
   const baseAssetAmount = new BN(1).mul(BASE_PRECISION);
 
   beforeAll(async () => {
-    usdcMint = await mockUSDCMint(provider);
-    solPerpOracle = await mockOracle(initialSolPerpPrice);
+    try {
+      await mockUSDCMint(provider, usdcMint, usdcMintAuth);
+      solPerpOracle = await mockOracle(initialSolPerpPrice);
 
-    const perpMarketIndexes = [0];
-    const spotMarketIndexes = [0];
-    const oracleInfos = [
-      { publicKey: solPerpOracle, source: OracleSource.PYTH },
-    ];
+      const perpMarketIndexes = [0];
+      const spotMarketIndexes = [0];
+      const oracleInfos = [
+        { publicKey: solPerpOracle, source: OracleSource.PYTH },
+      ];
 
-    adminClient = new AdminClient({
-      connection,
-      wallet: provider.wallet,
-      opts: {
-        commitment: "confirmed",
-      },
-      activeSubAccountId: 0,
-      perpMarketIndexes,
-      spotMarketIndexes,
-      oracleInfos,
-      accountSubscription: {
-        type: "websocket",
-        resubTimeoutMs: 30_000,
-      },
-    });
-
-    await adminClient.initialize(usdcMint.publicKey, true);
-    await adminClient.subscribe();
-    await initializeQuoteSpotMarket(adminClient, usdcMint.publicKey);
-
-    const periodicity = new BN(0);
-    await adminClient.initializePerpMarket(
-      0,
-      solPerpOracle,
-      ammInitialBaseAssetReserve,
-      ammInitialQuoteAssetReserve,
-      periodicity,
-      new BN(initialSolPerpPrice).mul(PEG_PRECISION),
-    );
-    await adminClient.updatePerpAuctionDuration(new BN(0));
-    await adminClient.updatePerpMarketCurveUpdateIntensity(0, 100);
-
-    // init vault manager
-    const bootstrapManager = await bootstrapSignerClientAndUser({
-      payer: provider,
-      programId: program.programId,
-      usdcMint,
-      usdcAmount,
-      signer: manager,
-      depositCollateral: false,
-      driftClientConfig: {
-        accountSubscription: {
-          type: "websocket",
-          resubTimeoutMs: 30_000,
+      adminClient = new AdminClient({
+        connection,
+        wallet: provider.wallet,
+        opts: {
+          commitment: "confirmed",
         },
-        opts,
         activeSubAccountId: 0,
         perpMarketIndexes,
         spotMarketIndexes,
         oracleInfos,
-      },
-    });
-    managerClient = bootstrapManager.vaultClient;
-    managerUser = bootstrapManager.user;
-
-    // init delegate who trades with vault funds
-    const bootstrapDelegate = await bootstrapSignerClientAndUser({
-      payer: provider,
-      programId: program.programId,
-      usdcMint,
-      usdcAmount,
-      driftClientConfig: {
         accountSubscription: {
           type: "websocket",
           resubTimeoutMs: 30_000,
         },
-        opts,
-        activeSubAccountId: 0,
-        perpMarketIndexes,
-        spotMarketIndexes,
-        oracleInfos,
-      },
-    });
-    delegate = bootstrapDelegate.signer;
-    delegateClient = bootstrapDelegate.vaultClient;
+      });
 
-    // init a market filler for manager to trade against
-    const bootstrapFiller = await bootstrapSignerClientAndUser({
-      payer: provider,
-      programId: program.programId,
-      usdcMint,
-      usdcAmount,
-      depositCollateral: true,
-      driftClientConfig: {
-        accountSubscription: {
-          type: "websocket",
-          resubTimeoutMs: 30_000,
+      await adminClient.initialize(usdcMint.publicKey, true);
+      await adminClient.subscribe();
+      await initializeQuoteSpotMarket(adminClient, usdcMint.publicKey);
+
+      const periodicity = new BN(0);
+      await adminClient.initializePerpMarket(
+        0,
+        solPerpOracle,
+        ammInitialBaseAssetReserve,
+        ammInitialQuoteAssetReserve,
+        periodicity,
+        new BN(initialSolPerpPrice).mul(PEG_PRECISION),
+      );
+      await adminClient.updatePerpAuctionDuration(new BN(0));
+      await adminClient.updatePerpMarketCurveUpdateIntensity(0, 100);
+
+      // init vault manager
+      const bootstrapManager = await bootstrapSignerClientAndUser({
+        payer: provider,
+        programId: program.programId,
+        usdcMint,
+        usdcMintAuth,
+        usdcAmount,
+        signer: manager,
+        depositCollateral: false,
+        driftClientConfig: {
+          accountSubscription: {
+            type: "websocket",
+            resubTimeoutMs: 30_000,
+          },
+          opts,
+          activeSubAccountId: 0,
+          perpMarketIndexes,
+          spotMarketIndexes,
+          oracleInfos,
         },
-        opts,
-        activeSubAccountId: 0,
-        perpMarketIndexes,
-        spotMarketIndexes,
-        oracleInfos,
-      },
-    });
-    fillerClient = bootstrapFiller.vaultClient;
-    fillerUser = bootstrapFiller.user;
+      });
+      managerClient = bootstrapManager.vaultClient;
+      managerUser = bootstrapManager.user;
 
-    // the VaultDepositor for the protocol vault
-    const bootstrapVD = await bootstrapSignerClientAndUser({
-      payer: provider,
-      programId: program.programId,
-      usdcMint,
-      usdcAmount,
-      depositCollateral: false,
-      signer: vd,
-      driftClientConfig: {
-        accountSubscription: {
-          type: "websocket",
-          resubTimeoutMs: 30_000,
+      // init delegate who trades with vault funds
+      const bootstrapDelegate = await bootstrapSignerClientAndUser({
+        payer: provider,
+        programId: program.programId,
+        usdcMint,
+        usdcMintAuth,
+        usdcAmount,
+        driftClientConfig: {
+          accountSubscription: {
+            type: "websocket",
+            resubTimeoutMs: 30_000,
+          },
+          opts,
+          activeSubAccountId: 0,
+          perpMarketIndexes,
+          spotMarketIndexes,
+          oracleInfos,
         },
-        opts,
-        activeSubAccountId: 0,
-        perpMarketIndexes,
-        spotMarketIndexes,
-        oracleInfos,
-      },
-    });
-    vdClient = bootstrapVD.vaultClient;
-    vdUser = bootstrapVD.user;
-    vdUserUSDCAccount = bootstrapVD.userUSDCAccount;
+      });
+      delegate = bootstrapDelegate.signer;
+      delegateClient = bootstrapDelegate.vaultClient;
 
-    // the VaultDepositor for the vault
-    const bootstrapVD2 = await bootstrapSignerClientAndUser({
-      payer: provider,
-      programId: program.programId,
-      usdcMint,
-      usdcAmount,
-      depositCollateral: false,
-      driftClientConfig: {
-        accountSubscription: {
-          type: "websocket",
-          resubTimeoutMs: 30_000,
+      // init a market filler for manager to trade against
+      const bootstrapFiller = await bootstrapSignerClientAndUser({
+        payer: provider,
+        programId: program.programId,
+        usdcMint,
+        usdcMintAuth,
+        usdcAmount,
+        depositCollateral: true,
+        driftClientConfig: {
+          accountSubscription: {
+            type: "websocket",
+            resubTimeoutMs: 30_000,
+          },
+          opts,
+          activeSubAccountId: 0,
+          perpMarketIndexes,
+          spotMarketIndexes,
+          oracleInfos,
         },
-        opts,
-        activeSubAccountId: 0,
-        perpMarketIndexes,
-        spotMarketIndexes,
-        oracleInfos,
-      },
-    });
-    vd2 = bootstrapVD2.signer;
-    vd2Client = bootstrapVD2.vaultClient;
-    vd2UserUSDCAccount = bootstrapVD2.userUSDCAccount;
+      });
+      fillerClient = bootstrapFiller.vaultClient;
+      fillerUser = bootstrapFiller.user;
 
-    // init protocol
-    const bootstrapProtocol = await bootstrapSignerClientAndUser({
-      payer: provider,
-      programId: program.programId,
-      usdcMint,
-      usdcAmount,
-      driftClientConfig: {
-        accountSubscription: {
-          type: "websocket",
-          resubTimeoutMs: 30_000,
+      // the VaultDepositor for the protocol vault
+      const bootstrapVD = await bootstrapSignerClientAndUser({
+        payer: provider,
+        programId: program.programId,
+        usdcMint,
+        usdcMintAuth,
+        usdcAmount,
+        depositCollateral: false,
+        signer: vd,
+        driftClientConfig: {
+          accountSubscription: {
+            type: "websocket",
+            resubTimeoutMs: 30_000,
+          },
+          opts,
+          activeSubAccountId: 0,
+          perpMarketIndexes,
+          spotMarketIndexes,
+          oracleInfos,
         },
-        opts,
-        activeSubAccountId: 0,
-        perpMarketIndexes,
-        spotMarketIndexes,
-        oracleInfos,
-      },
-    });
-    protocol = bootstrapProtocol.signer;
-    protocolClient = bootstrapProtocol.vaultClient;
-    protocolVdUserUSDCAccount = bootstrapProtocol.userUSDCAccount;
+      });
+      vdClient = bootstrapVD.vaultClient;
+      vdUser = bootstrapVD.user;
+      vdUserUSDCAccount = bootstrapVD.userUSDCAccount;
 
-    // start account loader
-    bulkAccountLoader.startPolling();
-    await bulkAccountLoader.load();
+      // the VaultDepositor for the vault
+      const bootstrapVD2 = await bootstrapSignerClientAndUser({
+        payer: provider,
+        programId: program.programId,
+        usdcMint,
+        usdcMintAuth,
+        usdcAmount,
+        depositCollateral: false,
+        driftClientConfig: {
+          accountSubscription: {
+            type: "websocket",
+            resubTimeoutMs: 30_000,
+          },
+          opts,
+          activeSubAccountId: 0,
+          perpMarketIndexes,
+          spotMarketIndexes,
+          oracleInfos,
+        },
+      });
+      vd2 = bootstrapVD2.signer;
+      vd2Client = bootstrapVD2.vaultClient;
+      vd2UserUSDCAccount = bootstrapVD2.userUSDCAccount;
+
+      // init protocol
+      const bootstrapProtocol = await bootstrapSignerClientAndUser({
+        payer: provider,
+        programId: program.programId,
+        usdcMint,
+        usdcMintAuth,
+        usdcAmount,
+        driftClientConfig: {
+          accountSubscription: {
+            type: "websocket",
+            resubTimeoutMs: 30_000,
+          },
+          opts,
+          activeSubAccountId: 0,
+          perpMarketIndexes,
+          spotMarketIndexes,
+          oracleInfos,
+        },
+      });
+      protocol = bootstrapProtocol.signer;
+      protocolClient = bootstrapProtocol.vaultClient;
+      protocolVdUserUSDCAccount = bootstrapProtocol.userUSDCAccount;
+
+      // start account loader
+      bulkAccountLoader.startPolling();
+      await bulkAccountLoader.load();
+    } catch (e: any) {
+      console.error(e);
+      assert(false);
+    }
   });
 
   afterAll(async () => {
@@ -484,6 +501,7 @@ describe("driftProtocolVaults", () => {
     const [driftClient, _user, _kp] = await createUserWithUSDCAccount(
       adminClient.provider,
       usdcMint,
+      usdcMintAuth,
       new anchor.Program(
         adminClient.program.idl,
         adminClient.program.programId,
@@ -563,6 +581,7 @@ describe("driftProtocolVaults", () => {
     const [driftClient, _user, _kp] = await createUserWithUSDCAccount(
       adminClient.provider,
       usdcMint,
+      usdcMintAuth,
       new anchor.Program(
         adminClient.program.idl,
         adminClient.program.programId,

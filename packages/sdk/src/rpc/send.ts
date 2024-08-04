@@ -1,4 +1,4 @@
-import { Connection } from "@solana/web3.js";
+import { Connection, TransactionError } from "@solana/web3.js";
 import {
   AsyncSigner,
   buildAndSignTransaction,
@@ -86,21 +86,25 @@ export async function sendTransactionWithResult(
   instructions: InstructionReturn[],
   funder: AsyncSigner,
   connection: Connection,
-): Promise<Result<string, string>> {
-  const trx = await buildAndSignTransaction(instructions, funder, {
-    connection: connection,
-    commitment: "confirmed",
-  });
+): Promise<Result<string, TransactionError>> {
+  try {
+    const trx = await buildAndSignTransaction(instructions, funder, {
+      connection: connection,
+      commitment: "confirmed",
+    });
 
-  const res = await sendTransaction(trx, connection, {
-    sendOptions: {
-      skipPreflight: true,
-    },
-  });
-  if (res.value.isErr()) {
-    return err(res.value.error.toString());
-  } else {
-    return ok(res.value.value);
+    const res = await sendTransaction(trx, connection, {
+      sendOptions: {
+        skipPreflight: true,
+      },
+    });
+    if (res.value.isErr()) {
+      return err(res.value.error);
+    } else {
+      return ok(res.value.value);
+    }
+  } catch (e: any) {
+    throw new Error(e);
   }
 }
 

@@ -39,5 +39,23 @@ export const TEST_VAULT_DEPOSITOR = Keypair.fromSecretKey(
   ]),
 );
 
+export const TEST_USDC_MINT = Keypair.fromSecretKey(
+  Uint8Array.from([
+    87, 198, 89, 198, 67, 63, 51, 219, 219, 205, 135, 80, 234, 56, 140, 16, 89,
+    50, 81, 229, 158, 31, 99, 65, 96, 2, 245, 44, 73, 148, 172, 223, 207, 221,
+    139, 122, 3, 190, 18, 238, 58, 168, 238, 122, 70, 81, 217, 218, 189, 29,
+    109, 94, 252, 95, 110, 157, 33, 107, 20, 14, 201, 83, 184, 122,
+  ]),
+);
+
+export const TEST_USDC_MINT_AUTHORITY = Keypair.fromSecretKey(
+  Uint8Array.from([
+    66, 123, 76, 224, 250, 46, 45, 185, 92, 44, 26, 59, 177, 162, 57, 152, 152,
+    168, 214, 27, 185, 110, 97, 62, 226, 94, 214, 190, 206, 253, 83, 234, 143,
+    207, 63, 171, 250, 160, 85, 171, 204, 57, 11, 146, 117, 118, 22, 155, 104,
+    251, 84, 131, 255, 168, 226, 187, 237, 120, 54, 43, 103, 65, 121, 161,
+  ]),
+);
+
 export const DRIFT_API_PREFIX =
   "https://drift-historical-data-v2.s3.eu-west-1.amazonaws.com/program/dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH/";
