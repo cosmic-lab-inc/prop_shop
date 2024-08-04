@@ -1,7 +1,6 @@
 import React, { ReactNode } from "react";
 import { Box, styled, Typography } from "@mui/material";
 import { customTheme } from "../../styles";
-import { Line, LineChart, XAxis, YAxis } from "recharts";
 import {
   formatNumber,
   FundOverview,
@@ -51,14 +50,11 @@ export function FundOverviewCard({
   const { vault, tvl, volume30d, lifetimePNL, title, investors, data, birth } =
     fundOverview;
 
-  const roi = calcRoi(data);
   // TVL = netDeposits + lifetimePNL, so TVL - lifetimePNL = netDeposits
   let pnl = (lifetimePNL / (tvl - lifetimePNL)) * 100;
   if (isNaN(pnl)) {
     pnl = 0;
   }
-  const drawdown = calcMaxDrawdown(data);
-  const _data = data.map((d) => ({ y: d }));
 
   const [open, setOpen] = React.useState(false);
 
@@ -74,41 +70,18 @@ export function FundOverviewCard({
         <Header title={title} investors={investors} />
         <Box
           sx={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            p: 1,
-          }}
-        >
-          <LineChart width={400} height={150} data={_data} compact>
-            <Line
-              type="monotone"
-              dataKey="y"
-              stroke={roi < 0 ? customTheme.error : customTheme.success}
-              strokeWidth={2}
-              dot={{
-                r: 0,
-              }}
-            />
-            <XAxis dataKey="name" hide />
-            <YAxis hide />
-          </LineChart>
-        </Box>
-        <Box
-          sx={{
-            width: "100%",
+            width: "350px",
             flexDirection: "column",
             display: "flex",
             gap: 0,
           }}
         >
           <TableRow hover divider footer square>
-            <Typography variant="h4">{roi < 0 ? "Loss" : "Profit"}</Typography>
+            <Typography variant="h4">{pnl < 0 ? "Loss" : "Profit"}</Typography>
             <Typography
               variant="h3"
               sx={{
-                color: roi < 0 ? customTheme.error : customTheme.success,
+                color: pnl < 0 ? customTheme.error : customTheme.success,
               }}
             >
               {prettyNumber(pnl)}%
