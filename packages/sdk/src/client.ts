@@ -43,7 +43,11 @@ import {
 } from "./constants";
 import { getAssociatedTokenAddress } from "./programs";
 import { Drift } from "./idl/drift";
-import { percentPrecisionToPercent, percentToPercentPrecision } from "./utils";
+import {
+  percentPrecisionToPercent,
+  percentToPercentPrecision,
+  shortenAddress,
+} from "./utils";
 import {
   confirmTransactions,
   formatExplorerLink,
@@ -87,7 +91,6 @@ import {
   WalletReadyState,
 } from "@solana/wallet-adapter-base";
 import { Wallet, WalletContextState } from "@solana/wallet-adapter-react";
-import { ProxyClient } from "./proxyClient";
 import { WebSocketSubscriber } from "./websocketSubscriber";
 import {
   createAssociatedTokenAccountInstruction,
@@ -95,7 +98,6 @@ import {
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { RedisClient } from "./redisClient";
 import { err, ok, Result } from "neverthrow";
 import {
   InstructionReturn,
@@ -556,14 +558,18 @@ export class PropShopClient {
     );
   }
 
-  public async fetchVault(key: PublicKey): Promise<ProgramAccount<Vault>> {
+  public async fetchVault(key: PublicKey): Promise<Vault | undefined> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
-    // @ts-ignore ... Vault type omits padding fields, but this is safe.
-    const vault: ProgramAccount<Vault> =
-      await this.vaultClient.program.account.vault.fetch(key);
-    return vault;
+    try {
+      // @ts-ignore ... Vault type omits padding fields, but this is safe.
+      const vault: Vault =
+        await this.vaultClient.program.account.vault.fetch(key);
+      return vault;
+    } catch (e: any) {
+      return undefined;
+    }
   }
 
   public async fetchVaults(
@@ -591,15 +597,19 @@ export class PropShopClient {
   /**
    * VaultDepositors the connected wallet is the authority of.
    */
-  public async fetchVaultDepositor(key: PublicKey): Promise<VaultDepositor> {
+  public async fetchVaultDepositor(
+    key: PublicKey,
+  ): Promise<VaultDepositor | undefined> {
     if (!this.vaultClient) {
       throw new Error("VaultClient not initialized");
     }
-    const preFetch = Date.now();
-    const vd: VaultDepositor =
-      await this.vaultClient.program.account.vaultDepositor.fetch(key);
-    console.log(`fetched vd from RPC in ${Date.now() - preFetch}ms`);
-    return vd;
+    try {
+      const vd: VaultDepositor =
+        await this.vaultClient.program.account.vaultDepositor.fetch(key);
+      return vd;
+    } catch (e: any) {
+      return undefined;
+    }
   }
 
   /**
@@ -713,12 +723,13 @@ export class PropShopClient {
     }
 
     const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-    const key = RedisClient.vaultPnlFromDriftKey(vault.data.pubkey);
-    const vaultPNL = await ProxyClient.performance({
-      key,
-      usePrefix: this.useProxyPrefix,
-    });
-    const data = vaultPNL.cumulativeSeriesPNL();
+    // const key = RedisClient.vaultPnlFromDriftKey(vault.data.pubkey);
+    // const vaultPNL = await ProxyClient.performance({
+    //   key,
+    //   usePrefix: this.useProxyPrefix,
+    // });
+    // const data = vaultPNL.cumulativeSeriesPNL();
+    const data: number[] = [];
     const title = decodeName(vault.data.name);
     const stats = await this.vaultStats(vault.key);
     if (!stats) {
@@ -759,12 +770,13 @@ export class PropShopClient {
     const fundOverviews: FundOverview[] = [];
     for (const vault of vaults) {
       const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-      const key = RedisClient.vaultPnlFromDriftKey(vault.data.pubkey);
-      const vaultPNL = await ProxyClient.performance({
-        key,
-        usePrefix: this.useProxyPrefix,
-      });
-      const data = vaultPNL.cumulativeSeriesPNL();
+      // const key = RedisClient.vaultPnlFromDriftKey(vault.data.pubkey);
+      // const vaultPNL = await ProxyClient.performance({
+      //   key,
+      //   usePrefix: this.useProxyPrefix,
+      // });
+      // const data = vaultPNL.cumulativeSeriesPNL();
+      const data: number[] = [];
       const title = decodeName(vault.data.name);
       const stats = await this.vaultStats(vault.key);
       if (!stats) {
@@ -944,32 +956,37 @@ export class PropShopClient {
     forceFetch: boolean = false,
   ): Promise<number | undefined> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
-    const vault = this.vault(vaultKey);
+    let vault: Vault | undefined = undefined;
+    if (forceFetch) {
+      vault = await this.fetchVault(vaultKey);
+    } else {
+      vault = this.vault(vaultKey)?.data;
+    }
     if (!vault) {
       throw new Error(
         `Vault ${vaultKey.toString()} not found in equity calculation`,
       );
     }
-    let vd: Data<PublicKey, VaultDepositor> | undefined = undefined;
+    let vaultDepositor: VaultDepositor | undefined = undefined;
     if (forceFetch) {
       const data = await this.fetchVaultDepositor(vdKey);
-      vd = {
-        key: vdKey,
-        data,
-      };
+      if (!data) {
+        return undefined;
+      }
+      vaultDepositor = data;
     } else {
-      vd = this.vaultDepositor(vdKey, false);
+      vaultDepositor = this.vaultDepositor(vdKey, false)?.data;
     }
-    if (!vd) {
+    if (!vaultDepositor) {
       return undefined;
     }
     const amount =
       await this.vaultClient.calculateWithdrawableVaultDepositorEquityInDepositAsset(
         {
-          vaultDepositor: vd.data,
-          vault: vault.data,
+          vaultDepositor,
+          vault,
         },
       );
     return amount.toNumber() / QUOTE_PRECISION.toNumber();
@@ -2700,6 +2717,7 @@ export class PropShopClient {
     if (!usdc) {
       return undefined;
     }
+    console.log(`vd: ${shortenAddress(key.toString())}, equity: ${usdc}`);
     this._equities.set(vault.toString(), usdc);
     return usdc;
   }

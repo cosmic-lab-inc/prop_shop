@@ -115,6 +115,7 @@ export const InvestorStats = observer(
         console.error("Invalid action on submit");
       }
       resetTransferDialog();
+      await client.fetchVaultEquity(vault);
     }
 
     return (
@@ -217,6 +218,10 @@ const Stats = observer(
     );
     const [equity, setEquity] = React.useState<number | undefined>(undefined);
     React.useEffect(() => {
+      // fetchVaultEquity sets the observed value, then this runs on initial render, yet the value isn't updated
+      // so we manually fetch here to update state and re-render (eye-roll...)
+      client.fetchVaultEquity(vault);
+      console.log(`use effect equity: ${client.vaultEquity(vault)}`);
       setEquity(client.vaultEquity(vault));
       setTimer(client.withdrawTimer(vault));
     }, [client.vaultEquity(vault), client.withdrawTimer(vault)]);
