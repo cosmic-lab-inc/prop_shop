@@ -4,7 +4,6 @@ import "./styles/globals.css";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Error, Home } from "./pages";
 import { observer } from "mobx-react";
-import { useClient } from "./lib";
 import type { Adapter, WalletError } from "@solana/wallet-adapter-base";
 import { WalletDialogProvider } from "@solana/wallet-adapter-material-ui";
 import {
@@ -21,28 +20,29 @@ import Box from "@mui/material/Box";
 import { Toolbar } from "./components";
 import { TOOLBAR_HEIGHT } from "./constants";
 import { ThemeWrapper } from "./styles";
+import { useClient } from "./lib";
 
 export const App = observer(() => {
   return (
-    <React.StrictMode>
-      <BrowserRouter>
-        <Routes>
-          <Route
-            index
-            element={
-              <Context>
-                <Content />
-              </Context>
-            }
-            errorElement={<Error />}
-          />
-        </Routes>
-      </BrowserRouter>
-    </React.StrictMode>
+    // <React.StrictMode>
+    <BrowserRouter>
+      <Routes>
+        <Route
+          index
+          element={
+            <Context>
+              <Content />
+            </Context>
+          }
+          errorElement={<Error />}
+        />
+      </Routes>
+    </BrowserRouter>
+    // </React.StrictMode>
   );
 });
 
-function Context({ children }: { children: ReactNode }) {
+const Context = observer(({ children }: { children: ReactNode }) => {
   const endpoint = useMemo(
     () => process.env.RPC_URL ?? "http://localhost:8899",
     [],
@@ -77,7 +77,7 @@ function Context({ children }: { children: ReactNode }) {
       </ConnectionProvider>
     </ThemeWrapper>
   );
-}
+});
 
 const Content = observer(() => {
   const client = useClient();

@@ -1,6 +1,11 @@
 import React from "react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import {
+  useConnection,
+  useWallet,
+  WalletContextState,
+} from "@solana/wallet-adapter-react";
 import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
+import { Keypair } from "@solana/web3.js";
 
 export function useClient(): PropShopClient | undefined {
   const wallet = useWallet();
@@ -13,23 +18,104 @@ export function useClient(): PropShopClient | undefined {
   React.useEffect(() => {
     const env = process.env.ENV ?? "dev";
     const skipFetching = env === "dev";
+    const dummyWallet = !wallet.publicKey;
 
     const run = async () => {
-      if (!client && wallet.publicKey) {
+      // if (!client && dummyWallet) {
+      //   const _wallet = PropShopClient.keypairToWalletContextState(
+      //     Keypair.generate(),
+      //   );
+      //   // initialize client with real wallet
+      //   const _client = new PropShopClient({
+      //     wallet: _wallet,
+      //     connection: connection.connection,
+      //     skipFetching,
+      //     dummyWallet,
+      //   });
+      //   console.debug(`dummy wallet`);
+      //   await _client.initialize();
+      //   setClient(_client);
+      // } else if (!client && !dummyWallet) {
+      //   // initialize client with real wallet
+      //   const _client = new PropShopClient({
+      //     wallet,
+      //     connection: connection.connection,
+      //     skipFetching,
+      //     dummyWallet,
+      //   });
+      //   console.debug(
+      //     `set client with wallet: ${wallet.publicKey?.toString()}`,
+      //   );
+      //   await _client.initialize();
+      //   setClient(_client);
+      // } else if (
+      //   client &&
+      //   client.dummyWallet &&
+      //   !dummyWallet &&
+      //   !client.loading
+      // ) {
+      //   // client was initialized with dummy wallet, so reinitialize with real wallet
+      //   console.debug(`update dummy wallet: ${wallet.publicKey?.toString()}`);
+      //   await client.updateWallet({ wallet });
+      // } else if (
+      //   client &&
+      //   wallet.publicKey &&
+      //   !client.publicKey.equals(wallet.publicKey) &&
+      //   !client.loading
+      // ) {
+      //   // different wallet connected than the one in client, so reinitialize
+      //   console.debug(
+      //     `update connected wallet: ${wallet.publicKey?.toString()}`,
+      //   );
+      //   await client.updateWallet({ wallet });
+      // }
+
+      if (!client) {
+        let _wallet: WalletContextState;
+        if (dummyWallet) {
+          _wallet = PropShopClient.keypairToWalletContextState(
+            Keypair.generate(),
+          );
+        } else {
+          _wallet = wallet;
+        }
+        // initialize client with real wallet
         const _client = new PropShopClient({
-          wallet,
+          wallet: _wallet,
           connection: connection.connection,
           skipFetching,
+          dummyWallet,
         });
-        if (!_client.vaultClient && !_client.loading) {
-          await _client.initialize();
-          setClient(_client);
-        }
+        console.debug(
+          `set client with wallet: ${wallet.publicKey?.toString()}`,
+        );
+        await _client.initialize();
+        setClient(_client);
+      } else if (
+        client &&
+        client.dummyWallet &&
+        !dummyWallet &&
+        !client.loading
+      ) {
+        // client was initialized with dummy wallet, so reinitialize with real wallet
+        console.debug(`update dummy wallet: ${wallet.publicKey?.toString()}`);
+        await client.updateWallet({ wallet });
+      } else if (
+        client &&
+        wallet.publicKey &&
+        !client.publicKey.equals(wallet.publicKey) &&
+        !client.loading
+      ) {
+        // different wallet connected than the one in client, so reinitialize
+        console.debug(
+          `update connected wallet: ${wallet.publicKey?.toString()}`,
+        );
+        await client.updateWallet({ wallet });
       }
     };
 
     run();
-  }, [wallet.publicKey]);
+  }, [client?.loading, wallet.publicKey]);
 
   return client;
 }

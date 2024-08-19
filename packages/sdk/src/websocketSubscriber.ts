@@ -123,28 +123,29 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
     }
 
     if (this._subscriptionConfig.filters) {
-      const gpas: GetProgramAccountsResponse[] = await Promise.all(
-        this._subscriptionConfig.filters.map((filter) => {
-          const gpaConfig: GetProgramAccountsConfig = {
-            filters: [
-              {
-                memcmp: {
-                  offset: 0,
-                  bytes: bs58.encode(
-                    BorshAccountsCoder.accountDiscriminator(
-                      capitalize(filter.accountName),
-                    ),
+      const gpas: GetProgramAccountsResponse[] = [];
+      for (const filter of this._subscriptionConfig.filters) {
+        const gpaConfig: GetProgramAccountsConfig = {
+          filters: [
+            {
+              memcmp: {
+                offset: 0,
+                bytes: bs58.encode(
+                  BorshAccountsCoder.accountDiscriminator(
+                    capitalize(filter.accountName),
                   ),
-                },
+                ),
               },
-            ],
-          };
-          return this.program.provider.connection.getProgramAccounts(
+            },
+          ],
+        };
+        gpas.push(
+          await this.program.provider.connection.getProgramAccounts(
             this.program.programId,
             gpaConfig,
-          );
-        }),
-      );
+          ),
+        );
+      }
 
       gpas.forEach((gpa, index) => {
         if (this._subscriptionConfig.filters) {
@@ -315,29 +316,29 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
 
     if (this._subscriptionConfig.filters) {
       const slot = await this.program.provider.connection.getSlot();
-
-      const gpas: GetProgramAccountsResponse[] = await Promise.all(
-        this._subscriptionConfig.filters.map((filter) => {
-          const _accountName =
-            this.program.account[filter.accountName].idlAccount.name;
-          const gpaConfig: GetProgramAccountsConfig = {
-            filters: [
-              {
-                memcmp: {
-                  offset: 0,
-                  bytes: bs58.encode(
-                    BorshAccountsCoder.accountDiscriminator(_accountName),
-                  ),
-                },
+      const gpas: GetProgramAccountsResponse[] = [];
+      for (const filter of this._subscriptionConfig.filters) {
+        const _accountName =
+          this.program.account[filter.accountName].idlAccount.name;
+        const gpaConfig: GetProgramAccountsConfig = {
+          filters: [
+            {
+              memcmp: {
+                offset: 0,
+                bytes: bs58.encode(
+                  BorshAccountsCoder.accountDiscriminator(_accountName),
+                ),
               },
-            ],
-          };
-          return this.program.provider.connection.getProgramAccounts(
+            },
+          ],
+        };
+        gpas.push(
+          await this.program.provider.connection.getProgramAccounts(
             this.program.programId,
             gpaConfig,
-          );
-        }),
-      );
+          ),
+        );
+      }
 
       gpas.forEach((gpa, index) => {
         if (this._subscriptionConfig.filters) {

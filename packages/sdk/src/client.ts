@@ -107,13 +107,14 @@ import {
 
 export class PropShopClient {
   private readonly connection: Connection;
-  private readonly wallet: WalletContextState;
+  private wallet: WalletContextState;
   vaultClient: VaultClient | undefined;
 
   loading: boolean = false;
   private readonly disableCache: boolean = false;
   private readonly skipFetching: boolean = false;
   private readonly useProxyPrefix: boolean = false;
+  dummyWallet: boolean = false;
 
   private eventEmitter: StrictEventEmitter<
     EventEmitter,
@@ -133,19 +134,38 @@ export class PropShopClient {
     disableCache?: boolean;
     skipFetching?: boolean;
     useProxyPrefix?: boolean;
+    dummyWallet?: boolean;
   }) {
     makeAutoObservable(this);
-
     this.wallet = config.wallet;
     this.connection = config.connection;
     this.disableCache = config.disableCache ?? false;
     this.skipFetching = config.skipFetching ?? false;
     this.useProxyPrefix = config.useProxyPrefix ?? false;
+    this.dummyWallet = config.dummyWallet ?? false;
   }
 
   //
   // Initialization and setup
   //
+
+  public async updateWallet(config: {
+    wallet: WalletContextState;
+    dummyWallet?: boolean;
+  }) {
+    this.loading = true;
+    console.log("updating wallet...");
+    this.dummyWallet = config.dummyWallet ?? false;
+    this.wallet = config.wallet;
+    const now = Date.now();
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const iWallet = PropShopClient.walletAdapterToIWallet(this.wallet);
+    await this.vaultClient.driftClient.updateWallet(iWallet, undefined, 0);
+    console.log(`updated PropShopClient wallet in ${Date.now() - now}ms`);
+    this.loading = false;
+  }
 
   /**
    * Initialize the VaultClient.
@@ -169,6 +189,8 @@ export class PropShopClient {
         commitment: "confirmed",
       },
       activeSubAccountId: 0,
+      // if dummy wallet, we don't care about the user accounts
+      skipLoadUsers: this.dummyWallet,
     };
 
     const { connection, accountSubscription, opts, activeSubAccountId } =
@@ -202,7 +224,7 @@ export class PropShopClient {
     });
     const preDriftSub = Date.now();
     await driftClient.subscribe();
-    // this takes about 1.2s which can't be reduced much more
+    // this takes about 10-15s which can't be reduced much more
     console.log(`DriftClient subscribed in ${Date.now() - preDriftSub}ms`);
 
     this.vaultClient = new VaultClient({
@@ -244,15 +266,14 @@ export class PropShopClient {
       // takes about 2s for websocket and 4s for polling
       console.log(`cache subscribed in ${Date.now() - preSub}ms`);
     }
-    const preFo = Date.now();
-    const funds = await this.fetchFundOverviews();
-    console.log(
-      `fetched ${funds.length} fund overviews in ${Date.now() - preFo}ms`,
-    );
+    // const preFo = Date.now();
+    // const funds = await this.fetchFundOverviews();
+    // console.log(
+    //   `fetched ${funds.length} fund overviews in ${Date.now() - preFo}ms`,
+    // );
 
-    this.loading = false;
-    // 3-6s
     console.log(`initialized PropShopClient in ${Date.now() - now}ms`);
+    this.loading = false;
   }
 
   async subscribe(program: anchor.Program<DriftVaults>) {
@@ -1242,10 +1263,11 @@ export class PropShopClient {
       this.vaultClient.driftClient.program.programId,
       this.publicKey,
     );
-
+    let addUserAfter = false;
     if (!(await this.checkIfAccountExists(userKey))) {
       const initUserIxs = await this.initUserIxs();
       ixs.push(...initUserIxs);
+      addUserAfter = true;
     }
 
     // check if wallet is protocol
@@ -1288,6 +1310,10 @@ export class PropShopClient {
     const vaultName = decodeName(this.vault(vault)!.data.name);
     await this.fetchVaultEquity(vault);
     await this.fetchFundOverview(vault);
+    if (addUserAfter) {
+      await this.vaultClient.driftClient.addUser(0, this.publicKey);
+    }
+
     return {
       variant: "success",
       message: `Deposited to ${vaultName}`,
@@ -1299,7 +1325,7 @@ export class PropShopClient {
     usdc: number,
   ): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     if (!this.userInitialized()) {
       throw new Error("User not initialized");
@@ -1500,7 +1526,7 @@ export class PropShopClient {
       }
       this.removeWithdrawTimer(vault);
       await this.fetchVaultEquity(vault);
-      await this.fetchFundOverviews();
+      await this.fetchFundOverview(vault);
 
       console.debug("protocol withdraw:", formatExplorerLink(res.value));
       const vaultName = decodeName(this.vault(vault)!.data.name);
@@ -1804,7 +1830,6 @@ export class PropShopClient {
       profitShare,
       hurdleRate: null,
       permissioned,
-      vaultProtocol: null,
     };
     const vaultAcct = this.vault(vault)?.data;
     if (!vaultAcct) {
@@ -2539,7 +2564,9 @@ export class PropShopClient {
     const vdKey = this.getVaultDepositorAddress(vault);
 
     // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
-    await this._cache?.fetch();
+    // await this._cache?.fetch();
+    await this.fetchVault(vault);
+    await this.fetchVaultDepositor(vdKey);
 
     const vdAcct = this.vaultDepositor(vdKey, false)?.data;
     if (!vdAcct) {
@@ -2578,7 +2605,8 @@ export class PropShopClient {
       return;
     }
     // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
-    await this._cache?.fetch();
+    // await this._cache?.fetch();
+    await this.fetchVault(vault);
 
     const vaultAcct = this.vault(vault)!.data;
 
@@ -2621,7 +2649,8 @@ export class PropShopClient {
       return;
     }
     // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
-    await this._cache?.fetch();
+    // await this._cache?.fetch();
+    await this.fetchVault(vault);
 
     const vaultAcct = this.vault(vault)!.data;
     if (vaultAcct.vaultProtocol.equals(SystemProgram.programId)) {

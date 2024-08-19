@@ -218,12 +218,16 @@ const Stats = observer(
     );
     const [equity, setEquity] = React.useState<number | undefined>(undefined);
     React.useEffect(() => {
-      // fetchVaultEquity sets the observed value, then this runs on initial render, yet the value isn't updated
-      // so we manually fetch here to update state and re-render (eye-roll...)
-      client.fetchVaultEquity(vault);
-      console.log(`use effect equity: ${client.vaultEquity(vault)}`);
-      setEquity(client.vaultEquity(vault));
-      setTimer(client.withdrawTimer(vault));
+      async function run() {
+        // fetchVaultEquity sets the observed value, then this runs on initial render, yet the value isn't updated.
+        // so we manually fetch here to update state and re-render (eye-roll...)
+        await client.fetchVaultEquity(vault);
+        console.log(`use effect equity: ${client.vaultEquity(vault)}`);
+        setEquity(client.vaultEquity(vault));
+        setTimer(client.withdrawTimer(vault));
+      }
+
+      run();
     }, [client.vaultEquity(vault), client.withdrawTimer(vault)]);
 
     return (
