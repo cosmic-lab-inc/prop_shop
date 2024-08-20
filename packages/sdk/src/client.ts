@@ -32,6 +32,7 @@ import {
   SpotMarketAccount,
   TEN,
   unstakeSharesToAmount as depositSharesToVaultAmount,
+  UserAccount,
   UserStatsAccount,
 } from "@drift-labs/sdk";
 import {
@@ -46,7 +47,7 @@ import {
 } from "./constants";
 import { getAssociatedTokenAddress } from "./programs";
 // import { DRIFT_IDL } from "./idl";
-import DRIFT_IDL from "./idl/drift.json";
+import { Drift, IDL as DRIFT_IDL } from "./idl/drift";
 import {
   percentPrecisionToPercent,
   percentToPercentPrecision,
@@ -60,9 +61,11 @@ import {
 import {
   CreateVaultConfig,
   Data,
+  DriftAccountEvents,
+  DriftSubscriber,
+  DriftVaultsAccountEvents,
   DriftVaultsSubscriber,
   FundOverview,
-  PropShopAccountEvents,
   SnackInfo,
   UpdateVaultConfig,
   WithdrawRequestTimer,
@@ -107,7 +110,8 @@ import {
   keypairToAsyncSigner,
   walletAdapterToAsyncSigner,
 } from "@cosmic-lab/data-source";
-import { WebSocketSubscriber } from "./websocketSubscriber";
+import { WebsocketDriftVaultsSubscriber } from "./websocketDriftVaultsSubscriber";
+import { WebsocketDriftSubscriber } from "./websocketDriftSubscriber";
 
 interface DriftMarkets {
   spotMarkets: SpotMarketAccount[];
@@ -126,17 +130,26 @@ export class PropShopClient {
   private readonly useProxyPrefix: boolean = false;
   dummyWallet: boolean = false;
 
-  private eventEmitter: StrictEventEmitter<
+  private driftVaultsEventEmitter: StrictEventEmitter<
     EventEmitter,
-    PropShopAccountEvents
+    DriftVaultsAccountEvents
   > = new EventEmitter();
-  private _cache: DriftVaultsSubscriber | undefined = undefined;
+  private driftVaultsCache: DriftVaultsSubscriber | undefined = undefined;
+
+  private driftEventEmitter: StrictEventEmitter<
+    EventEmitter,
+    DriftAccountEvents
+  > = new EventEmitter();
+  private driftCache: DriftSubscriber | undefined = undefined;
 
   private _vaults: Map<string, Vault> = new Map();
   private _vaultDepositors: Map<string, VaultDepositor> = new Map();
   private _timers: Map<string, WithdrawRequestTimer> = new Map();
   private _equities: Map<string, number> = new Map();
   private _fundOverviews: Map<string, FundOverview> = new Map();
+  private _users: Map<string, UserAccount> = new Map();
+  private _spotMarkets: Map<string, SpotMarketAccount> = new Map();
+  private _perpMarkets: Map<string, PerpMarketAccount> = new Map();
 
   constructor(config: {
     wallet: WalletContextState;
@@ -158,24 +171,6 @@ export class PropShopClient {
   //
   // Initialization and setup
   //
-
-  public async updateWallet(config: {
-    wallet: WalletContextState;
-    dummyWallet?: boolean;
-  }) {
-    this.loading = true;
-    console.log("updating wallet...");
-    this.dummyWallet = config.dummyWallet ?? false;
-    this.wallet = config.wallet;
-    const now = Date.now();
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
-    const iWallet = PropShopClient.walletAdapterToIWallet(this.wallet);
-    await this.vaultClient.driftClient.updateWallet(iWallet, undefined, 0);
-    console.log(`updated PropShopClient wallet in ${Date.now() - now}ms`);
-    this.loading = false;
-  }
 
   /**
    * Initialize the VaultClient.
@@ -223,7 +218,7 @@ export class PropShopClient {
       provider,
     );
     const driftProgram = new anchor.Program(
-      DRIFT_IDL as any as anchor.Idl,
+      DRIFT_IDL,
       DRIFT_PROGRAM_ID,
       provider,
     );
@@ -249,8 +244,7 @@ export class PropShopClient {
       oracleInfos: Array.from(markets.oracleInfos.values()),
     });
     const preDriftSub = Date.now();
-    // await driftClient.subscribe();
-    await this.driftClientSubscribe(driftClient);
+    await driftClient.subscribe();
     console.log(`DriftClient subscribed in ${Date.now() - preDriftSub}ms`);
 
     this.vaultClient = new VaultClient({
@@ -260,7 +254,28 @@ export class PropShopClient {
       cliMode: true,
     });
 
-    this.eventEmitter.on(
+    if (!this.disableCache) {
+      const preSub = Date.now();
+      await this.loadCache(driftVaultsProgram, driftProgram);
+      // 2500ms websocket, 1500ms polling
+      console.log(`cache loaded in ${Date.now() - preSub}ms`);
+    }
+
+    console.log(`initialized PropShopClient in ${Date.now() - now}ms`);
+    this.loading = false;
+  }
+
+  async loadCache(
+    driftVaultsProgram: anchor.Program<DriftVaults>,
+    driftProgram: anchor.Program<Drift>,
+  ) {
+    if (this.disableCache) {
+      return;
+    }
+    //
+    // DRIFT VAULTS
+    //
+    this.driftVaultsEventEmitter.on(
       "vaultUpdate",
       async (payload: Data<PublicKey, Vault>) => {
         const update = JSON.stringify(payload.data);
@@ -273,7 +288,7 @@ export class PropShopClient {
         }
       },
     );
-    this.eventEmitter.on(
+    this.driftVaultsEventEmitter.on(
       "vaultDepositorUpdate",
       (payload: Data<PublicKey, VaultDepositor>) => {
         const update = JSON.stringify(payload.data);
@@ -286,23 +301,8 @@ export class PropShopClient {
       },
     );
 
-    if (!this.disableCache) {
-      const preSub = Date.now();
-      await this.loadCache(driftVaultsProgram);
-      // 2500ms websocket, 1500ms polling
-      console.log(`cache loaded in ${Date.now() - preSub}ms`);
-    }
-
-    console.log(`initialized PropShopClient in ${Date.now() - now}ms`);
-    this.loading = false;
-  }
-
-  async loadCache(program: anchor.Program<DriftVaults>) {
-    if (this.disableCache) {
-      return;
-    }
-    this._cache = new WebSocketSubscriber(
-      program,
+    this.driftVaultsCache = new WebsocketDriftVaultsSubscriber(
+      driftVaultsProgram,
       {
         filters: [
           {
@@ -315,9 +315,90 @@ export class PropShopClient {
           },
         ],
       },
-      this.eventEmitter,
+      this.driftVaultsEventEmitter,
     );
-    await this._cache.subscribe();
+    await this.driftVaultsCache.subscribe();
+
+    //
+    // DRIFT
+    //
+    this.driftEventEmitter.on(
+      "userUpdate",
+      async (payload: Data<PublicKey, UserAccount>) => {
+        const update = JSON.stringify(payload.data);
+        const existing = JSON.stringify(
+          this._users.get(payload.key.toString()),
+        );
+        if (update !== existing) {
+          this._users.set(payload.key.toString(), payload.data);
+          await this.fetchFundOverview(payload.key);
+        }
+      },
+    );
+    this.driftEventEmitter.on(
+      "spotMarketUpdate",
+      (payload: Data<PublicKey, SpotMarketAccount>) => {
+        const update = JSON.stringify(payload.data);
+        const existing = JSON.stringify(
+          this._spotMarkets.get(payload.key.toString()),
+        );
+        if (update !== existing) {
+          this._spotMarkets.set(payload.key.toString(), payload.data);
+        }
+      },
+    );
+    this.driftEventEmitter.on(
+      "perpMarketUpdate",
+      (payload: Data<PublicKey, PerpMarketAccount>) => {
+        const update = JSON.stringify(payload.data);
+        const existing = JSON.stringify(
+          this._perpMarkets.get(payload.key.toString()),
+        );
+        if (update !== existing) {
+          this._perpMarkets.set(payload.key.toString(), payload.data);
+        }
+      },
+    );
+
+    this.driftCache = new WebsocketDriftSubscriber(
+      driftProgram,
+      {
+        filters: [
+          {
+            accountName: "User",
+            eventType: "userUpdate",
+          },
+          {
+            accountName: "SpotMarket",
+            eventType: "spotMarketUpdate",
+          },
+          {
+            accountName: "PerpMarket",
+            eventType: "perpMarketUpdate",
+          },
+        ],
+      },
+      this.driftEventEmitter,
+    );
+    await this.driftCache.subscribe();
+  }
+
+  public async updateWallet(config: {
+    wallet: WalletContextState;
+    dummyWallet?: boolean;
+  }) {
+    this.loading = true;
+    console.log("updating wallet...");
+    this.dummyWallet = config.dummyWallet ?? false;
+    this.wallet = config.wallet;
+    const now = Date.now();
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    const iWallet = PropShopClient.walletAdapterToIWallet(this.wallet);
+    await this.vaultClient.driftClient.updateWallet(iWallet, undefined, 0);
+    console.log(`updated PropShopClient wallet in ${Date.now() - now}ms`);
+    this.loading = false;
   }
 
   private async driftMarkets(
@@ -362,32 +443,8 @@ export class PropShopClient {
   }
 
   async shutdown(): Promise<void> {
-    await this._cache?.unsubscribe();
-  }
-
-  private async driftClientSubscribe(driftClient: DriftClient) {
-    const preUserSub = Date.now();
-    const subUsers = await driftClient.addAndSubscribeToUsers();
-    // 1.2s
-    console.log(
-      `DriftClient subscribed to users in ${Date.now() - preUserSub}ms`,
-    );
-
-    const preAcctSub = Date.now();
-    const subAcctSub = await driftClient.accountSubscriber.subscribe();
-    console.log(
-      `DriftClient subscribed to accounts in ${Date.now() - preAcctSub}ms`,
-    );
-
-    let subUserStats: boolean = false;
-    if (driftClient.userStats !== undefined) {
-      const preStatsSub = Date.now();
-      subUserStats = await driftClient.userStats.subscribe();
-      console.log(
-        `DriftClient subscribed to user stats in ${Date.now() - preStatsSub}ms`,
-      );
-    }
-    driftClient.isSubscribed = subUsers && subAcctSub && subUserStats;
+    await this.driftVaultsCache?.unsubscribe();
+    await this.driftCache?.unsubscribe();
   }
 
   get publicKey(): PublicKey {
@@ -634,7 +691,7 @@ export class PropShopClient {
   public vaultDepositors(
     filterByAuthority?: boolean,
   ): Data<PublicKey, VaultDepositor>[] {
-    if (!this.vaultClient || !this._cache) {
+    if (!this.vaultClient || !this.driftVaultsCache) {
       throw new Error("PropShopClient not initialized");
     }
     const preFetch = Date.now();
@@ -941,7 +998,7 @@ export class PropShopClient {
     if (vaults) {
       _vaults = vaults;
     } else {
-      if (!this._cache) {
+      if (!this.driftVaultsCache) {
         throw new Error("Cache not initialized");
       }
       _vaults = this.vaults();
@@ -951,7 +1008,7 @@ export class PropShopClient {
     if (vaultDepositors) {
       _vds = vaultDepositors;
     } else {
-      if (!this._cache) {
+      if (!this.driftVaultsCache) {
         throw new Error("Cache not initialized");
       }
       _vds = this.vaultDepositors();
@@ -1108,7 +1165,7 @@ export class PropShopClient {
   ): number {
     let vds: Data<PublicKey, VaultDepositor>[];
     if (!vaultDepositors) {
-      if (!this._cache) {
+      if (!this.driftVaultsCache) {
         throw new Error("Cache not initialized");
       }
       vds = this.vaultDepositors();
@@ -1135,7 +1192,7 @@ export class PropShopClient {
     }
     let vds: Data<PublicKey, VaultDepositor>[];
     if (!vaultDepositors) {
-      if (!this._cache) {
+      if (!this.driftVaultsCache) {
         throw new Error("Cache not initialized");
       }
       vds = this.vaultDepositors();
@@ -2691,7 +2748,7 @@ export class PropShopClient {
       return;
     }
     // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
-    // await this._cache?.fetch();
+    // await this.driftVaultsCache?.fetch();
     await this.fetchVault(vault);
 
     const vaultAcct = this.vault(vault)!.data;
@@ -2735,7 +2792,6 @@ export class PropShopClient {
       return;
     }
     // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
-    // await this._cache?.fetch();
     await this.fetchVault(vault);
 
     const vaultAcct = this.vault(vault)!.data;
