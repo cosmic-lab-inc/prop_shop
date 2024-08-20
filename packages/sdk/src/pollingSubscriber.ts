@@ -16,11 +16,11 @@ import {
 } from "@solana/web3.js";
 import { DriftVaults } from "@drift-labs/vaults-sdk";
 import {
-  AccountGpaFilter,
-  AccountSubscription,
+  DriftVaultsAccountEvents,
+  DriftVaultsAccountGpaFilter,
+  DriftVaultsAccountSubscription,
   DriftVaultsSubscriber,
-  PropShopAccountEvents,
-  SubscriptionConfig,
+  DriftVaultsSubscriptionConfig,
 } from "./types";
 import { Buffer } from "buffer";
 import bs58 from "bs58";
@@ -29,20 +29,20 @@ import { AccountLoader } from "./accountLoader";
 export class PollingSubscriber implements DriftVaultsSubscriber {
   isSubscribed: boolean;
   program: Program<DriftVaults>;
-  eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>;
+  eventEmitter: StrictEventEmitter<EventEmitter, DriftVaultsAccountEvents>;
   accountLoader: AccountLoader;
-  accountsToPoll = new Map<string, AccountSubscription>();
+  accountsToPoll = new Map<string, DriftVaultsAccountSubscription>();
   errorCallbackId?: string;
-  _subscriptionConfig: SubscriptionConfig;
-  subscriptions: Map<string, AccountSubscription>;
+  _subscriptionConfig: DriftVaultsSubscriptionConfig;
+  subscriptions: Map<string, DriftVaultsAccountSubscription>;
 
   private isSubscribing = false;
 
   public constructor(
     program: Program<DriftVaults>,
     accountLoader: AccountLoader,
-    subscriptionConfig: SubscriptionConfig,
-    eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>,
+    subscriptionConfig: DriftVaultsSubscriptionConfig,
+    eventEmitter: StrictEventEmitter<EventEmitter, DriftVaultsAccountEvents>,
   ) {
     this.isSubscribed = false;
     this.program = program;
@@ -53,7 +53,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
   }
 
   async subscribe(): Promise<void> {
-    const subs: AccountSubscription[] = [];
+    const subs: DriftVaultsAccountSubscription[] = [];
     const slot = await this.program.provider.connection.getSlot();
 
     if (this._subscriptionConfig.accounts) {
@@ -97,9 +97,9 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         );
         accountInfos.forEach((accountInfo, index) => {
           if (accountInfo) {
-            const value: AccountSubscription =
+            const value: DriftVaultsAccountSubscription =
               this._subscriptionConfig.accounts![index];
-            const sub: AccountSubscription = {
+            const sub: DriftVaultsAccountSubscription = {
               ...value,
               dataAndSlot: {
                 data: accountInfo.data,
@@ -115,7 +115,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
 
     if (this._subscriptionConfig.filters) {
       const gpas: GetProgramAccountsResponse[] = [];
-      const discrims: Map<string, AccountGpaFilter> = new Map();
+      const discrims: Map<string, DriftVaultsAccountGpaFilter> = new Map();
       for (const filter of this._subscriptionConfig.filters) {
         const gpaConfig: GetProgramAccountsConfig = {
           filters: [
@@ -159,7 +159,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
                 data: value.account.data,
                 slot,
               };
-              const sub: AccountSubscription = {
+              const sub: DriftVaultsAccountSubscription = {
                 accountName: filter.accountName,
                 eventType: filter.eventType,
                 publicKey: value.pubkey,
@@ -191,7 +191,9 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     this.isSubscribed = true;
   }
 
-  async updateAccountsToPoll(accounts: AccountSubscription[]): Promise<void> {
+  async updateAccountsToPoll(
+    accounts: DriftVaultsAccountSubscription[],
+  ): Promise<void> {
     if (this.accountsToPoll.size > 0) {
       return;
     }

@@ -19,17 +19,25 @@ import { BN, ProgramAccount } from "@coral-xyz/anchor";
 import { Wallet as AnchorWallet } from "@coral-xyz/anchor/dist/cjs/provider";
 import {
   decodeName,
+  DEFAULT_USER_NAME,
   DriftClient,
   DriftClientConfig,
   encodeName,
+  getDriftStateAccountPublicKey,
+  getPerpMarketPublicKey,
+  getSpotMarketPublicKey,
+  getTokenAmount,
   getUserAccountPublicKey,
   getUserAccountPublicKeySync,
   getUserStatsAccountPublicKey,
   IWallet,
   OracleInfo,
   PerpMarketAccount,
+  PerpPosition,
   QUOTE_PRECISION,
+  ReferrerInfo,
   SpotMarketAccount,
+  StateAccount,
   TEN,
   unstakeSharesToAmount as depositSharesToVaultAmount,
   UserAccount,
@@ -46,7 +54,6 @@ import {
   TEST_USDC_MINT_AUTHORITY,
 } from "./constants";
 import { getAssociatedTokenAddress } from "./programs";
-// import { DRIFT_IDL } from "./idl";
 import { Drift, IDL as DRIFT_IDL } from "./idl/drift";
 import {
   percentPrecisionToPercent,
@@ -86,7 +93,6 @@ import {
   WithdrawUnit,
 } from "@drift-labs/vaults-sdk";
 import { EventEmitter } from "events";
-import bs58 from "bs58";
 import StrictEventEmitter from "strict-event-emitter-types";
 import {
   EventEmitter as WalletAdapterEventEmitter,
@@ -112,6 +118,38 @@ import {
 } from "@cosmic-lab/data-source";
 import { WebsocketDriftVaultsSubscriber } from "./websocketDriftVaultsSubscriber";
 import { WebsocketDriftSubscriber } from "./websocketDriftSubscriber";
+import { isVariant, MarginCategory } from "@drift-labs/sdk/src/types";
+import {
+  AMM_RESERVE_PRECISION,
+  AMM_RESERVE_PRECISION_EXP,
+  FIVE_MINUTE,
+  ONE,
+  OPEN_ORDER_MARGIN_REQUIREMENT,
+  PRICE_PRECISION,
+  QUOTE_SPOT_MARKET_INDEX,
+  SPOT_MARKET_WEIGHT_PRECISION,
+  ZERO,
+} from "@drift-labs/sdk/src/constants/numericConstants";
+import {
+  getWorstCaseTokenAmounts,
+  isSpotPositionAvailable,
+} from "@drift-labs/sdk/src/math/spotPosition";
+import { calculateLiveOracleTwap } from "@drift-labs/sdk/src/math/oracles";
+import { StrictOraclePrice } from "@drift-labs/sdk/src/oracles/strictOraclePrice";
+import {
+  calculatePositionFundingPNL,
+  calculatePositionPNL,
+  calculateUnrealizedAssetWeight,
+  getSignedTokenAmount,
+  getStrictTokenValue,
+  SpotBalanceType,
+} from "@drift-labs/sdk/src";
+import {
+  calculateAssetWeight,
+  calculateLiabilityWeight,
+} from "@drift-labs/sdk/src/math/spotBalance";
+import { OracleClientCache } from "@drift-labs/sdk/src/oracles/oracleClientCache";
+import { calculateMarketOpenBidAsk } from "@drift-labs/sdk/src/math/amm";
 
 interface DriftMarkets {
   spotMarkets: SpotMarketAccount[];
@@ -129,6 +167,8 @@ export class PropShopClient {
   private readonly skipFetching: boolean = false;
   private readonly useProxyPrefix: boolean = false;
   dummyWallet: boolean = false;
+
+  oracleClientCache = new OracleClientCache();
 
   private driftVaultsEventEmitter: StrictEventEmitter<
     EventEmitter,
@@ -223,14 +263,6 @@ export class PropShopClient {
       provider,
     );
 
-    const preMarkets = Date.now();
-    const markets = await this.driftMarkets(
-      driftProgram as any as anchor.Program,
-    );
-    const slot = await connection.getSlot();
-    // 3s
-    console.log(`fetched Drift markets in ${Date.now() - preMarkets}ms`);
-
     const driftClient = new DriftClient({
       connection,
       wallet: iWallet,
@@ -239,13 +271,7 @@ export class PropShopClient {
       },
       activeSubAccountId,
       accountSubscription,
-      spotMarketIndexes: markets.spotMarkets.map((m) => m.marketIndex),
-      perpMarketIndexes: markets.perpMarkets.map((m) => m.marketIndex),
-      oracleInfos: Array.from(markets.oracleInfos.values()),
     });
-    const preDriftSub = Date.now();
-    await driftClient.subscribe();
-    console.log(`DriftClient subscribed in ${Date.now() - preDriftSub}ms`);
 
     this.vaultClient = new VaultClient({
       // @ts-ignore
@@ -396,7 +422,7 @@ export class PropShopClient {
       throw new Error("PropShopClient not initialized");
     }
     const iWallet = PropShopClient.walletAdapterToIWallet(this.wallet);
-    await this.vaultClient.driftClient.updateWallet(iWallet, undefined, 0);
+    await this.driftClient.updateWallet(iWallet, undefined, 0);
     console.log(`updated PropShopClient wallet in ${Date.now() - now}ms`);
     this.loading = false;
   }
@@ -404,10 +430,6 @@ export class PropShopClient {
   private async driftMarkets(
     driftProgram: anchor.Program,
   ): Promise<DriftMarkets> {
-    if (!this.vaultClient) {
-      throw new Error("PropShopClient not initialized");
-    }
-
     const perpMarkets: PerpMarketAccount[] = [];
     const spotMarkets: SpotMarketAccount[] = [];
     const oracleInfos: Map<string, OracleInfo> = new Map();
@@ -459,7 +481,7 @@ export class PropShopClient {
       throw new Error("PropShopClient not initialized");
     }
     return getVaultDepositorAddressSync(
-      this.vaultClient.program.programId,
+      this.driftVaultsProgram.programId,
       vault,
       this.publicKey,
     );
@@ -475,6 +497,70 @@ export class PropShopClient {
     }
   }
 
+  private async getInitializeUserInstructions(
+    subAccountId = 0,
+    name?: string,
+    referrerInfo?: ReferrerInfo,
+  ): Promise<[PublicKey, TransactionInstruction]> {
+    const userAccountPublicKey = await getUserAccountPublicKey(
+      this.driftProgram.programId,
+      this.publicKey,
+      subAccountId,
+    );
+
+    const remainingAccounts = new Array<AccountMeta>();
+    if (referrerInfo !== undefined) {
+      remainingAccounts.push({
+        pubkey: referrerInfo.referrer,
+        isWritable: true,
+        isSigner: false,
+      });
+      remainingAccounts.push({
+        pubkey: referrerInfo.referrerStats,
+        isWritable: true,
+        isSigner: false,
+      });
+    }
+
+    const state = await this.getStateAccount();
+    if (!state.whitelistMint.equals(PublicKey.default)) {
+      const associatedTokenPublicKey = getAssociatedTokenAddress(
+        state.whitelistMint,
+        this.publicKey,
+      );
+      remainingAccounts.push({
+        pubkey: associatedTokenPublicKey,
+        isWritable: false,
+        isSigner: false,
+      });
+    }
+
+    if (name === undefined) {
+      if (subAccountId === 0) {
+        name = DEFAULT_USER_NAME;
+      } else {
+        name = `Subaccount ${subAccountId + 1}`;
+      }
+    }
+
+    const nameBuffer = encodeName(name);
+    const initializeUserAccountIx =
+      this.driftProgram.instruction.initializeUser(subAccountId, nameBuffer, {
+        accounts: {
+          user: userAccountPublicKey,
+          userStats: this.getUserStatsKey(this.publicKey),
+          authority: this.publicKey,
+          payer: this.publicKey,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          state: await this.getStateKey(),
+        },
+        remainingAccounts,
+      });
+
+    return [userAccountPublicKey, initializeUserAccountIx];
+  }
+
   private async initUserIxs(
     subAccountId = 0,
   ): Promise<TransactionInstruction[]> {
@@ -483,26 +569,21 @@ export class PropShopClient {
     }
     const ixs = [];
     const userKey = getUserAccountPublicKeySync(
-      this.vaultClient.driftClient.program.programId,
+      this.driftProgram.programId,
       this.publicKey,
       subAccountId,
     );
 
     if (subAccountId === 0) {
       if (
-        !(await this.checkIfAccountExists(
-          this.vaultClient.driftClient.getUserStatsAccountPublicKey(),
-        ))
+        !(await this.checkIfAccountExists(this.getUserStatsKey(this.publicKey)))
       ) {
-        ixs.push(await this.vaultClient.driftClient.getInitializeUserStatsIx());
+        ixs.push(await this.driftClient.getInitializeUserStatsIx());
       }
     }
 
     if (!(await this.checkIfAccountExists(userKey))) {
-      const [_, ix] =
-        await this.vaultClient.driftClient.getInitializeUserInstructions(
-          subAccountId,
-        );
+      const [_, ix] = await this.getInitializeUserInstructions(subAccountId);
       ixs.push(ix);
     }
     return ixs;
@@ -519,26 +600,21 @@ export class PropShopClient {
     }
     const ixs = [];
     const userKey = getUserAccountPublicKeySync(
-      this.vaultClient.driftClient.program.programId,
+      this.driftProgram.programId,
       this.publicKey,
       subAccountId,
     );
 
     if (subAccountId === 0) {
       if (
-        !(await this.checkIfAccountExists(
-          this.vaultClient.driftClient.getUserStatsAccountPublicKey(),
-        ))
+        !(await this.checkIfAccountExists(this.getUserStatsKey(this.publicKey)))
       ) {
-        ixs.push(await this.vaultClient.driftClient.getInitializeUserStatsIx());
+        ixs.push(await this.driftClient.getInitializeUserStatsIx());
       }
     }
 
     if (!(await this.checkIfAccountExists(userKey))) {
-      const [_, ix] =
-        await this.vaultClient.driftClient.getInitializeUserInstructions(
-          subAccountId,
-        );
+      const [_, ix] = await this.getInitializeUserInstructions(subAccountId);
       ixs.push(ix);
     }
     const sig = await this.sendTx(ixs);
@@ -548,41 +624,6 @@ export class PropShopClient {
     console.debug("init user:", formatExplorerLink(sig.value));
   }
 
-  // async initUser(): Promise<{
-  //   user: User;
-  //   usdcMint: PublicKey;
-  //   usdcAta: PublicKey;
-  // }> {
-  //   if (!this.vaultClient) {
-  //     throw new Error("PropShopClient not initialized");
-  //   }
-  //   const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(0);
-  //   if (!spotMarket) {
-  //     throw new Error("USDC spot market not found in DriftClient");
-  //   }
-  //   const usdcMint = spotMarket.mint;
-  //   const usdcAta = getAssociatedTokenAddress(usdcMint, this.publicKey);
-  //   const user = new User({
-  //     // @ts-ignore
-  //     driftClient: this.vaultClient.driftClient,
-  //     userAccountPublicKey:
-  //       await this.vaultClient.driftClient.getUserAccountPublicKey(),
-  //   });
-  //   // only init if this is the first time (not already subscribed)
-  //   if (!user.isSubscribed) {
-  //     await this.vaultClient.driftClient.initializeUserAccount(
-  //       this.vaultClient!.driftClient.activeSubAccountId ?? 0,
-  //     );
-  //
-  //     await user.subscribe();
-  //   }
-  //   return {
-  //     user,
-  //     usdcMint,
-  //     usdcAta,
-  //   };
-  // }
-
   /**
    * Uses the active subAccountId and connected wallet as the authority.
    */
@@ -590,36 +631,13 @@ export class PropShopClient {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    const user = this.vaultClient.driftClient.getUserAccount();
+    const user = this.getUserAccount(this.publicKey, 0);
     return !!user;
   }
 
   //
   // Account cache and fetching
   //
-
-  async spotMarketByIndex(
-    driftProgram: anchor.Program,
-    index: number,
-  ): Promise<ProgramAccount<SpotMarketAccount>> {
-    const filters: GetProgramAccountsFilter[] = [
-      {
-        memcmp: {
-          // offset of "market_index" field in "SpotMarket" account
-          offset: 684,
-          bytes: bs58.encode(Uint8Array.from([index])),
-        },
-      },
-    ];
-    // @ts-ignore
-    const res: ProgramAccount<SpotMarketAccount>[] =
-      await driftProgram.account.spotMarket.all(filters);
-    if (res.length > 0) {
-      return res[0];
-    } else {
-      throw new Error(`Spot market not found for index ${index}`);
-    }
-  }
 
   public vault(
     key: PublicKey,
@@ -730,7 +748,7 @@ export class PropShopClient {
     try {
       // @ts-ignore ... Vault type omits padding fields, but this is safe.
       const vault: Vault =
-        await this.vaultClient.program.account.vault.fetch(key);
+        await this.driftVaultsProgram.account.vault.fetch(key);
       return vault;
     } catch (e: any) {
       return undefined;
@@ -746,7 +764,7 @@ export class PropShopClient {
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
     const preFetch = Date.now();
     const vaults: ProgramAccount<Vault>[] =
-      await this.vaultClient.program.account.vault.all();
+      await this.driftVaultsProgram.account.vault.all();
     console.log(
       `fetched ${vaults.length} vaults from RPC in ${Date.now() - preFetch}ms`,
     );
@@ -770,7 +788,7 @@ export class PropShopClient {
     }
     try {
       const vd: VaultDepositor =
-        await this.vaultClient.program.account.vaultDepositor.fetch(key);
+        await this.driftVaultsProgram.account.vaultDepositor.fetch(key);
       return vd;
     } catch (e: any) {
       return undefined;
@@ -801,7 +819,7 @@ export class PropShopClient {
     }
     const preFetch = Date.now();
     const vds: ProgramAccount<VaultDepositor>[] =
-      await this.vaultClient.program.account.vaultDepositor.all(filters);
+      await this.driftVaultsProgram.account.vaultDepositor.all(filters);
     console.log(
       `fetched ${vds.length} vds from RPC in ${Date.now() - preFetch}ms`,
     );
@@ -836,19 +854,18 @@ export class PropShopClient {
           factorUnrealizedPNL: false,
         })
       ).toNumber() / QUOTE_PRECISION.toNumber();
-    const user = await this.vaultClient.getSubscribedVaultUser(acct.user);
-    const userAcct = user.getUserAccount();
+    const userAccount = await this.getUserAccountByKey(acct.user);
     const netDeposits =
-      userAcct.totalDeposits.sub(userAcct.totalWithdraws).toNumber() /
+      userAccount.totalDeposits.sub(userAccount.totalWithdraws).toNumber() /
       QUOTE_PRECISION.toNumber();
 
     const userStatsKey = getUserStatsAccountPublicKey(
-      this.vaultClient.driftClient.program.programId,
+      this.driftProgram.programId,
       vault,
     );
 
-    const driftProgram = this.vaultClient.driftClient.program;
-    const _userStats = await driftProgram.account.userStats.fetch(userStatsKey);
+    const _userStats =
+      await this.driftProgram.account.UserStats.fetch(userStatsKey);
     if (!_userStats) {
       throw new Error(`UserStats not found for: ${decodeName(acct.name)}`);
     }
@@ -1053,7 +1070,7 @@ export class PropShopClient {
     if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       const vpAccount =
-        await this.vaultClient.program.account.vaultProtocol.fetch(
+        await this.driftVaultsProgram.account.vaultProtocol.fetch(
           vaultProtocol,
         );
       vpShares = vpAccount.protocolProfitAndFeeShares;
@@ -1067,10 +1084,9 @@ export class PropShopClient {
       vaultTotalEquity,
     );
 
-    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
-      vaultAccount.spotMarketIndex,
-    );
-    const spotOracle = this.vaultClient.driftClient.getOracleDataForSpotMarket(
+    const spotMarket = await this.getSpotMarket(vaultAccount.spotMarketIndex);
+    await this.addSpotMarketToDriftClient(spotMarket);
+    const spotOracle = this.driftClient.getOracleDataForSpotMarket(
       vaultAccount.spotMarketIndex,
     );
     const spotPrecision = TEN.pow(new BN(spotMarket!.decimals));
@@ -1097,16 +1113,15 @@ export class PropShopClient {
     });
     const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
     const vpAccount =
-      await this.vaultClient.program.account.vaultProtocol.fetch(vaultProtocol);
+      await this.driftVaultsProgram.account.vaultProtocol.fetch(vaultProtocol);
     const equity = depositSharesToVaultAmount(
       vpAccount.protocolProfitAndFeeShares,
       vaultAccount.totalShares,
       vaultTotalEquity,
     );
-    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
-      vaultAccount.spotMarketIndex,
-    );
-    const spotOracle = this.vaultClient.driftClient.getOracleDataForSpotMarket(
+    const spotMarket = await this.getSpotMarket(vaultAccount.spotMarketIndex);
+    await this.addSpotMarketToDriftClient(spotMarket);
+    const spotOracle = this.driftClient.getOracleDataForSpotMarket(
       vaultAccount.spotMarketIndex,
     );
     const spotPrecision = TEN.pow(new BN(spotMarket!.decimals));
@@ -1123,7 +1138,7 @@ export class PropShopClient {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    let vault: Vault | undefined = undefined;
+    let vault: Vault | undefined;
     if (forceFetch) {
       vault = await this.fetchVault(vaultKey);
     } else {
@@ -1219,7 +1234,7 @@ export class PropShopClient {
     console.debug("join vault:", formatExplorerLink(sig));
     await confirmTransactions(this.connection, [sig]);
     const vaultAccount =
-      await this.vaultClient.program.account.vault.fetch(vault);
+      await this.driftVaultsProgram.account.vault.fetch(vault);
     const vaultName = decodeName(vaultAccount.name);
     return {
       variant: "success",
@@ -1264,12 +1279,11 @@ export class PropShopClient {
         message: "Vault not found in deposit instruction",
       });
     }
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [],
-        writableSpotMarketIndexes: [0],
-      },
-    );
+    // todo: maybe this needs to be manual
+    const remainingAccounts = this.driftClient.getRemainingAccounts({
+      userAccounts: [],
+      writableSpotMarketIndexes: [0],
+    });
     if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
@@ -1281,9 +1295,7 @@ export class PropShopClient {
 
     const ixs: TransactionInstruction[] = [];
 
-    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
-      vaultAccount.spotMarketIndex,
-    );
+    const spotMarket = await this.getSpotMarket(vaultAccount.spotMarketIndex);
     if (!spotMarket) {
       return err({
         variant: "error",
@@ -1312,7 +1324,7 @@ export class PropShopClient {
     const vdExists = this.vaultDepositor(vaultDepositor, false)?.data;
     if (!vdExists) {
       ixs.push(
-        await this.vaultClient.program.methods
+        await this.driftVaultsProgram.methods
           .initializeVaultDepositor()
           .accounts({
             vaultDepositor,
@@ -1324,7 +1336,7 @@ export class PropShopClient {
     }
 
     const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
-    const depositIx = await this.vaultClient.program.methods
+    const depositIx = await this.driftVaultsProgram.methods
       .deposit(amount)
       .accounts({
         vault,
@@ -1332,10 +1344,10 @@ export class PropShopClient {
         vaultTokenAccount: vaultAccount.tokenAccount,
         driftUserStats: vaultAccount.userStats,
         driftUser: vaultAccount.user,
-        driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+        driftState: await this.getStateKey(),
         userTokenAccount: userAta,
         driftSpotMarketVault: spotMarket.vault,
-        driftProgram: this.vaultClient.driftClient.program.programId,
+        driftProgram: this.driftProgram.programId,
       })
       .remainingAccounts(remainingAccounts)
       .instruction();
@@ -1362,10 +1374,9 @@ export class PropShopClient {
 
     // check if wallet is protocol
     if (!vaultAcct.vaultProtocol.equals(SystemProgram.programId)) {
-      const vpAcct =
-        (await this.vaultClient.program.account.vaultProtocol.fetch(
-          vaultAcct.vaultProtocol,
-        )) as VaultProtocol;
+      const vpAcct = (await this.driftVaultsProgram.account.vaultProtocol.fetch(
+        vaultAcct.vaultProtocol,
+      )) as VaultProtocol;
       if (vpAcct.protocol.equals(this.publicKey)) {
         return ok(true);
       }
@@ -1404,7 +1415,7 @@ export class PropShopClient {
     const ixs = [];
 
     const userKey = getUserAccountPublicKeySync(
-      this.vaultClient.driftClient.program.programId,
+      this.driftProgram.programId,
       this.publicKey,
     );
     let addUserAfter = false;
@@ -1455,7 +1466,7 @@ export class PropShopClient {
     await this.fetchVaultEquity(vault);
     await this.fetchFundOverview(vault);
     if (addUserAfter) {
-      await this.vaultClient.driftClient.addUser(0, this.publicKey);
+      await this.driftClient.addUser(0, this.publicKey);
     }
 
     return {
@@ -1754,18 +1765,16 @@ export class PropShopClient {
     };
 
     const vault = getVaultAddressSync(
-      this.vaultClient.program.programId,
+      this.driftVaultsProgram.programId,
       params.name,
     );
     const tokenAccount = getTokenVaultAddressSync(
-      this.vaultClient.program.programId,
+      this.driftVaultsProgram.programId,
       vault,
     );
 
-    const driftState = await this.vaultClient.driftClient.getStatePublicKey();
-    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
-      params.spotMarketIndex,
-    );
+    const driftState = await this.getStateKey();
+    const spotMarket = await this.getSpotMarket(params.spotMarketIndex);
     if (!spotMarket) {
       throw new Error(
         `Spot market ${params.spotMarketIndex} not found on driftClient`,
@@ -1773,11 +1782,11 @@ export class PropShopClient {
     }
 
     const userStatsKey = getUserStatsAccountPublicKey(
-      this.vaultClient.driftClient.program.programId,
+      this.driftProgram.programId,
       vault,
     );
     const userKey = getUserAccountPublicKeySync(
-      this.vaultClient.driftClient.program.programId,
+      this.driftProgram.programId,
       vault,
     );
 
@@ -1789,14 +1798,14 @@ export class PropShopClient {
       driftState,
       vault,
       tokenAccount,
-      driftProgram: this.vaultClient.driftClient.program.programId,
+      driftProgram: this.driftProgram.programId,
     };
 
     const updateDelegateIx = await this.delegateVaultIx(vault, delegate);
 
     if (params.vaultProtocol) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(
-        getVaultAddressSync(this.vaultClient.program.programId, params.name),
+        getVaultAddressSync(this.driftVaultsProgram.programId, params.name),
       );
       const remainingAccounts: AccountMeta[] = [
         {
@@ -1805,14 +1814,14 @@ export class PropShopClient {
           isWritable: true,
         },
       ];
-      return await this.vaultClient.program.methods
+      return await this.driftVaultsProgram.methods
         .initializeVault(_params)
         .accounts(accounts)
         .remainingAccounts(remainingAccounts)
         .postInstructions([updateDelegateIx])
         .rpc();
     } else {
-      return await this.vaultClient.program.methods
+      return await this.driftVaultsProgram.methods
         .initializeVault(_params)
         .accounts(accounts)
         .postInstructions([updateDelegateIx])
@@ -1882,7 +1891,7 @@ export class PropShopClient {
 
     console.debug("initialize vault:", formatExplorerLink(sig));
     const vault = getVaultAddressSync(
-      this.vaultClient.program.programId,
+      this.driftVaultsProgram.programId,
       encodeName(params.name),
     );
     const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
@@ -1908,16 +1917,16 @@ export class PropShopClient {
       throw new Error("PropShopClient not initialized");
     }
     const vaultUser = getUserAccountPublicKeySync(
-      this.vaultClient.driftClient.program.programId,
+      this.driftProgram.programId,
       vault,
     );
 
-    return this.vaultClient.program.methods
+    return this.driftVaultsProgram.methods
       .updateDelegate(delegate)
       .accounts({
         vault,
         driftUser: vaultUser,
-        driftProgram: this.vaultClient.driftClient.program.programId,
+        driftProgram: this.driftProgram.programId,
       })
       .instruction();
   }
@@ -1936,7 +1945,7 @@ export class PropShopClient {
     console.debug("delegate vault:", formatExplorerLink(sig));
     await confirmTransactions(this.connection, [sig]);
     const vaultAccount =
-      await this.vaultClient.program.account.vault.fetch(vault);
+      await this.driftVaultsProgram.account.vault.fetch(vault);
     const vaultName = decodeName(vaultAccount.name);
     return {
       variant: "success",
@@ -1990,7 +1999,7 @@ export class PropShopClient {
           isWritable: true,
         },
       ];
-      ix = await this.vaultClient.program.methods
+      ix = await this.driftVaultsProgram.methods
         .updateVault(params)
         .accounts({
           vault,
@@ -1999,7 +2008,7 @@ export class PropShopClient {
         .remainingAccounts(remainingAccounts)
         .instruction();
     } else {
-      ix = await this.vaultClient.program.methods
+      ix = await this.driftVaultsProgram.methods
         .updateVault(params)
         .accounts({
           vault,
@@ -2085,7 +2094,7 @@ export class PropShopClient {
         `Vault ${vault.toString()} not found during manager deposit`,
       );
     }
-    const driftSpotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
+    const driftSpotMarket = await this.getSpotMarket(
       vaultAccount.spotMarketIndex,
     );
     if (!driftSpotMarket) {
@@ -2095,15 +2104,12 @@ export class PropShopClient {
       });
     }
 
-    const user = await this.vaultClient.getSubscribedVaultUser(
-      vaultAccount.user,
-    );
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [user.getUserAccount()],
-        writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
-      },
-    );
+    const userAccount = await this.getUserAccountByKey(vaultAccount.user);
+    // todo: maybe this needs to be manual
+    const remainingAccounts = this.driftClient.getRemainingAccounts({
+      userAccounts: [userAccount],
+      writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
+    });
     if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
@@ -2115,21 +2121,21 @@ export class PropShopClient {
 
     const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
     return ok(
-      await this.vaultClient.program.methods
+      await this.driftVaultsProgram.methods
         .managerDeposit(amount)
         .accounts({
           vault,
           vaultTokenAccount: vaultAccount.tokenAccount,
           driftUser: await getUserAccountPublicKey(
-            this.vaultClient.driftClient.program.programId,
+            this.driftProgram.programId,
             vault,
           ),
-          driftProgram: this.vaultClient.driftClient.program.programId,
+          driftProgram: this.driftProgram.programId,
           driftUserStats: getUserStatsAccountPublicKey(
-            this.vaultClient.driftClient.program.programId,
+            this.driftProgram.programId,
             vault,
           ),
-          driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+          driftState: await this.getStateKey(),
           driftSpotMarketVault: driftSpotMarket.vault,
           userTokenAccount: getAssociatedTokenAddressSync(
             driftSpotMarket.mint,
@@ -2158,15 +2164,12 @@ export class PropShopClient {
       });
     }
 
-    const user = await this.vaultClient.getSubscribedVaultUser(
-      vaultAccount.user,
-    );
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [user.getUserAccount()],
-        writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
-      },
-    );
+    const userAccount = await this.getUserAccountByKey(vaultAccount.user);
+    // todo: maybe this needs to be manual
+    const remainingAccounts = this.driftClient.getRemainingAccounts({
+      userAccounts: [userAccount],
+      writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
+    });
     if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
@@ -2179,17 +2182,17 @@ export class PropShopClient {
     const accounts = {
       vault,
       driftUserStats: getUserStatsAccountPublicKey(
-        this.vaultClient.driftClient.program.programId,
+        this.driftProgram.programId,
         vault,
       ),
       driftUser: vaultAccount.user,
-      driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+      driftState: await this.getStateKey(),
     };
 
     const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
     const withdrawUnit = WithdrawUnit.TOKEN;
     return ok(
-      await this.vaultClient.program.methods
+      await this.driftVaultsProgram.methods
         // @ts-ignore, 0.29.0 anchor issues..
         .managerRequestWithdraw(amount, withdrawUnit)
         .accounts(accounts)
@@ -2223,21 +2226,18 @@ export class PropShopClient {
       manager: this.publicKey,
       vault,
       driftUserStats: getUserStatsAccountPublicKey(
-        this.vaultClient.driftClient.program.programId,
+        this.driftProgram.programId,
         vault,
       ),
       driftUser: vaultAccount.user,
-      driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+      driftState: await this.getStateKey(),
     };
 
-    const user = await this.vaultClient.getSubscribedVaultUser(
-      vaultAccount.user,
-    );
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [user.getUserAccount()],
-      },
-    );
+    const userAccount = await this.getUserAccountByKey(vaultAccount.user);
+    // todo: maybe this needs to be manual
+    const remainingAccounts = this.driftClient.getRemainingAccounts({
+      userAccounts: [userAccount],
+    });
     if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
@@ -2248,7 +2248,7 @@ export class PropShopClient {
     }
 
     return ok(
-      await this.vaultClient.program.methods
+      await this.driftVaultsProgram.methods
         .mangerCancelWithdrawRequest()
         .accounts(accounts)
         .remainingAccounts(remainingAccounts)
@@ -2277,15 +2277,12 @@ export class PropShopClient {
       });
     }
 
-    const user = await this.vaultClient.getSubscribedVaultUser(
-      vaultAccount.user,
-    );
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [user.getUserAccount()],
-        writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
-      },
-    );
+    const userAccount = await this.getUserAccountByKey(vaultAccount.user);
+    // todo: maybe this needs to be manual
+    const remainingAccounts = this.driftClient.getRemainingAccounts({
+      userAccounts: [userAccount],
+      writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
+    });
     if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
@@ -2295,9 +2292,7 @@ export class PropShopClient {
       });
     }
 
-    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
-      vaultAccount.spotMarketIndex,
-    );
+    const spotMarket = await this.getSpotMarket(vaultAccount.spotMarketIndex);
     if (!spotMarket) {
       return err({
         variant: "error",
@@ -2306,28 +2301,28 @@ export class PropShopClient {
     }
 
     return ok(
-      await this.vaultClient.program.methods
+      await this.driftVaultsProgram.methods
         .managerWithdraw()
         .accounts({
           vault,
           manager: this.publicKey,
           vaultTokenAccount: vaultAccount.tokenAccount,
           driftUser: await getUserAccountPublicKey(
-            this.vaultClient.driftClient.program.programId,
+            this.driftProgram.programId,
             vault,
           ),
-          driftProgram: this.vaultClient.driftClient.program.programId,
+          driftProgram: this.driftProgram.programId,
           driftUserStats: getUserStatsAccountPublicKey(
-            this.vaultClient.driftClient.program.programId,
+            this.driftProgram.programId,
             vault,
           ),
-          driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+          driftState: await this.getStateKey(),
           driftSpotMarketVault: spotMarket.vault,
           userTokenAccount: getAssociatedTokenAddressSync(
             spotMarket.mint,
             this.publicKey,
           ),
-          driftSigner: this.vaultClient.driftClient.getStateAccount().signer,
+          driftSigner: (await this.getStateAccount()).signer,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .remainingAccounts(remainingAccounts)
@@ -2362,7 +2357,7 @@ export class PropShopClient {
     }
 
     const vpAccount =
-      (await this.vaultClient.program.account.vaultProtocol.fetch(
+      (await this.driftVaultsProgram.account.vaultProtocol.fetch(
         vaultAccount.vaultProtocol,
       )) as VaultProtocol;
     if (!this.publicKey.equals(vpAccount.protocol)) {
@@ -2372,15 +2367,12 @@ export class PropShopClient {
       });
     }
 
-    const user = await this.vaultClient.getSubscribedVaultUser(
-      vaultAccount.user,
-    );
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [user.getUserAccount()],
-        writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
-      },
-    );
+    const userAccount = await this.getUserAccountByKey(vaultAccount.user);
+    // todo: maybe this needs to be manual
+    const remainingAccounts = this.driftClient.getRemainingAccounts({
+      userAccounts: [userAccount],
+      writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
+    });
     if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
@@ -2393,17 +2385,17 @@ export class PropShopClient {
     const accounts = {
       vault,
       driftUserStats: getUserStatsAccountPublicKey(
-        this.vaultClient.driftClient.program.programId,
+        this.driftProgram.programId,
         vault,
       ),
       driftUser: vaultAccount.user,
-      driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+      driftState: await this.getStateKey(),
     };
 
     const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
     const withdrawUnit = WithdrawUnit.TOKEN;
     return ok(
-      await this.vaultClient.program.methods
+      await this.driftVaultsProgram.methods
         // @ts-ignore, 0.29.0 anchor issues..
         .managerRequestWithdraw(amount, withdrawUnit)
         .accounts(accounts)
@@ -2437,21 +2429,18 @@ export class PropShopClient {
       manager: this.publicKey,
       vault,
       driftUserStats: getUserStatsAccountPublicKey(
-        this.vaultClient.driftClient.program.programId,
+        this.driftProgram.programId,
         vault,
       ),
       driftUser: vaultAccount.user,
-      driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+      driftState: await this.getStateKey(),
     };
 
-    const user = await this.vaultClient.getSubscribedVaultUser(
-      vaultAccount.user,
-    );
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [user.getUserAccount()],
-      },
-    );
+    const userAccount = await this.getUserAccountByKey(vaultAccount.user);
+    // todo: maybe this needs to be manual
+    const remainingAccounts = this.driftClient.getRemainingAccounts({
+      userAccounts: [userAccount],
+    });
     if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
@@ -2462,7 +2451,7 @@ export class PropShopClient {
     }
 
     return ok(
-      await this.vaultClient.program.methods
+      await this.driftVaultsProgram.methods
         .mangerCancelWithdrawRequest()
         .accounts(accounts)
         .remainingAccounts(remainingAccounts)
@@ -2491,15 +2480,14 @@ export class PropShopClient {
       });
     }
 
-    const user = await this.vaultClient.getSubscribedVaultUser(
-      vaultAccount.user,
-    );
-    const remainingAccounts = this.vaultClient.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [user.getUserAccount()],
-        writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
-      },
-    );
+    const spotMarket = await this.getSpotMarket(vaultAccount.spotMarketIndex);
+    await this.addSpotMarketToDriftClient(spotMarket);
+    const userAccount = await this.getUserAccountByKey(vaultAccount.user);
+    // todo: maybe this needs to be manual
+    const remainingAccounts = this.driftClient.getRemainingAccounts({
+      userAccounts: [userAccount],
+      writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
+    });
     if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
@@ -2509,9 +2497,6 @@ export class PropShopClient {
       });
     }
 
-    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(
-      vaultAccount.spotMarketIndex,
-    );
     if (!spotMarket) {
       return err({
         variant: "error",
@@ -2520,28 +2505,28 @@ export class PropShopClient {
     }
 
     return ok(
-      await this.vaultClient.program.methods
+      await this.driftVaultsProgram.methods
         .managerWithdraw()
         .accounts({
           vault,
-          manager: this.vaultClient.driftClient.wallet.publicKey,
+          manager: this.publicKey,
           vaultTokenAccount: vaultAccount.tokenAccount,
           driftUser: await getUserAccountPublicKey(
-            this.vaultClient.driftClient.program.programId,
+            this.driftProgram.programId,
             vault,
           ),
-          driftProgram: this.vaultClient.driftClient.program.programId,
+          driftProgram: this.driftProgram.programId,
           driftUserStats: getUserStatsAccountPublicKey(
-            this.vaultClient.driftClient.program.programId,
+            this.driftProgram.programId,
             vault,
           ),
-          driftState: await this.vaultClient.driftClient.getStatePublicKey(),
+          driftState: await this.getStateKey(),
           driftSpotMarketVault: spotMarket.vault,
           userTokenAccount: getAssociatedTokenAddressSync(
             spotMarket.mint,
-            this.vaultClient.driftClient.wallet.publicKey,
+            this.publicKey,
           ),
-          driftSigner: this.vaultClient.driftClient.getStateAccount().signer,
+          driftSigner: (await this.getStateAccount()).signer,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .remainingAccounts(remainingAccounts)
@@ -2592,7 +2577,7 @@ export class PropShopClient {
       readyState: WalletReadyState.Installed,
     };
 
-    const walletCtx: WalletContextState = {
+    return {
       autoConnect: false,
       wallets: [wallet],
       wallet,
@@ -2636,8 +2621,7 @@ export class PropShopClient {
         return Promise.resolve(tx.serializeMessage());
       },
       signIn: undefined,
-    };
-    return walletCtx;
+    } as WalletContextState;
   }
 
   public static walletAdapterToIWallet(wallet: WalletContextState): IWallet {
@@ -2798,7 +2782,7 @@ export class PropShopClient {
     if (vaultAcct.vaultProtocol.equals(SystemProgram.programId)) {
       return;
     }
-    const vpAcct = (await this.vaultClient.program.account.vaultProtocol.fetch(
+    const vpAcct = (await this.driftVaultsProgram.account.vaultProtocol.fetch(
       vaultAcct.vaultProtocol,
     )) as VaultProtocol;
 
@@ -2901,7 +2885,7 @@ export class PropShopClient {
     if (!this.vaultClient) {
       throw new Error("PropShopClient not initialized");
     }
-    const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(0);
+    const spotMarket = await this.getSpotMarket(0);
     if (!spotMarket) {
       throw new Error("USDC spot market not found in DriftClient");
     }
@@ -3021,5 +3005,745 @@ export class PropShopClient {
         message: e.toString(),
       };
     }
+  }
+
+  public get driftVaultsProgram(): anchor.Program<DriftVaults> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    return this.vaultClient.program as any as anchor.Program<DriftVaults>;
+  }
+
+  public get driftProgram(): anchor.Program<Drift> {
+    return this.driftClient.program as any as anchor.Program<Drift>;
+  }
+
+  public get driftClient(): DriftClient {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+    // @ts-ignore
+    return this.vaultClient.driftClient;
+  }
+
+  public async getStateKey(): Promise<PublicKey> {
+    return await getDriftStateAccountPublicKey(this.driftProgram.programId);
+  }
+
+  public async getStateAccount(): Promise<StateAccount> {
+    const key = await getDriftStateAccountPublicKey(
+      this.driftProgram.programId,
+    );
+    return (await this.driftProgram.account.State.fetch(
+      key,
+    )) as any as StateAccount;
+  }
+
+  public async getUserAccountByKey(key: PublicKey): Promise<UserAccount> {
+    return (await this.driftProgram.account.User.fetch(
+      key,
+    )) as any as UserAccount;
+  }
+
+  public async getUserAccount(
+    authority: PublicKey,
+    subAccountId = 0,
+  ): Promise<UserAccount> {
+    const key = await getUserAccountPublicKey(
+      this.driftProgram.programId,
+      authority,
+      subAccountId,
+    );
+    return (await this.driftProgram.account.User.fetch(
+      key,
+    )) as any as UserAccount;
+  }
+
+  public async getUserStatsAccount(
+    authority: PublicKey,
+  ): Promise<UserStatsAccount> {
+    const key = getUserStatsAccountPublicKey(
+      this.driftProgram.programId,
+      authority,
+    );
+    return (await this.driftProgram.account.UserStats.fetch(
+      key,
+    )) as any as UserStatsAccount;
+  }
+
+  public getUserStatsKey(authority: PublicKey): PublicKey {
+    return getUserStatsAccountPublicKey(this.driftProgram.programId, authority);
+  }
+
+  public async getSpotMarket(marketIndex: number): Promise<SpotMarketAccount> {
+    const key = await getSpotMarketPublicKey(
+      this.driftProgram.programId,
+      marketIndex,
+    );
+    return (await this.driftProgram.account.SpotMarket.fetch(
+      key,
+    )) as any as SpotMarketAccount;
+  }
+
+  private async addSpotMarketToDriftClient(spotMarket: SpotMarketAccount) {
+    await this.driftClient.accountSubscriber.addSpotMarket(
+      spotMarket.marketIndex,
+    );
+    await this.driftClient.accountSubscriber.addOracle({
+      publicKey: spotMarket.oracle,
+      source: spotMarket.oracleSource,
+    });
+  }
+
+  public async getPerpMarket(marketIndex: number): Promise<PerpMarketAccount> {
+    const key = await getPerpMarketPublicKey(
+      this.driftProgram.programId,
+      marketIndex,
+    );
+    return (await this.driftProgram.account.PerpMarket.fetch(
+      key,
+    )) as any as PerpMarketAccount;
+  }
+
+  private async addPerpMarketToDriftClient(perpMarket: PerpMarketAccount) {
+    await this.driftClient.accountSubscriber.addPerpMarket(
+      perpMarket.marketIndex,
+    );
+    await this.driftClient.accountSubscriber.addOracle({
+      publicKey: perpMarket.amm.oracle,
+      source: perpMarket.amm.oracleSource,
+    });
+  }
+
+  private async calculateVaultEquity(params: {
+    address?: PublicKey;
+    vault?: Vault;
+    factorUnrealizedPNL?: boolean;
+  }): Promise<BN> {
+    try {
+      if (!this.vaultClient) {
+        throw new Error("PropShopClient not initialized");
+      }
+      // defaults to true if undefined
+      let factorUnrealizedPNL = true;
+      if (params.factorUnrealizedPNL !== undefined) {
+        factorUnrealizedPNL = params.factorUnrealizedPNL;
+      }
+
+      let vaultAccount: Vault;
+      if (params.address !== undefined) {
+        // @ts-ignore
+        vaultAccount = await this.program.account.vault.fetch(params.address);
+      } else if (params.vault !== undefined) {
+        vaultAccount = params.vault;
+      } else {
+        throw new Error("Must supply address or vault");
+      }
+
+      const user = await this.vaultClient.getSubscribedVaultUser(
+        vaultAccount.user,
+      );
+
+      // @ts-ignore
+      const userAccount: UserAccount = user.getUserAccount();
+      const netSpotValue = await this.getNetSpotMarketValue(userAccount);
+
+      if (factorUnrealizedPNL) {
+        const unrealizedPnl = user.getUnrealizedPNL(true, undefined, undefined);
+        return netSpotValue.add(unrealizedPnl);
+      } else {
+        return netSpotValue;
+      }
+    } catch (err) {
+      console.error("VaultClient ~ err:", err);
+      return ZERO;
+    }
+  }
+
+  private getActivePerpPositions(userKey: PublicKey): PerpPosition[] {
+    const user = this._users.get(userKey.toString());
+    if (!user) {
+      throw new Error("User not cached");
+    }
+    return user.perpPositions.filter(
+      (pos) =>
+        !pos.baseAssetAmount.eq(ZERO) ||
+        !pos.quoteAssetAmount.eq(ZERO) ||
+        !(pos.openOrders == 0) ||
+        !pos.lpShares.eq(ZERO),
+    );
+  }
+
+  private async getOraclePriceData(oracle: OracleInfo) {
+    const oracleClient = this.oracleClientCache.get(
+      oracle.source,
+      this.connection,
+      this.driftProgram as any as anchor.Program,
+    );
+    if (!oracleClient) {
+      throw new Error("OracleClient not initialized");
+    }
+    const acct = await this.connection.getAccountInfo(oracle.publicKey);
+    if (!acct) {
+      throw new Error(
+        `Oracle account not found for ${oracle.publicKey.toString()}`,
+      );
+    }
+    return oracleClient.getOraclePriceDataFromBuffer(acct.data);
+  }
+
+  private async getUnrealizedPNL(
+    userKey: PublicKey,
+    withFunding?: boolean,
+    marketIndex?: number,
+    withWeightMarginCategory?: MarginCategory,
+    strict = false,
+  ): BN {
+    return this.getActivePerpPositions(userKey)
+      .filter((pos) =>
+        marketIndex !== undefined ? pos.marketIndex === marketIndex : true,
+      )
+      .reduce(async (unrealizedPnl, perpPosition) => {
+        const market = (await this.getPerpMarket(perpPosition.marketIndex))!;
+        const oraclePriceData = await this.getOraclePriceData({
+          publicKey: market.amm.oracle,
+          source: market.amm.oracleSource,
+        });
+
+        const quoteSpotMarket = (await this.getSpotMarket(
+          market.quoteSpotMarketIndex,
+        ))!;
+        const quoteOraclePriceData = await this.getOraclePriceData({
+          publicKey: quoteSpotMarket.oracle,
+          source: quoteSpotMarket.oracleSource,
+        });
+
+        if (perpPosition.lpShares.gt(ZERO)) {
+          perpPosition = this.getPerpPositionWithLPSettle(
+            perpPosition.marketIndex,
+            undefined,
+            !!withWeightMarginCategory,
+          )[0];
+        }
+
+        let positionUnrealizedPnl = calculatePositionPNL(
+          market,
+          perpPosition,
+          withFunding,
+          oraclePriceData,
+        );
+
+        let quotePrice;
+        if (strict && positionUnrealizedPnl.gt(ZERO)) {
+          quotePrice = BN.min(
+            quoteOraclePriceData.price,
+            quoteSpotMarket.historicalOracleData.lastOraclePriceTwap5Min,
+          );
+        } else if (strict && positionUnrealizedPnl.lt(ZERO)) {
+          quotePrice = BN.max(
+            quoteOraclePriceData.price,
+            quoteSpotMarket.historicalOracleData.lastOraclePriceTwap5Min,
+          );
+        } else {
+          quotePrice = quoteOraclePriceData.price;
+        }
+
+        positionUnrealizedPnl = positionUnrealizedPnl
+          .mul(quotePrice)
+          .div(PRICE_PRECISION);
+
+        if (withWeightMarginCategory !== undefined) {
+          if (positionUnrealizedPnl.gt(ZERO)) {
+            positionUnrealizedPnl = positionUnrealizedPnl
+              .mul(
+                calculateUnrealizedAssetWeight(
+                  market,
+                  quoteSpotMarket,
+                  positionUnrealizedPnl,
+                  withWeightMarginCategory,
+                  oraclePriceData,
+                ),
+              )
+              .div(new BN(SPOT_MARKET_WEIGHT_PRECISION));
+          }
+        }
+
+        return unrealizedPnl.add(positionUnrealizedPnl);
+      }, ZERO);
+  }
+
+  private async getNetSpotMarketValue(
+    userAccount: UserAccount,
+    marketIndex?: number,
+    marginCategory?: MarginCategory,
+    liquidationBuffer?: BN,
+    includeOpenOrders?: boolean,
+    strict = false,
+    now?: BN,
+  ): Promise<BN> {
+    marginCategory = marginCategory || "Initial";
+    now = now || new BN(new Date().getTime() / 1000);
+    let netQuoteValue = ZERO;
+    let totalAssetValue = ZERO;
+    let totalLiabilityValue = ZERO;
+    for (const spotPosition of userAccount.spotPositions) {
+      const countForBase =
+        marketIndex === undefined || spotPosition.marketIndex === marketIndex;
+
+      const countForQuote =
+        marketIndex === undefined ||
+        marketIndex === QUOTE_SPOT_MARKET_INDEX ||
+        (includeOpenOrders && spotPosition.openOrders !== 0);
+      if (
+        isSpotPositionAvailable(spotPosition) ||
+        (!countForBase && !countForQuote)
+      ) {
+        continue;
+      }
+
+      const spotMarketAccount = await this.getSpotMarket(
+        spotPosition.marketIndex,
+      );
+      await this.addSpotMarketToDriftClient(spotMarketAccount);
+      const oraclePriceData = this.driftClient.getOracleDataForSpotMarket(
+        spotPosition.marketIndex,
+      );
+
+      let twap5min;
+      if (strict) {
+        twap5min = calculateLiveOracleTwap(
+          spotMarketAccount.historicalOracleData,
+          oraclePriceData,
+          now,
+          FIVE_MINUTE, // 5MIN
+        );
+      }
+      const strictOraclePrice = new StrictOraclePrice(
+        oraclePriceData.price,
+        twap5min,
+      );
+
+      if (
+        spotPosition.marketIndex === QUOTE_SPOT_MARKET_INDEX &&
+        countForQuote
+      ) {
+        const tokenAmount = getSignedTokenAmount(
+          getTokenAmount(
+            spotPosition.scaledBalance,
+            spotMarketAccount,
+            spotPosition.balanceType,
+          ),
+          spotPosition.balanceType,
+        );
+
+        if (isVariant(spotPosition.balanceType, "borrow")) {
+          const weightedTokenValue = this.getSpotLiabilityValue(
+            tokenAmount,
+            strictOraclePrice,
+            spotMarketAccount,
+            userAccount,
+            marginCategory,
+            liquidationBuffer,
+          ).abs();
+
+          netQuoteValue = netQuoteValue.sub(weightedTokenValue);
+        } else {
+          const weightedTokenValue = this.getSpotAssetValue(
+            tokenAmount,
+            strictOraclePrice,
+            spotMarketAccount,
+            userAccount,
+            marginCategory,
+          );
+
+          netQuoteValue = netQuoteValue.add(weightedTokenValue);
+        }
+
+        continue;
+      }
+
+      if (!includeOpenOrders && countForBase) {
+        if (isVariant(spotPosition.balanceType, "borrow")) {
+          const tokenAmount = getSignedTokenAmount(
+            getTokenAmount(
+              spotPosition.scaledBalance,
+              spotMarketAccount,
+              spotPosition.balanceType,
+            ),
+            SpotBalanceType.BORROW,
+          );
+          const liabilityValue = this.getSpotLiabilityValue(
+            tokenAmount,
+            strictOraclePrice,
+            spotMarketAccount,
+            userAccount,
+            marginCategory,
+            liquidationBuffer,
+          ).abs();
+          totalLiabilityValue = totalLiabilityValue.add(liabilityValue);
+
+          continue;
+        } else {
+          const tokenAmount = getTokenAmount(
+            spotPosition.scaledBalance,
+            spotMarketAccount,
+            spotPosition.balanceType,
+          );
+          const assetValue = this.getSpotAssetValue(
+            tokenAmount,
+            strictOraclePrice,
+            spotMarketAccount,
+            userAccount,
+            marginCategory,
+          );
+          totalAssetValue = totalAssetValue.add(assetValue);
+
+          continue;
+        }
+      }
+
+      const {
+        tokenAmount: worstCaseTokenAmount,
+        ordersValue: worstCaseQuoteTokenAmount,
+      } = getWorstCaseTokenAmounts(
+        spotPosition,
+        spotMarketAccount,
+        strictOraclePrice,
+        marginCategory,
+        userAccount.maxMarginRatio,
+      );
+
+      if (worstCaseTokenAmount.gt(ZERO) && countForBase) {
+        const baseAssetValue = this.getSpotAssetValue(
+          worstCaseTokenAmount,
+          strictOraclePrice,
+          spotMarketAccount,
+          userAccount,
+          marginCategory,
+        );
+
+        totalAssetValue = totalAssetValue.add(baseAssetValue);
+      }
+
+      if (worstCaseTokenAmount.lt(ZERO) && countForBase) {
+        const baseLiabilityValue = this.getSpotLiabilityValue(
+          worstCaseTokenAmount,
+          strictOraclePrice,
+          spotMarketAccount,
+          userAccount,
+          marginCategory,
+          liquidationBuffer,
+        ).abs();
+
+        totalLiabilityValue = totalLiabilityValue.add(baseLiabilityValue);
+      }
+
+      if (worstCaseQuoteTokenAmount.gt(ZERO) && countForQuote) {
+        netQuoteValue = netQuoteValue.add(worstCaseQuoteTokenAmount);
+      }
+
+      if (worstCaseQuoteTokenAmount.lt(ZERO) && countForQuote) {
+        let weight = SPOT_MARKET_WEIGHT_PRECISION;
+        if (marginCategory === "Initial") {
+          weight = BN.max(weight, new BN(userAccount.maxMarginRatio));
+        }
+
+        const weightedTokenValue = worstCaseQuoteTokenAmount
+          .abs()
+          .mul(weight)
+          .div(SPOT_MARKET_WEIGHT_PRECISION);
+
+        netQuoteValue = netQuoteValue.sub(weightedTokenValue);
+      }
+
+      totalLiabilityValue = totalLiabilityValue.add(
+        new BN(spotPosition.openOrders).mul(OPEN_ORDER_MARGIN_REQUIREMENT),
+      );
+    }
+
+    if (marketIndex === undefined || marketIndex === QUOTE_SPOT_MARKET_INDEX) {
+      if (netQuoteValue.gt(ZERO)) {
+        totalAssetValue = totalAssetValue.add(netQuoteValue);
+      } else {
+        totalLiabilityValue = totalLiabilityValue.add(netQuoteValue.abs());
+      }
+    }
+
+    return totalAssetValue.sub(totalLiabilityValue);
+  }
+
+  private getSpotLiabilityValue(
+    tokenAmount: BN,
+    strictOraclePrice: StrictOraclePrice,
+    spotMarketAccount: SpotMarketAccount,
+    userAccount: UserAccount,
+    marginCategory?: MarginCategory,
+    liquidationBuffer?: BN,
+  ): BN {
+    let liabilityValue = getStrictTokenValue(
+      tokenAmount,
+      spotMarketAccount.decimals,
+      strictOraclePrice,
+    );
+
+    if (marginCategory !== undefined) {
+      let weight = calculateLiabilityWeight(
+        tokenAmount,
+        spotMarketAccount,
+        marginCategory,
+      );
+
+      if (
+        marginCategory === "Initial" &&
+        spotMarketAccount.marketIndex !== QUOTE_SPOT_MARKET_INDEX
+      ) {
+        weight = BN.max(
+          weight,
+          SPOT_MARKET_WEIGHT_PRECISION.addn(userAccount.maxMarginRatio),
+        );
+      }
+
+      if (liquidationBuffer !== undefined) {
+        weight = weight.add(liquidationBuffer);
+      }
+
+      liabilityValue = liabilityValue
+        .mul(weight)
+        .div(SPOT_MARKET_WEIGHT_PRECISION);
+    }
+
+    return liabilityValue;
+  }
+
+  private getSpotAssetValue(
+    tokenAmount: BN,
+    strictOraclePrice: StrictOraclePrice,
+    spotMarketAccount: SpotMarketAccount,
+    userAccount: UserAccount,
+    marginCategory?: MarginCategory,
+  ): BN {
+    let assetValue = getStrictTokenValue(
+      tokenAmount,
+      spotMarketAccount.decimals,
+      strictOraclePrice,
+    );
+
+    if (marginCategory !== undefined) {
+      let weight = calculateAssetWeight(
+        tokenAmount,
+        strictOraclePrice.current,
+        spotMarketAccount,
+        marginCategory,
+      );
+
+      if (
+        marginCategory === "Initial" &&
+        spotMarketAccount.marketIndex !== QUOTE_SPOT_MARKET_INDEX
+      ) {
+        const userCustomAssetWeight = BN.max(
+          ZERO,
+          SPOT_MARKET_WEIGHT_PRECISION.subn(userAccount.maxMarginRatio),
+        );
+        weight = BN.min(weight, userCustomAssetWeight);
+      }
+
+      assetValue = assetValue.mul(weight).div(SPOT_MARKET_WEIGHT_PRECISION);
+    }
+
+    return assetValue;
+  }
+
+  private async getPerpPositionWithLPSettle(
+    marketIndex: number,
+    originalPosition?: PerpPosition,
+    burnLpShares = false,
+    includeRemainderInBaseAmount = false,
+  ): [PerpPosition, BN, BN] {
+    originalPosition =
+      originalPosition ??
+      this.getPerpPosition(marketIndex) ??
+      this.getEmptyPosition(marketIndex);
+
+    if (originalPosition.lpShares.eq(ZERO)) {
+      return [originalPosition, ZERO, ZERO];
+    }
+
+    const position = this.getClonedPosition(originalPosition);
+    const market = this.driftClient.getPerpMarketAccount(position.marketIndex);
+
+    if (market.amm.perLpBase != position.perLpBase) {
+      // perLpBase = 1 => per 10 LP shares, perLpBase = -1 => per 0.1 LP shares
+      const expoDiff = market.amm.perLpBase - position.perLpBase;
+      const marketPerLpRebaseScalar = new BN(10 ** Math.abs(expoDiff));
+
+      if (expoDiff > 0) {
+        position.lastBaseAssetAmountPerLp =
+          position.lastBaseAssetAmountPerLp.mul(marketPerLpRebaseScalar);
+        position.lastQuoteAssetAmountPerLp =
+          position.lastQuoteAssetAmountPerLp.mul(marketPerLpRebaseScalar);
+      } else {
+        position.lastBaseAssetAmountPerLp =
+          position.lastBaseAssetAmountPerLp.div(marketPerLpRebaseScalar);
+        position.lastQuoteAssetAmountPerLp =
+          position.lastQuoteAssetAmountPerLp.div(marketPerLpRebaseScalar);
+      }
+
+      position.perLpBase = position.perLpBase + expoDiff;
+    }
+
+    const nShares = position.lpShares;
+
+    // incorp unsettled funding on pre settled position
+    const quoteFundingPnl = calculatePositionFundingPNL(market, position);
+
+    let baseUnit = AMM_RESERVE_PRECISION;
+    if (market.amm.perLpBase == position.perLpBase) {
+      if (
+        position.perLpBase >= 0 &&
+        position.perLpBase <= AMM_RESERVE_PRECISION_EXP.toNumber()
+      ) {
+        const marketPerLpRebase = new BN(10 ** market.amm.perLpBase);
+        baseUnit = baseUnit.mul(marketPerLpRebase);
+      } else if (
+        position.perLpBase < 0 &&
+        position.perLpBase >= -AMM_RESERVE_PRECISION_EXP.toNumber()
+      ) {
+        const marketPerLpRebase = new BN(10 ** Math.abs(market.amm.perLpBase));
+        baseUnit = baseUnit.div(marketPerLpRebase);
+      } else {
+        throw "cannot calc";
+      }
+    } else {
+      throw "market.amm.perLpBase != position.perLpBase";
+    }
+
+    const deltaBaa = market.amm.baseAssetAmountPerLp
+      .sub(position.lastBaseAssetAmountPerLp)
+      .mul(nShares)
+      .div(baseUnit);
+    const deltaQaa = market.amm.quoteAssetAmountPerLp
+      .sub(position.lastQuoteAssetAmountPerLp)
+      .mul(nShares)
+      .div(baseUnit);
+
+    function sign(v: BN) {
+      return v.isNeg() ? new BN(-1) : new BN(1);
+    }
+
+    function standardize(amount: BN, stepSize: BN) {
+      const remainder = amount.abs().mod(stepSize).mul(sign(amount));
+      const standardizedAmount = amount.sub(remainder);
+      return [standardizedAmount, remainder];
+    }
+
+    const [standardizedBaa, remainderBaa] = standardize(
+      deltaBaa,
+      market.amm.orderStepSize,
+    );
+
+    position.remainderBaseAssetAmount += remainderBaa.toNumber();
+
+    if (
+      Math.abs(position.remainderBaseAssetAmount) >
+      market.amm.orderStepSize.toNumber()
+    ) {
+      const [newStandardizedBaa, newRemainderBaa] = standardize(
+        new BN(position.remainderBaseAssetAmount),
+        market.amm.orderStepSize,
+      );
+      position.baseAssetAmount =
+        position.baseAssetAmount.add(newStandardizedBaa);
+      position.remainderBaseAssetAmount = newRemainderBaa.toNumber();
+    }
+
+    let dustBaseAssetValue = ZERO;
+    if (burnLpShares && position.remainderBaseAssetAmount != 0) {
+      const oraclePriceData = this.driftClient.getOracleDataForPerpMarket(
+        position.marketIndex,
+      );
+      dustBaseAssetValue = new BN(Math.abs(position.remainderBaseAssetAmount))
+        .mul(oraclePriceData.price)
+        .div(AMM_RESERVE_PRECISION)
+        .add(ONE);
+    }
+
+    let updateType;
+    if (position.baseAssetAmount.eq(ZERO)) {
+      updateType = "open";
+    } else if (sign(position.baseAssetAmount).eq(sign(deltaBaa))) {
+      updateType = "increase";
+    } else if (position.baseAssetAmount.abs().gt(deltaBaa.abs())) {
+      updateType = "reduce";
+    } else if (position.baseAssetAmount.abs().eq(deltaBaa.abs())) {
+      updateType = "close";
+    } else {
+      updateType = "flip";
+    }
+
+    let newQuoteEntry;
+    let pnl;
+    if (updateType == "open" || updateType == "increase") {
+      newQuoteEntry = position.quoteEntryAmount.add(deltaQaa);
+      pnl = ZERO;
+    } else if (updateType == "reduce" || updateType == "close") {
+      newQuoteEntry = position.quoteEntryAmount.sub(
+        position.quoteEntryAmount
+          .mul(deltaBaa.abs())
+          .div(position.baseAssetAmount.abs()),
+      );
+      pnl = position.quoteEntryAmount.sub(newQuoteEntry).add(deltaQaa);
+    } else {
+      newQuoteEntry = deltaQaa.sub(
+        deltaQaa.mul(position.baseAssetAmount.abs()).div(deltaBaa.abs()),
+      );
+      pnl = position.quoteEntryAmount.add(deltaQaa.sub(newQuoteEntry));
+    }
+    position.quoteEntryAmount = newQuoteEntry;
+    position.baseAssetAmount = position.baseAssetAmount.add(standardizedBaa);
+    position.quoteAssetAmount = position.quoteAssetAmount
+      .add(deltaQaa)
+      .add(quoteFundingPnl)
+      .sub(dustBaseAssetValue);
+    position.quoteBreakEvenAmount = position.quoteBreakEvenAmount
+      .add(deltaQaa)
+      .add(quoteFundingPnl)
+      .sub(dustBaseAssetValue);
+
+    // update open bids/asks
+    const [marketOpenBids, marketOpenAsks] = calculateMarketOpenBidAsk(
+      market.amm.baseAssetReserve,
+      market.amm.minBaseAssetReserve,
+      market.amm.maxBaseAssetReserve,
+      market.amm.orderStepSize,
+    );
+    const lpOpenBids = marketOpenBids
+      .mul(position.lpShares)
+      .div(market.amm.sqrtK);
+    const lpOpenAsks = marketOpenAsks
+      .mul(position.lpShares)
+      .div(market.amm.sqrtK);
+    position.openBids = lpOpenBids.add(position.openBids);
+    position.openAsks = lpOpenAsks.add(position.openAsks);
+
+    // eliminate counting funding on settled position
+    if (position.baseAssetAmount.gt(ZERO)) {
+      position.lastCumulativeFundingRate = market.amm.cumulativeFundingRateLong;
+    } else if (position.baseAssetAmount.lt(ZERO)) {
+      position.lastCumulativeFundingRate =
+        market.amm.cumulativeFundingRateShort;
+    } else {
+      position.lastCumulativeFundingRate = ZERO;
+    }
+
+    const remainderBeforeRemoval = new BN(position.remainderBaseAssetAmount);
+
+    if (includeRemainderInBaseAmount) {
+      position.baseAssetAmount = position.baseAssetAmount.add(
+        remainderBeforeRemoval,
+      );
+      position.remainderBaseAssetAmount = 0;
+    }
+
+    return [position, remainderBeforeRemoval, pnl];
   }
 }
