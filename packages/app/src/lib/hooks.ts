@@ -20,56 +20,52 @@ export function useClient(): PropShopClient | undefined {
     const skipFetching = env === "dev";
     const dummyWallet = !wallet.publicKey;
 
-    const run = async () => {
-      // if (!client && dummyWallet) {
-      //   const _wallet = PropShopClient.keypairToWalletContextState(
-      //     Keypair.generate(),
-      //   );
-      //   // initialize client with real wallet
-      //   const _client = new PropShopClient({
-      //     wallet: _wallet,
-      //     connection: connection.connection,
-      //     skipFetching,
-      //     dummyWallet,
-      //   });
-      //   console.debug(`dummy wallet`);
-      //   await _client.initialize();
-      //   setClient(_client);
-      // } else if (!client && !dummyWallet) {
-      //   // initialize client with real wallet
-      //   const _client = new PropShopClient({
-      //     wallet,
-      //     connection: connection.connection,
-      //     skipFetching,
-      //     dummyWallet,
-      //   });
-      //   console.debug(
-      //     `set client with wallet: ${wallet.publicKey?.toString()}`,
-      //   );
-      //   await _client.initialize();
-      //   setClient(_client);
-      // } else if (
-      //   client &&
-      //   client.dummyWallet &&
-      //   !dummyWallet &&
-      //   !client.loading
-      // ) {
-      //   // client was initialized with dummy wallet, so reinitialize with real wallet
-      //   console.debug(`update dummy wallet: ${wallet.publicKey?.toString()}`);
-      //   await client.updateWallet({ wallet });
-      // } else if (
-      //   client &&
-      //   wallet.publicKey &&
-      //   !client.publicKey.equals(wallet.publicKey) &&
-      //   !client.loading
-      // ) {
-      //   // different wallet connected than the one in client, so reinitialize
-      //   console.debug(
-      //     `update connected wallet: ${wallet.publicKey?.toString()}`,
-      //   );
-      //   await client.updateWallet({ wallet });
-      // }
+    // const run = async () => {
+    //   if (!client) {
+    //     let _wallet: WalletContextState;
+    //     if (dummyWallet) {
+    //       _wallet = PropShopClient.keypairToWalletContextState(
+    //         Keypair.generate(),
+    //       );
+    //     } else {
+    //       _wallet = wallet;
+    //     }
+    //     // initialize client with real wallet
+    //     const _client = new PropShopClient({
+    //       wallet: _wallet,
+    //       connection: connection.connection,
+    //       skipFetching,
+    //       dummyWallet,
+    //     });
+    //     console.debug(
+    //       `set client with wallet: ${wallet.publicKey?.toString()}`,
+    //     );
+    //     await _client.initialize();
+    //     setClient(_client);
+    //   } else if (
+    //     client &&
+    //     client.dummyWallet &&
+    //     !dummyWallet &&
+    //     !client.loading
+    //   ) {
+    //     // client was initialized with dummy wallet, so reinitialize with real wallet
+    //     console.debug(`update dummy wallet: ${wallet.publicKey?.toString()}`);
+    //     await client.updateWallet({ wallet });
+    //   } else if (
+    //     client &&
+    //     wallet.publicKey &&
+    //     !client.publicKey.equals(wallet.publicKey) &&
+    //     !client.loading
+    //   ) {
+    //     // different wallet connected than the one in client, so reinitialize
+    //     console.debug(
+    //       `update connected wallet: ${wallet.publicKey?.toString()}`,
+    //     );
+    //     await client.updateWallet({ wallet });
+    //   }
+    // };
 
+    const run = async () => {
       if (!client) {
         let _wallet: WalletContextState;
         if (dummyWallet) {
@@ -89,8 +85,8 @@ export function useClient(): PropShopClient | undefined {
         console.debug(
           `set client with wallet: ${wallet.publicKey?.toString()}`,
         );
-        await _client.initialize();
         setClient(_client);
+        await _client.initialize();
       } else if (
         client &&
         client.dummyWallet &&
@@ -98,7 +94,7 @@ export function useClient(): PropShopClient | undefined {
         !client.loading
       ) {
         // client was initialized with dummy wallet, so reinitialize with real wallet
-        console.debug(`update dummy wallet: ${wallet.publicKey?.toString()}`);
+        console.debug(`override dummy wallet: ${wallet.publicKey?.toString()}`);
         await client.updateWallet({ wallet });
       } else if (
         client &&
@@ -117,7 +113,7 @@ export function useClient(): PropShopClient | undefined {
     run();
   }, [client?.loading, wallet.publicKey]);
 
-  return client;
+  return client?.loading ? undefined : client;
 }
 
 export function useOutsideClick(callback: () => void) {

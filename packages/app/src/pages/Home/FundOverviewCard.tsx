@@ -133,6 +133,7 @@ function Container({
           alignItems: "center",
           flexDirection: "column",
           cursor: "pointer",
+          p: 1,
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}

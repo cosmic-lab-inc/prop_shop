@@ -1084,6 +1084,7 @@ export async function bootstrapSignerClientAndUser(params: {
   );
   const program = new Program(IDL, programId, provider);
   const vaultClient = new VaultClient({
+    // @ts-ignore
     driftClient,
     program,
     cliMode: vaultClientCliMode ?? true,

@@ -26,6 +26,8 @@ import {
   getUserAccountPublicKeySync,
   getUserStatsAccountPublicKey,
   IWallet,
+  OracleInfo,
+  PerpMarketAccount,
   QUOTE_PRECISION,
   SpotMarketAccount,
   TEN,
@@ -33,6 +35,7 @@ import {
   UserStatsAccount,
 } from "@drift-labs/sdk";
 import {
+  DRIFT_PROGRAM_ID,
   DRIFT_VAULTS_PROGRAM_ID,
   ONE_DAY,
   PROP_SHOP_PERCENT_ANNUAL_FEE,
@@ -42,7 +45,8 @@ import {
   TEST_USDC_MINT_AUTHORITY,
 } from "./constants";
 import { getAssociatedTokenAddress } from "./programs";
-import { Drift } from "./idl/drift";
+// import { DRIFT_IDL } from "./idl";
+import DRIFT_IDL from "./idl/drift.json";
 import {
   percentPrecisionToPercent,
   percentToPercentPrecision,
@@ -91,7 +95,6 @@ import {
   WalletReadyState,
 } from "@solana/wallet-adapter-base";
 import { Wallet, WalletContextState } from "@solana/wallet-adapter-react";
-import { WebSocketSubscriber } from "./websocketSubscriber";
 import {
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
@@ -104,6 +107,13 @@ import {
   keypairToAsyncSigner,
   walletAdapterToAsyncSigner,
 } from "@cosmic-lab/data-source";
+import { WebSocketSubscriber } from "./websocketSubscriber";
+
+interface DriftMarkets {
+  spotMarkets: SpotMarketAccount[];
+  perpMarkets: PerpMarketAccount[];
+  oracleInfos: Map<string, OracleInfo>;
+}
 
 export class PropShopClient {
   private readonly connection: Connection;
@@ -212,6 +222,19 @@ export class PropShopClient {
       DRIFT_VAULTS_PROGRAM_ID,
       provider,
     );
+    const driftProgram = new anchor.Program(
+      DRIFT_IDL as any as anchor.Idl,
+      DRIFT_PROGRAM_ID,
+      provider,
+    );
+
+    const preMarkets = Date.now();
+    const markets = await this.driftMarkets(
+      driftProgram as any as anchor.Program,
+    );
+    const slot = await connection.getSlot();
+    // 3s
+    console.log(`fetched Drift markets in ${Date.now() - preMarkets}ms`);
 
     const driftClient = new DriftClient({
       connection,
@@ -221,10 +244,13 @@ export class PropShopClient {
       },
       activeSubAccountId,
       accountSubscription,
+      spotMarketIndexes: markets.spotMarkets.map((m) => m.marketIndex),
+      perpMarketIndexes: markets.perpMarkets.map((m) => m.marketIndex),
+      oracleInfos: Array.from(markets.oracleInfos.values()),
     });
     const preDriftSub = Date.now();
-    await driftClient.subscribe();
-    // this takes about 10-15s which can't be reduced much more
+    // await driftClient.subscribe();
+    await this.driftClientSubscribe(driftClient);
     console.log(`DriftClient subscribed in ${Date.now() - preDriftSub}ms`);
 
     this.vaultClient = new VaultClient({
@@ -262,21 +288,16 @@ export class PropShopClient {
 
     if (!this.disableCache) {
       const preSub = Date.now();
-      await this.subscribe(driftVaultsProgram);
-      // takes about 2s for websocket and 4s for polling
-      console.log(`cache subscribed in ${Date.now() - preSub}ms`);
+      await this.loadCache(driftVaultsProgram);
+      // 2500ms websocket, 1500ms polling
+      console.log(`cache loaded in ${Date.now() - preSub}ms`);
     }
-    // const preFo = Date.now();
-    // const funds = await this.fetchFundOverviews();
-    // console.log(
-    //   `fetched ${funds.length} fund overviews in ${Date.now() - preFo}ms`,
-    // );
 
     console.log(`initialized PropShopClient in ${Date.now() - now}ms`);
     this.loading = false;
   }
 
-  async subscribe(program: anchor.Program<DriftVaults>) {
+  async loadCache(program: anchor.Program<DriftVaults>) {
     if (this.disableCache) {
       return;
     }
@@ -299,8 +320,74 @@ export class PropShopClient {
     await this._cache.subscribe();
   }
 
+  private async driftMarkets(
+    driftProgram: anchor.Program,
+  ): Promise<DriftMarkets> {
+    if (!this.vaultClient) {
+      throw new Error("PropShopClient not initialized");
+    }
+
+    const perpMarkets: PerpMarketAccount[] = [];
+    const spotMarkets: SpotMarketAccount[] = [];
+    const oracleInfos: Map<string, OracleInfo> = new Map();
+
+    const perpMarketProgramAccounts =
+      (await driftProgram.account.perpMarket.all()) as ProgramAccount<PerpMarketAccount>[];
+    const spotMarketProgramAccounts =
+      (await driftProgram.account.spotMarket.all()) as ProgramAccount<SpotMarketAccount>[];
+
+    for (const perpMarketProgramAccount of perpMarketProgramAccounts) {
+      const perpMarket = perpMarketProgramAccount.account as PerpMarketAccount;
+      perpMarkets.push(perpMarket);
+      oracleInfos.set(perpMarket.amm.oracle.toString(), {
+        publicKey: perpMarket.amm.oracle,
+        source: perpMarket.amm.oracleSource,
+      });
+    }
+
+    for (const spotMarketProgramAccount of spotMarketProgramAccounts) {
+      const spotMarket = spotMarketProgramAccount.account as SpotMarketAccount;
+      spotMarkets.push(spotMarket);
+      oracleInfos.set(spotMarket.oracle.toString(), {
+        publicKey: spotMarket.oracle,
+        source: spotMarket.oracleSource,
+      });
+    }
+
+    return {
+      spotMarkets,
+      perpMarkets,
+      oracleInfos,
+    };
+  }
+
   async shutdown(): Promise<void> {
     await this._cache?.unsubscribe();
+  }
+
+  private async driftClientSubscribe(driftClient: DriftClient) {
+    const preUserSub = Date.now();
+    const subUsers = await driftClient.addAndSubscribeToUsers();
+    // 1.2s
+    console.log(
+      `DriftClient subscribed to users in ${Date.now() - preUserSub}ms`,
+    );
+
+    const preAcctSub = Date.now();
+    const subAcctSub = await driftClient.accountSubscriber.subscribe();
+    console.log(
+      `DriftClient subscribed to accounts in ${Date.now() - preAcctSub}ms`,
+    );
+
+    let subUserStats: boolean = false;
+    if (driftClient.userStats !== undefined) {
+      const preStatsSub = Date.now();
+      subUserStats = await driftClient.userStats.subscribe();
+      console.log(
+        `DriftClient subscribed to user stats in ${Date.now() - preStatsSub}ms`,
+      );
+    }
+    driftClient.isSubscribed = subUsers && subAcctSub && subUserStats;
   }
 
   get publicKey(): PublicKey {
@@ -312,7 +399,7 @@ export class PropShopClient {
 
   getVaultDepositorAddress(vault: PublicKey): PublicKey {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     return getVaultDepositorAddressSync(
       this.vaultClient.program.programId,
@@ -410,7 +497,7 @@ export class PropShopClient {
   //   usdcAta: PublicKey;
   // }> {
   //   if (!this.vaultClient) {
-  //     throw new Error("VaultClient not initialized");
+  //     throw new Error("PropShopClient not initialized");
   //   }
   //   const spotMarket = this.vaultClient.driftClient.getSpotMarketAccount(0);
   //   if (!spotMarket) {
@@ -455,7 +542,7 @@ export class PropShopClient {
   //
 
   async spotMarketByIndex(
-    program: anchor.Program<Drift>,
+    driftProgram: anchor.Program,
     index: number,
   ): Promise<ProgramAccount<SpotMarketAccount>> {
     const filters: GetProgramAccountsFilter[] = [
@@ -469,7 +556,7 @@ export class PropShopClient {
     ];
     // @ts-ignore
     const res: ProgramAccount<SpotMarketAccount>[] =
-      await program.account.spotMarket.all(filters);
+      await driftProgram.account.spotMarket.all(filters);
     if (res.length > 0) {
       return res[0];
     } else {
@@ -597,7 +684,7 @@ export class PropShopClient {
     protocolsOnly?: boolean,
   ): Promise<ProgramAccount<Vault>[]> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
     const preFetch = Date.now();
@@ -622,7 +709,7 @@ export class PropShopClient {
     key: PublicKey,
   ): Promise<VaultDepositor | undefined> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     try {
       const vd: VaultDepositor =
@@ -640,7 +727,7 @@ export class PropShopClient {
     filterByAuthority?: boolean,
   ): Promise<ProgramAccount<VaultDepositor>[]> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     let filters: GetProgramAccountsFilter[] | undefined = undefined;
     if (filterByAuthority) {
@@ -848,7 +935,7 @@ export class PropShopClient {
     vaultDepositors?: Data<PublicKey, VaultDepositor>[],
   ): Promise<number> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     let _vaults: Data<PublicKey, Vault>[];
     if (vaults) {
@@ -1044,7 +1131,7 @@ export class PropShopClient {
     vaultDepositors?: Data<PublicKey, VaultDepositor>[],
   ): Promise<number> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     let vds: Data<PublicKey, VaultDepositor>[];
     if (!vaultDepositors) {
@@ -1066,7 +1153,7 @@ export class PropShopClient {
 
   public async joinVault(vault: PublicKey): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     if (!this.userInitialized()) {
       throw new Error("User not initialized");
@@ -1419,7 +1506,7 @@ export class PropShopClient {
 
   public async cancelWithdrawRequest(vault: PublicKey): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     if (!this.userInitialized()) {
       throw new Error("User not initialized");
@@ -1500,7 +1587,7 @@ export class PropShopClient {
 
   public async withdraw(vault: PublicKey): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     if (!this.userInitialized()) {
       throw new Error("User not initialized");
@@ -1685,7 +1772,7 @@ export class PropShopClient {
     snack: SnackInfo;
   }> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     if (params.redeemPeriod && params.redeemPeriod > ONE_DAY * 90) {
       throw new Error("Redeem period must be less than 90 days");
@@ -1761,7 +1848,7 @@ export class PropShopClient {
     delegate: PublicKey,
   ): Promise<TransactionInstruction> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     const vaultUser = getUserAccountPublicKeySync(
       this.vaultClient.driftClient.program.programId,
@@ -1783,7 +1870,7 @@ export class PropShopClient {
     delegate: PublicKey,
   ): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     if (!this.userInitialized()) {
       throw new Error("User not initialized");
@@ -1802,7 +1889,7 @@ export class PropShopClient {
 
   public async updateVaultIx(vault: PublicKey, config: UpdateVaultConfig) {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
     if (config.redeemPeriod && config.redeemPeriod > ONE_DAY * 90) {
       throw new Error("Redeem period must be less than 90 days");
@@ -1900,7 +1987,7 @@ export class PropShopClient {
     params: UpdateVaultConfig,
   ): Promise<SnackInfo> {
     if (!this.vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("PropShopClient not initialized");
     }
 
     const ixs: TransactionInstruction[] = [];
@@ -2564,7 +2651,6 @@ export class PropShopClient {
     const vdKey = this.getVaultDepositorAddress(vault);
 
     // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
-    // await this._cache?.fetch();
     await this.fetchVault(vault);
     await this.fetchVaultDepositor(vdKey);
 

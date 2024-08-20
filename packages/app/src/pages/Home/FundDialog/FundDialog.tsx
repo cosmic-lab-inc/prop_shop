@@ -21,12 +21,16 @@ export const FundDialog = observer(
   }) => {
     React.useEffect(() => {
       async function run() {
-        await client.createWithdrawTimer(vault);
-        await client.fetchVaultEquity(vault);
+        if (open) {
+          console.log("creating withdraw timer");
+          await client.createWithdrawTimer(vault);
+          console.log("created withdraw timer");
+          await client.fetchVaultEquity(vault);
+        }
       }
 
       run();
-    }, []);
+    }, [open]);
 
     return (
       <>

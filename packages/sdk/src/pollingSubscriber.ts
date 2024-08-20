@@ -114,33 +114,29 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     }
 
     if (this._subscriptionConfig.filters) {
-      const gpa: GetProgramAccountsResponse = (
-        await Promise.all(
-          this._subscriptionConfig.filters.map((filter) => {
-            const gpaConfig: GetProgramAccountsConfig = {
-              filters: [
-                {
-                  memcmp: {
-                    offset: 0,
-                    bytes: bs58.encode(
-                      BorshAccountsCoder.accountDiscriminator(
-                        capitalize(filter.accountName),
-                      ),
-                    ),
-                  },
-                },
-              ],
-            };
-            return this.program.provider.connection.getProgramAccounts(
-              this.program.programId,
-              gpaConfig,
-            );
-          }),
-        )
-      ).flat();
-
+      const gpas: GetProgramAccountsResponse[] = [];
       const discrims: Map<string, AccountGpaFilter> = new Map();
       for (const filter of this._subscriptionConfig.filters) {
+        const gpaConfig: GetProgramAccountsConfig = {
+          filters: [
+            {
+              memcmp: {
+                offset: 0,
+                bytes: bs58.encode(
+                  BorshAccountsCoder.accountDiscriminator(
+                    capitalize(filter.accountName),
+                  ),
+                ),
+              },
+            },
+          ],
+        };
+        gpas.push(
+          await this.program.provider.connection.getProgramAccounts(
+            this.program.programId,
+            gpaConfig,
+          ),
+        );
         const _accountName =
           this.program.account[filter.accountName].idlAccount.name;
         const discrim = bs58.encode(
@@ -148,38 +144,37 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         );
         discrims.set(discrim, filter);
       }
-      console.log(`polling config "filters" returned ${gpa.length} items`);
-      const slot = await this.program.provider.connection.getSlot();
-      gpa.forEach((value) => {
-        // get first 8 bytes of data
-        const discrim = bs58.encode(value.account.data.subarray(0, 8));
-        const filter = discrims.get(discrim);
-        if (!filter) {
-          throw new Error(`No filter found for discriminator: ${discrim}`);
-        }
-        try {
-          const accountName =
-            this.program.account[filter.accountName].idlAccount.name;
-          const decoded = this.program.account[
-            filter.accountName
-          ].coder.accounts.decodeUnchecked(accountName, value.account.data);
-          const dataAndSlot = {
-            data: value.account.data,
-            slot,
-          };
-          const sub: AccountSubscription = {
-            accountName: filter.accountName,
-            eventType: filter.eventType,
-            publicKey: value.pubkey,
-            decoded,
-            dataAndSlot,
-          };
-          this.subscriptions.set(sub.publicKey.toString(), sub);
-          subs.push(sub);
-        } catch (e: any) {
-          throw new Error(e);
+
+      gpas.forEach((gpa, index) => {
+        if (this._subscriptionConfig.filters) {
+          const filter = this._subscriptionConfig.filters[index];
+          try {
+            for (const value of gpa) {
+              const accountName =
+                this.program.account[filter.accountName].idlAccount.name;
+              const decoded = this.program.account[
+                filter.accountName
+              ].coder.accounts.decodeUnchecked(accountName, value.account.data);
+              const dataAndSlot = {
+                data: value.account.data,
+                slot,
+              };
+              const sub: AccountSubscription = {
+                accountName: filter.accountName,
+                eventType: filter.eventType,
+                publicKey: value.pubkey,
+                decoded,
+                dataAndSlot,
+              };
+              this.subscriptions.set(sub.publicKey.toString(), sub);
+              subs.push(sub);
+            }
+          } catch (e: any) {
+            throw new Error(e);
+          }
         }
       });
+      console.log(`polling config "filters" returned ${subs.length} items`);
     }
 
     if (this.isSubscribed || this.isSubscribing) {
