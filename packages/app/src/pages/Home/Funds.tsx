@@ -17,17 +17,12 @@ export const Funds = observer(({ client }: { client: PropShopClient }) => {
       process.env.ENV === "dev" ||
       process.env.RPC_URL === "http://localhost:8899"
     ) {
-      let _funds: FundOverview[] = client.fundOverviews.map((fund) => {
+      const _funds: FundOverview[] = client.fundOverviews.map((fund) => {
         return {
           ...fund,
           data: mockFundOverviews()[0].data,
         };
       });
-      _funds.sort((a, b) => a.lifetimePNL / a.tvl - b.lifetimePNL / b.tvl);
-      for (let i = 0; i < _funds.length; i++) {
-        console.log(`#${i}: ${_funds[i]?.title}`);
-      }
-
       setFunds(_funds);
     } else {
       setFunds(client.fundOverviews);

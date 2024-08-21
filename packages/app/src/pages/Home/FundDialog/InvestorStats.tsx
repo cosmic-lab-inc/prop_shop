@@ -199,9 +199,7 @@ export const InvestorStats = observer(
                 width: "100%",
               }}
             >
-              <ActionButton onClick={clickManageSettings}>
-                Manage Settings
-              </ActionButton>
+              <ActionButton onClick={clickManageSettings}>Manage</ActionButton>
             </Box>
           )}
         </Box>
@@ -222,7 +220,6 @@ const Stats = observer(
         // fetchVaultEquity sets the observed value, then this runs on initial render, yet the value isn't updated.
         // so we manually fetch here to update state and re-render (eye-roll...)
         await client.fetchVaultEquity(vault);
-        console.log(`use effect equity: ${client.vaultEquity(vault)}`);
         setEquity(client.vaultEquity(vault));
         setTimer(client.withdrawTimer(vault));
       }

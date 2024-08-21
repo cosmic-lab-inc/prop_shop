@@ -22,9 +22,7 @@ export const FundDialog = observer(
     React.useEffect(() => {
       async function run() {
         if (open) {
-          console.log("creating withdraw timer");
           await client.createWithdrawTimer(vault);
-          console.log("created withdraw timer");
           await client.fetchVaultEquity(vault);
         }
       }

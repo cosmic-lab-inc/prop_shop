@@ -46,6 +46,7 @@ import {
 } from "./constants";
 import { getAssociatedTokenAddress } from "./programs";
 import {
+  fundDollarPnl,
   percentPrecisionToPercent,
   percentToPercentPrecision,
   shortenAddress,
@@ -599,9 +600,13 @@ export class PropShopClient {
   }
 
   public get fundOverviews(): FundOverview[] {
-    return Array.from(this._fundOverviews.values()).sort(
-      (a, b) => a.lifetimePNL / a.tvl - b.lifetimePNL / b.tvl,
-    );
+    let values = Array.from(this._fundOverviews.values());
+    values.sort((a, b) => {
+      const _a = fundDollarPnl(a);
+      const _b = fundDollarPnl(b);
+      return _b - _a;
+    });
+    return values;
   }
 
   public async fetchVault(key: PublicKey): Promise<Vault | undefined> {
