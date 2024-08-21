@@ -289,7 +289,7 @@ export class PropShopClient {
     wallet: WalletContextState;
     dummyWallet?: boolean;
   }) {
-    this.loading = true;
+    // this.loading = true;
     const now = Date.now();
     this.dummyWallet = config.dummyWallet ?? false;
     this.wallet = config.wallet;
@@ -312,7 +312,7 @@ export class PropShopClient {
     const iWallet = PropShopClient.walletAdapterToIWallet(this.wallet);
     await this.driftClient.updateWallet(iWallet, undefined, 0);
     console.log(`updated wallet in ${Date.now() - now}ms`);
-    this.loading = false;
+    // this.loading = false;
   }
 
   private async driftMarkets(

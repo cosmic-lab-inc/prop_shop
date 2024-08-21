@@ -4,3 +4,4 @@ export * from "./AirdropIcon";
 export * from "./PlusIcon";
 export * from "./MinusIcon";
 export * from "./PropShopIcon";
+export * from "./IconSpinner";

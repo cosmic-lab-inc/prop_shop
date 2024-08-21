@@ -50,11 +50,6 @@ export function FundOverviewCard({
   const { vault, tvl, volume30d, lifetimePNL, title, investors, birth } =
     fundOverview;
 
-  // TVL = netDeposits + lifetimePNL, so TVL - lifetimePNL = netDeposits
-  // let pnl = (lifetimePNL / (tvl - lifetimePNL)) * 100;
-  // if (isNaN(pnl)) {
-  //   pnl = 0;
-  // }
   const pnl = lifetimePNL;
 
   const [open, setOpen] = React.useState(false);

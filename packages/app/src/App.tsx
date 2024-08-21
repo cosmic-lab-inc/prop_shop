@@ -17,7 +17,7 @@ import {
 } from "@solana/wallet-adapter-wallets";
 import { CssBaseline } from "@mui/material";
 import Box from "@mui/material/Box";
-import { Toolbar } from "./components";
+import { LoadScreen, Toolbar } from "./components";
 import { TOOLBAR_HEIGHT } from "./constants";
 import { ThemeWrapper } from "./styles";
 import { useClient } from "./lib";
@@ -81,6 +81,16 @@ const Context = observer(({ children }: { children: ReactNode }) => {
 
 const Content = observer(() => {
   const client = useClient();
+
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
+    if (client && !client.loading) {
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+  }, [client?.loading]);
+
   return (
     <Box sx={{ display: "flex" }}>
       <CssBaseline />
@@ -96,7 +106,13 @@ const Content = observer(() => {
           alignItems: "center",
         }}
       >
-        {client && <Home client={client} />}
+        {client ? (
+          <Home client={client} />
+        ) : (
+          <>
+            <LoadScreen open={loading} />
+          </>
+        )}
       </Box>
     </Box>
   );

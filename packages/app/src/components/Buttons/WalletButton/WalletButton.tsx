@@ -50,6 +50,7 @@ export function WalletButton({
       airdropSol={airdropSol}
       airdropUsdc={airdropUsdc}
       labels={LABELS}
+      client={client}
     />
   );
 }

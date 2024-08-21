@@ -1,6 +1,10 @@
 import {
+  adjectives,
   animals,
+  colors,
+  countries,
   languages,
+  names,
   starWars,
   uniqueNamesGenerator,
 } from "unique-names-generator";
@@ -19,15 +23,31 @@ export function randomName(
   charLimit: number = 32,
   separator: string = " ",
 ): string {
+  const dictionaries = [
+    languages,
+    starWars,
+    animals,
+    adjectives,
+    colors,
+    countries,
+    names,
+  ];
+  if (words > dictionaries.length) {
+    console.warn(
+      `Cannot generate a name with more than ${dictionaries.length} words`,
+    );
+    words = dictionaries.length;
+  }
+
   let _name = uniqueNamesGenerator({
-    dictionaries: [languages, starWars, animals],
+    dictionaries,
     separator,
     length: words,
     style: "capital",
   });
   while (_name.length > charLimit) {
     _name = uniqueNamesGenerator({
-      dictionaries: [languages, starWars, animals],
+      dictionaries,
       separator,
       length: words,
       style: "capital",

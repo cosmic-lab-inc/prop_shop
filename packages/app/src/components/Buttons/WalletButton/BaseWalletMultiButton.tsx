@@ -20,6 +20,7 @@ import Box from "@mui/material/Box";
 import { darken } from "@mui/system/colorManipulator";
 import { useOutsideClick } from "../../../lib";
 import { AirdropIcon } from "../../Icons";
+import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 
 const List = styled("ul")(({ theme }) => ({
   marginTop: 85,
@@ -76,6 +77,7 @@ function ListEntry({
 }
 
 type Props = ButtonProps & {
+  client?: PropShopClient;
   airdropSol?: () => Promise<void>;
   airdropUsdc?: () => Promise<void>;
   initUser?: () => Promise<void>;
@@ -98,7 +100,7 @@ export function BaseWalletMultiButton({
   labels,
   airdropSol,
   airdropUsdc,
-  ...props
+  client,
 }: Props) {
   const { setOpen: setModalVisible } = useWalletDialog();
   const anchorRef = React.createRef<HTMLButtonElement>();
@@ -223,6 +225,16 @@ export function BaseWalletMultiButton({
               text={"Airdrop USDC"}
             />
           )}
+
+          <ListEntry
+            onClick={() => {
+              if (client) {
+                client.loading = !client.loading;
+              }
+            }}
+            icon={<AirdropIcon color={customTheme.light} size={30} />}
+            text={"Toggle Loading"}
+          />
         </List>
       )}
     </Box>
