@@ -21,7 +21,7 @@
     "@coral-xyz/anchor": "0.28.0",
     "@cosmic-lab/data-source": "^0.7.4",
     "@drift-labs/sdk": "2.93.0-beta.3",
-    "@drift-labs/vaults-sdk": "0.1.338",
+    "@drift-labs/vaults-sdk": "0.1.413",
     "@flipsidecrypto/sdk": "^2.1.0",
     "@solana/spl-token": "^0.3.7",
     "@solana/wallet-adapter-base": "0.9.23",

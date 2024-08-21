@@ -519,6 +519,7 @@ describe("driftProtocolVaults", () => {
       bulkAccountLoader,
     );
     const vaultClient = new VaultClient({
+      // @ts-ignore
       driftClient,
       // @ts-ignore
       program: program,
@@ -599,6 +600,7 @@ describe("driftProtocolVaults", () => {
       bulkAccountLoader,
     );
     const vaultClient = new VaultClient({
+      // @ts-ignore
       driftClient,
       // @ts-ignore
       program: program,

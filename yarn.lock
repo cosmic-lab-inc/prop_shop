@@ -521,13 +521,13 @@
   dependencies:
     "@jridgewell/trace-mapping" "0.3.9"
 
-"@drift-labs/competitions-sdk@0.2.334":
-  version "0.2.334"
-  resolved "https://registry.yarnpkg.com/@drift-labs/competitions-sdk/-/competitions-sdk-0.2.334.tgz#b2950ac25296d2a945ceac5ce95045393a4fca8e"
-  integrity sha512-oSBlPHdKULwvX1qPBxdUFWYgV9kusXH9iWt/kZTrAqvNjuXYyDUDQl0t8Bf54Odc7nQcyGJnXbmiBCDuWV/y/g==
+"@drift-labs/competitions-sdk@0.2.386":
+  version "0.2.386"
+  resolved "https://registry.yarnpkg.com/@drift-labs/competitions-sdk/-/competitions-sdk-0.2.386.tgz#5aab51a8f68d3548d452c7c1fab12af46c44f2f4"
+  integrity sha512-Yu3U/BOmCDsUVAYPwAjN30MITkNbANvuqNpNok3HW3LamEpZMP2Y61qWig5FaoxScSHIHg1yWRNxp/XaMRxJJw==
   dependencies:
     "@coral-xyz/anchor" "^0.26.0"
-    "@drift-labs/sdk" "2.84.0-beta.6"
+    "@drift-labs/sdk" "2.87.0-beta.1"
     "@solana/web3.js" "1.73.2"
     "@switchboard-xyz/solana.js" "^2.7.1"
     cerializr "^3.1.4"
@@ -536,26 +536,10 @@
     ts-node "^10.9.1"
     typescript "^5.1.6"
 
-"@drift-labs/sdk@2.84.0-beta.6":
-  version "2.84.0-beta.6"
-  resolved "https://registry.yarnpkg.com/@drift-labs/sdk/-/sdk-2.84.0-beta.6.tgz#74117e5fd07d5d19f5dae79b1bdb1a8e4facc4ad"
-  integrity sha512-T42Mvx7D0w8f/eZcVijhZ4U+/D4oZ3S5nM5BRYqEKJHztCFL6Y0d3HvTpMFxc6MNbozSOq8djyjyJg1Zx0Nk9Q==
-  dependencies:
-    "@coral-xyz/anchor" "0.28.0"
-    "@ellipsis-labs/phoenix-sdk" "^1.4.2"
-    "@project-serum/serum" "^0.13.38"
-    "@pythnetwork/client" "2.5.3"
-    "@pythnetwork/pyth-solana-receiver" "^0.7.0"
-    "@solana/spl-token" "^0.3.7"
-    "@solana/web3.js" "1.92.3"
-    strict-event-emitter-types "^2.0.0"
-    uuid "^8.3.2"
-    zstddec "^0.1.0"
-
-"@drift-labs/sdk@2.86.0-beta.1":
-  version "2.86.0-beta.1"
-  resolved "https://registry.yarnpkg.com/@drift-labs/sdk/-/sdk-2.86.0-beta.1.tgz#bebd60ccfb490cae315bfc85afad0620d1f4456b"
-  integrity sha512-qXt6dXkQ350n2efrEvkS9uQU/iNRs22j4CLhN4qwTU6PJlkCYX5mwo4UvzAi/7ML6Ao+5I7WuZIwYykJR/q1iA==
+"@drift-labs/sdk@2.87.0-beta.1":
+  version "2.87.0-beta.1"
+  resolved "https://registry.yarnpkg.com/@drift-labs/sdk/-/sdk-2.87.0-beta.1.tgz#3cd28998cb462eb5e391e84f45b8e21aa4e5e688"
+  integrity sha512-cfxUuylV58v9t35DjCY4FaUITPgl5iZj1yd81OC+DrpuU4oBSCVEQ2OOXsFg+Q7+nbMRBLd52EFUHT/obKYFiA==
   dependencies:
     "@coral-xyz/anchor" "0.28.0"
     "@ellipsis-labs/phoenix-sdk" "^1.4.2"
@@ -596,17 +580,18 @@
     uuid "^8.3.2"
     zstddec "^0.1.0"
 
-"@drift-labs/vaults-sdk@0.1.338":
-  version "0.1.338"
-  resolved "https://registry.yarnpkg.com/@drift-labs/vaults-sdk/-/vaults-sdk-0.1.338.tgz#5107b4c8b9cc5b76adefd307e45b196ddd0180e7"
-  integrity sha512-fctgSuhay8A2td+mExzcCtcmccbVhvTknJ9wHED0ZFV0UbcaUIr58pJBgAnOXVsLaQQNJyV2L7URqjOoRz9VCA==
+"@drift-labs/vaults-sdk@0.1.413":
+  version "0.1.413"
+  resolved "https://registry.yarnpkg.com/@drift-labs/vaults-sdk/-/vaults-sdk-0.1.413.tgz#f4804339163374b61024a533a28e0d0435cd69aa"
+  integrity sha512-nr5pjE1s1Yr/hyDnadR5++xzFIYMaNR87PPzo6gSv8qRBzBV4AFpN+K6SRH0dsgT2cMQdYhF262lOl0bjc7xqQ==
   dependencies:
     "@coral-xyz/anchor" "0.28.0"
-    "@drift-labs/competitions-sdk" "0.2.334"
-    "@drift-labs/sdk" "2.86.0-beta.1"
-    "@solana/web3.js" "1.73.2"
+    "@drift-labs/competitions-sdk" "0.2.386"
+    "@drift-labs/sdk" "2.93.0-beta.3"
+    "@solana/web3.js" "1.92.3"
     commander "^11.0.0"
     dotenv "^16.3.1"
+    rpc-websockets "7.5.1"
     strict-event-emitter-types "^2.0.0"
     ts-node "^10.9.1"
     typescript "^5.1.6"
