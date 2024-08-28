@@ -289,7 +289,6 @@ export class PropShopClient {
     wallet: WalletContextState;
     dummyWallet?: boolean;
   }) {
-    // this.loading = true;
     const now = Date.now();
     this.dummyWallet = config.dummyWallet ?? false;
     this.wallet = config.wallet;
@@ -301,12 +300,11 @@ export class PropShopClient {
     const newProvider = new AnchorProvider(this.connection, anchorWallet, {
       commitment: "confirmed",
     });
-    const newDriftVaultsProgram = new Program(
+    this.vaultClient.program = new Program(
       DRIFT_VAULTS_IDL,
       this.vaultProgram.programId,
       newProvider,
     );
-    this.vaultClient.program = newDriftVaultsProgram;
 
     // update DriftClient wallet
     const iWallet = PropShopClient.walletAdapterToIWallet(this.wallet);
@@ -530,7 +528,7 @@ export class PropShopClient {
     const vaults = Array.from(this._vaults.entries())
       .filter(([_key, value]) => {
         const protocolFilter = filters?.hasProtocol
-          ? value.vaultProtocol !== SystemProgram.programId
+          ? value.vaultProtocol
           : true;
         const managedFilter = filters?.managed
           ? value.manager.equals(this.publicKey)
@@ -631,7 +629,7 @@ export class PropShopClient {
     );
     if (protocolsOnly) {
       return vaults.filter((v) => {
-        return v.account.vaultProtocol !== SystemProgram.programId;
+        return v.account.vaultProtocol;
       });
     } else {
       return vaults;
@@ -914,7 +912,7 @@ export class PropShopClient {
       vault: vaultAccount,
     });
     let vpShares = new BN(0);
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (vaultAccount.vaultProtocol) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       const vpAccount =
         await this.vaultProgram.account.vaultProtocol.fetch(vaultProtocol);
@@ -948,7 +946,7 @@ export class PropShopClient {
     if (!vaultAccount) {
       return undefined;
     }
-    if (vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (!vaultAccount.vaultProtocol) {
       return undefined;
     }
     const vaultTotalEquity = await this.vaultClient.calculateVaultEquity({
@@ -1114,7 +1112,7 @@ export class PropShopClient {
       userAccounts: [],
       writableSpotMarketIndexes: [0],
     });
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (vaultAccount.vaultProtocol) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
         pubkey: vaultProtocol,
@@ -1202,9 +1200,10 @@ export class PropShopClient {
     }
 
     // check if wallet is protocol
-    if (!vaultAcct.vaultProtocol.equals(SystemProgram.programId)) {
+    if (vaultAcct.vaultProtocol) {
+      const vp = this.vaultClient.getVaultProtocolAddress(vault);
       const vpAcct = (await this.vaultProgram.account.vaultProtocol.fetch(
-        vaultAcct.vaultProtocol,
+        vp,
       )) as VaultProtocol;
       if (vpAcct.protocol.equals(this.publicKey)) {
         return ok(true);
@@ -1789,7 +1788,7 @@ export class PropShopClient {
     }
 
     let ix: TransactionInstruction;
-    if (!vaultAcct.vaultProtocol.equals(SystemProgram.programId)) {
+    if (vaultAcct.vaultProtocol) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       const remainingAccounts: AccountMeta[] = [
         {
@@ -1903,7 +1902,7 @@ export class PropShopClient {
       userAccounts: [user.getUserAccount()],
       writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
     });
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (vaultAccount.vaultProtocol) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
         pubkey: vaultProtocol,
@@ -1961,7 +1960,7 @@ export class PropShopClient {
       userAccounts: [user.getUserAccount()],
       writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
     });
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (vaultAccount.vaultProtocol) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
         pubkey: vaultProtocol,
@@ -2027,7 +2026,7 @@ export class PropShopClient {
     const remainingAccounts = this.driftClient.getRemainingAccounts({
       userAccounts: [user.getUserAccount()],
     });
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (vaultAccount.vaultProtocol) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
         pubkey: vaultProtocol,
@@ -2070,7 +2069,7 @@ export class PropShopClient {
       userAccounts: [user.getUserAccount()],
       writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
     });
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (vaultAccount.vaultProtocol) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
         pubkey: vaultProtocol,
@@ -2135,15 +2134,16 @@ export class PropShopClient {
       });
     }
 
-    if (vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (!vaultAccount.vaultProtocol) {
       return err({
         variant: "error",
         message: `Protocol unable to request withdraw from non-protocol vault ${vault.toString()}`,
       });
     }
 
+    const vp = this.vaultClient.getVaultProtocolAddress(vault);
     const vpAccount = (await this.vaultProgram.account.vaultProtocol.fetch(
-      vaultAccount.vaultProtocol,
+      vp,
     )) as VaultProtocol;
     if (!this.publicKey.equals(vpAccount.protocol)) {
       return err({
@@ -2159,7 +2159,7 @@ export class PropShopClient {
       userAccounts: [user.getUserAccount()],
       writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
     });
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (vaultAccount.vaultProtocol) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
         pubkey: vaultProtocol,
@@ -2201,7 +2201,7 @@ export class PropShopClient {
       });
     }
 
-    if (vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (!vaultAccount.vaultProtocol) {
       return err({
         variant: "error",
         message: `Protocol unable to cancel withdraw request from non-protocol vault ${vault.toString()}`,
@@ -2225,7 +2225,7 @@ export class PropShopClient {
     const remainingAccounts = this.driftClient.getRemainingAccounts({
       userAccounts: [user.getUserAccount()],
     });
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (vaultAccount.vaultProtocol) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
         pubkey: vaultProtocol,
@@ -2254,7 +2254,7 @@ export class PropShopClient {
       });
     }
 
-    if (vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (!vaultAccount.vaultProtocol) {
       return err({
         variant: "error",
         message: `Protocol unable to withdraw from non-protocol vault ${vault.toString()}`,
@@ -2268,7 +2268,7 @@ export class PropShopClient {
       userAccounts: [user.getUserAccount()],
       writableSpotMarketIndexes: [vaultAccount.spotMarketIndex],
     });
-    if (!vaultAccount.vaultProtocol.equals(SystemProgram.programId)) {
+    if (vaultAccount.vaultProtocol) {
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(vault);
       remainingAccounts.push({
         pubkey: vaultProtocol,
@@ -2561,11 +2561,12 @@ export class PropShopClient {
     await this.fetchVault(vault);
 
     const vaultAcct = this.vault(vault)!.data;
-    if (vaultAcct.vaultProtocol.equals(SystemProgram.programId)) {
+    if (!vaultAcct.vaultProtocol) {
       return;
     }
+    const vp = this.vaultClient.getVaultProtocolAddress(vault);
     const vpAcct = (await this.vaultProgram.account.vaultProtocol.fetch(
-      vaultAcct.vaultProtocol,
+      vp,
     )) as VaultProtocol;
 
     const reqTs = vpAcct.lastProtocolWithdrawRequest.ts.toNumber();
