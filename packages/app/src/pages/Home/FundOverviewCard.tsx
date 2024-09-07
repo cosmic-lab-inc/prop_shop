@@ -118,11 +118,13 @@ function Container({
       sx={{
         cursor: "pointer",
         position: "relative",
+        minWidth: 0,
+        flex: `0 0 var(calc(100% / 3))`,
+        paddingLeft: `var(calc(100% / 3))`,
       }}
     >
       <Box
         sx={{
-          width: "100%",
           bgcolor: customTheme.grey,
           borderRadius: "10px",
           display: "flex",
