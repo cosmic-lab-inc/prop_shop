@@ -25,7 +25,7 @@ export const IconButton: React.FC<IconButtonProps<React.FC<ChildProps>>> = ({
     if (disabled) {
       setIconColor(customTheme.grey);
     } else {
-      setIconColor(customTheme.light);
+      setIconColor(customTheme.dark);
     }
   }, [disabled]);
 

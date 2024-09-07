@@ -29,7 +29,7 @@ export const SearchIconWrapper = styled("div")`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${customTheme.light};
+  color: ${customTheme.dark};
   border-top-left-radius: 10px;
   border-bottom-left-radius: 10px;
   background: transparent;
@@ -43,7 +43,7 @@ export const SearchInput = styled("input")`
   background: transparent;
   border-radius: 10px;
   border: none;
-  color: ${customTheme.light};
+  color: ${customTheme.dark};
   height: 100%;
 `;
 

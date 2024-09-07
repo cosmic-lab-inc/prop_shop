@@ -12,7 +12,7 @@ export function Header() {
         pb: 2,
         gap: 2,
         width: "100%",
-        bgcolor: customTheme.dark,
+        bgcolor: customTheme.light,
         display: "flex",
         justifyContent: "space-around",
         flexDirection: "row",
@@ -66,7 +66,7 @@ export function Header() {
                   }}
                 >
                   <Typography variant="h3">Join as a Trader</Typography>
-                  <ArrowsIcon color={customTheme.light} />
+                  <ArrowsIcon color={customTheme.dark} />
                 </Box>
               </ActionButton>
             </Box>

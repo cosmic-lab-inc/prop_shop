@@ -119,7 +119,7 @@ function Input({
               <InputAdornment position="start">
                 <Typography
                   variant="h3"
-                  sx={{ color: customTheme.light, fontWeight: 300 }}
+                  sx={{ color: customTheme.dark, fontWeight: 300 }}
                 >
                   $
                 </Typography>

@@ -12,13 +12,13 @@ type IconButtonProps = {
 export function SendButton(props: IconButtonProps) {
   const { disabled, ...rest } = props;
 
-  const [iconColor, setIconColor] = React.useState(customTheme.light);
+  const [iconColor, setIconColor] = React.useState(customTheme.dark);
 
   useEffect(() => {
     if (disabled) {
       setIconColor(customTheme.grey);
     } else {
-      setIconColor(customTheme.light);
+      setIconColor(customTheme.dark);
     }
   }, [disabled]);
 
@@ -32,7 +32,7 @@ export function SendButton(props: IconButtonProps) {
         display: "flex",
         justifyContent: "center",
 
-        color: disabled ? customTheme.dark : customTheme.light,
+        color: disabled ? customTheme.light : customTheme.dark,
         bgcolor: disabled
           ? darken(customTheme.grey2, 0.2)
           : customTheme.secondary,

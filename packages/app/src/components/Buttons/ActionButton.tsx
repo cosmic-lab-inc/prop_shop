@@ -16,7 +16,7 @@ export function ActionButton(props: Props) {
     if (disabled) {
       setColor(customTheme.grey);
     } else {
-      setColor(customTheme.light);
+      setColor(customTheme.dark);
     }
   }, [disabled]);
 

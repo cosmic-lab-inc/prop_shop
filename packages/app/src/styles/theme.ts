@@ -7,27 +7,18 @@ const LINE_HEIGHT = "2rem";
 const FONT_WEIGHT = "bolder";
 
 export const customTheme = {
-  light: "#2c2c2c",
-  grey: "#dad8d6",
+  dark: "#2c2c2c",
   grey2: "#cccccc",
-  dark: "#e3e2e2",
+  grey: "#dad8d6",
+  light: "#e3e2e2",
 
   secondary: SECONDARY,
   blue: SECONDARY,
 
-  success: SECONDARY,
+  success: "#44862a",
   error: "#b64747",
 
   font: {
-    // --- too soft ---
-    // light: "dosisLight",
-    // heavy: "dosisHeavy",
-    // --- default light ---
-    // light: "mulishLight",
-    // heavy: "mulishHeavy",
-    // --- default light ---
-    // light: "titilliumLight",
-    // heavy: "titilliumHeavy",
     light: "abel",
     heavy: "abel",
   },
@@ -36,23 +27,23 @@ export const customTheme = {
 export const theme: Theme = createTheme({
   palette: {
     background: {
-      default: customTheme.dark,
-      paper: customTheme.dark,
+      default: customTheme.light,
+      paper: customTheme.light,
     },
     primary: {
-      light: customTheme.light,
-      main: customTheme.dark,
-      contrastText: customTheme.light,
-      dark: customTheme.dark,
+      light: customTheme.dark,
+      main: customTheme.light,
+      contrastText: customTheme.dark,
+      dark: customTheme.light,
     },
     secondary: {
-      light: customTheme.light,
+      light: customTheme.dark,
       main: customTheme.secondary,
-      dark: customTheme.dark,
+      dark: customTheme.light,
     },
     text: {
-      primary: customTheme.light,
-      secondary: customTheme.light,
+      primary: customTheme.dark,
+      secondary: customTheme.dark,
     },
     success: {
       main: customTheme.success,
@@ -73,7 +64,7 @@ export const theme: Theme = createTheme({
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      color: customTheme.light,
+      color: customTheme.dark,
     },
     h2: {
       fontSize: 30,
@@ -81,7 +72,7 @@ export const theme: Theme = createTheme({
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      color: customTheme.light,
+      color: customTheme.dark,
     },
     h3: {
       fontSize: 24,
@@ -89,7 +80,7 @@ export const theme: Theme = createTheme({
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      color: customTheme.light,
+      color: customTheme.dark,
     },
     h4: {
       fontSize: 24,
@@ -97,7 +88,7 @@ export const theme: Theme = createTheme({
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      color: customTheme.light,
+      color: customTheme.dark,
     },
     body1: {
       fontFamily: customTheme.font.light,
@@ -105,7 +96,7 @@ export const theme: Theme = createTheme({
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      color: customTheme.light,
+      color: customTheme.dark,
     },
     button: {
       fontSize: 24,
@@ -113,7 +104,7 @@ export const theme: Theme = createTheme({
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      color: customTheme.light,
+      color: customTheme.dark,
     },
   },
 });

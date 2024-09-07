@@ -264,13 +264,13 @@ const TableRow = styled("div")<{ hover?: boolean; header?: boolean }>(
     alignItems: "center",
     padding: "10px",
     borderRadius: "10px",
-    color: customTheme.dark,
+    color: customTheme.light,
     "&:hover": {
       backgroundColor: `${hover ? customTheme.grey2 : "transparent"}`,
     },
 
     ...(header && {
-      borderBottom: `1px solid ${customTheme.dark}`,
+      borderBottom: `1px solid ${customTheme.light}`,
       borderBottomRightRadius: "0",
       borderBottomLeftRadius: "0",
     }),
@@ -375,7 +375,7 @@ function PercentInput({
           <InputAdornment position="end">
             <Typography
               variant="h4"
-              sx={{ color: customTheme.light, fontWeight: 300 }}
+              sx={{ color: customTheme.dark, fontWeight: 300 }}
             >
               %
             </Typography>
@@ -448,7 +448,7 @@ function DaysInput({
           <InputAdornment position="end">
             <Typography
               variant="h4"
-              sx={{ color: customTheme.light, fontWeight: 300 }}
+              sx={{ color: customTheme.dark, fontWeight: 300 }}
             >
               {value === 1 ? "day" : "days"}
             </Typography>
@@ -561,7 +561,7 @@ const Toggle = styled((props: ToggleProps) => {
     transitionDuration: "300ms",
     "&.Mui-checked": {
       transform: "translateX(48px)",
-      color: customTheme.light,
+      color: customTheme.dark,
       "& + .MuiSwitch-track": {
         backgroundColor: customTheme.secondary,
         opacity: 1,

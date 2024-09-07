@@ -285,7 +285,7 @@ function CopyButton({ text }: { text: string }) {
       size="small"
       sx={{
         p: 0,
-        color: customTheme.light,
+        color: customTheme.dark,
       }}
       onClick={() => copy()}
     >
@@ -317,7 +317,7 @@ function Container({ children }: { children: ReactNode }) {
 
 function Text({ children }: { children: ReactNode }) {
   return (
-    <Typography variant="h4" sx={{ color: customTheme.light }}>
+    <Typography variant="h4" sx={{ color: customTheme.dark }}>
       {children}
     </Typography>
   );
@@ -352,13 +352,13 @@ const TableRow = styled("div")<{ hover?: boolean; header?: boolean }>(
     justifyContent: "space-between",
     padding: "10px",
     borderRadius: "10px",
-    color: customTheme.dark,
+    color: customTheme.light,
     "&:hover": {
       backgroundColor: `${hover ? customTheme.grey2 : "transparent"}`,
     },
 
     ...(header && {
-      borderBottom: `1px solid ${customTheme.dark}`,
+      borderBottom: `1px solid ${customTheme.light}`,
       borderBottomRightRadius: "0",
       borderBottomLeftRadius: "0",
     }),

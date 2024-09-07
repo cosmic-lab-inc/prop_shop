@@ -97,7 +97,7 @@ export const Toolbar = observer(
               flexDirection: "row",
               height: TOOLBAR_HEIGHT,
               width: "70%",
-              bgcolor: customTheme.dark,
+              bgcolor: customTheme.light,
               gap: 2,
             }}
           >

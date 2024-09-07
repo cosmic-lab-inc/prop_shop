@@ -21,7 +21,7 @@ export function CodeSnippet({ code }: { code: string }) {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        bgcolor: customTheme.light,
+        bgcolor: customTheme.dark,
         borderRadius: "10px",
         flexGrow: 1,
       }}

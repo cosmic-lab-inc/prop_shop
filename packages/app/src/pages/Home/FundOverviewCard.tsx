@@ -92,7 +92,7 @@ export function FundOverviewCard({
           </TableRow>
 
           <TableRow hover square>
-            <PeopleAltIcon htmlColor={customTheme.light} fontSize={"medium"} />
+            <PeopleAltIcon htmlColor={customTheme.dark} fontSize={"medium"} />
             <Typography variant="h4">{formatNumber(investors)}</Typography>
           </TableRow>
 
@@ -154,10 +154,9 @@ function Container({
           display: "flex",
           flexDirection: "column",
           cursor: "pointer",
-          // p: 1,
           ml: 1,
           mr: 1,
-          boxShadow: `0px 5px 5px 0px ${customTheme.light}`,
+          boxShadow: `0px 5px 5px 0px ${customTheme.dark}`,
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}

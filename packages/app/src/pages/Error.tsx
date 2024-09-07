@@ -13,7 +13,7 @@ export function Error() {
         minWidth: "90%",
         maxWidth: "90%",
         minHeight: "900px",
-        bgcolor: customTheme.dark,
+        bgcolor: customTheme.light,
         borderRadius: "2px",
         display: "flex",
         justifyContent: "space-between",

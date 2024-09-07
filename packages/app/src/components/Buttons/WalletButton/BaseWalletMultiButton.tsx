@@ -60,7 +60,7 @@ function ListEntry({
         }}
         onClick={onClick}
       >
-        <ListItemIcon sx={{ color: customTheme.light }}>{icon}</ListItemIcon>
+        <ListItemIcon sx={{ color: customTheme.dark }}>{icon}</ListItemIcon>
         <ListItemText
           primary={text}
           disableTypography
@@ -213,7 +213,7 @@ export function BaseWalletMultiButton({
           {airdropSol && (
             <ListEntry
               onClick={airdropSol}
-              icon={<AirdropIcon color={customTheme.light} size={30} />}
+              icon={<AirdropIcon color={customTheme.dark} size={30} />}
               text={"Airdrop SOL"}
             />
           )}
@@ -221,7 +221,7 @@ export function BaseWalletMultiButton({
           {airdropUsdc && (
             <ListEntry
               onClick={airdropUsdc}
-              icon={<AirdropIcon color={customTheme.light} size={30} />}
+              icon={<AirdropIcon color={customTheme.dark} size={30} />}
               text={"Airdrop USDC"}
             />
           )}
@@ -232,7 +232,7 @@ export function BaseWalletMultiButton({
                 client.loading = !client.loading;
               }
             }}
-            icon={<AirdropIcon color={customTheme.light} size={30} />}
+            icon={<AirdropIcon color={customTheme.dark} size={30} />}
             text={"Toggle Loading"}
           />
         </List>

@@ -30,7 +30,7 @@ export const HttpDisplay = observer((props: ReactJsonViewProps) => {
           display: "flex",
           flexDirection: "column",
           flexGrow: 1,
-          backgroundColor: customTheme.dark,
+          backgroundColor: customTheme.light,
           maxHeight: "inherit",
         }}
       />

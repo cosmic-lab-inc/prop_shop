@@ -13,13 +13,13 @@ type IconProps = {
 
 export function ResetButton(props: IconButtonProps) {
   const { disabled, iconSize, ...rest } = props;
-  const [iconColor, setIconColor] = React.useState(customTheme.light);
+  const [iconColor, setIconColor] = React.useState(customTheme.dark);
 
   useEffect(() => {
     if (disabled) {
-      setIconColor(alpha(customTheme.dark, 0.7));
+      setIconColor(alpha(customTheme.light, 0.7));
     } else {
-      setIconColor(customTheme.light);
+      setIconColor(customTheme.dark);
     }
   }, [disabled]);
 
@@ -36,10 +36,10 @@ export function ResetButton(props: IconButtonProps) {
         minHeight: "40px",
 
         bgcolor: disabled ? customTheme.grey : customTheme.secondary,
-        color: disabled ? customTheme.dark : customTheme.light,
+        color: disabled ? customTheme.light : customTheme.dark,
         "&:hover": {
-          bgcolor: disabled ? customTheme.grey : customTheme.light,
-          color: disabled ? customTheme.light : customTheme.secondary,
+          bgcolor: disabled ? customTheme.grey : customTheme.dark,
+          color: disabled ? customTheme.dark : customTheme.secondary,
         },
       }}
       type="submit"
@@ -51,7 +51,7 @@ export function ResetButton(props: IconButtonProps) {
       }}
       onMouseLeave={() => {
         if (!disabled) {
-          setIconColor(customTheme.light);
+          setIconColor(customTheme.dark);
         }
       }}
       {...rest}

@@ -190,7 +190,7 @@ function PrevButton(props: ButtonProps) {
       {...restProps}
     >
       <ChevronLeftIcon
-        htmlColor={restProps.disabled ? customTheme.grey : customTheme.light}
+        htmlColor={restProps.disabled ? customTheme.grey : customTheme.dark}
         fontSize={"large"}
       />
       {children}
@@ -217,7 +217,7 @@ function NextButton(props: ButtonProps) {
       {...restProps}
     >
       <ChevronRightIcon
-        htmlColor={restProps.disabled ? customTheme.grey : customTheme.light}
+        htmlColor={restProps.disabled ? customTheme.grey : customTheme.dark}
         fontSize={"large"}
       />
       {children}

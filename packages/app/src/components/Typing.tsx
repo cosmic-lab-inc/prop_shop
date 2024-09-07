@@ -7,11 +7,11 @@ import { customTheme } from "../styles";
 const blink = keyframes`
     0% {
         opacity: 0.2;
-        color: ${customTheme.light};
+        color: ${customTheme.dark};
     }
     20% {
         opacity: 0.7;
-        color: ${customTheme.light};
+        color: ${customTheme.dark};
     }
     40% {
         opacity: 1;
@@ -19,7 +19,7 @@ const blink = keyframes`
     }
     100% {
         opacity: 0.2;
-        color: ${customTheme.light};
+        color: ${customTheme.dark};
     }
 `;
 
@@ -47,7 +47,7 @@ const Dot = styled("div")`
 
 export function Typing() {
   return (
-    <Box sx={{ display: "flex", color: customTheme.light }}>
+    <Box sx={{ display: "flex", color: customTheme.dark }}>
       <Dot />
       <Dot />
       <Dot />
