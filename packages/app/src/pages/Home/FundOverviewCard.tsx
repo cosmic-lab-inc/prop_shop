@@ -69,7 +69,7 @@ export function FundOverviewCard({
         <Header title={title} />
         <Box
           sx={{
-            width: "350px",
+            width: "100%",
             flexDirection: "column",
             display: "flex",
           }}
@@ -138,6 +138,7 @@ function Container({
   return (
     <Box
       sx={{
+        width: "100%",
         cursor: "pointer",
         position: "relative",
         minWidth: 0,
@@ -153,7 +154,10 @@ function Container({
           display: "flex",
           flexDirection: "column",
           cursor: "pointer",
-          p: 1,
+          // p: 1,
+          ml: 1,
+          mr: 1,
+          boxShadow: `0px 5px 5px 0px ${customTheme.light}`,
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}

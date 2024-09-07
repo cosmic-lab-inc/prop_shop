@@ -1,5 +1,11 @@
 import React from "react";
-import { Box, ListItem, ListItemButton, ListItemText } from "@mui/material";
+import {
+  Box,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  Typography,
+} from "@mui/material";
 import { customTheme } from "../../styles";
 import SearchIcon from "@mui/icons-material/Search";
 import {
@@ -86,11 +92,10 @@ export const SearchBar = ({
                     sx={{
                       p: "10px",
                       m: 0,
-                      fontFamily: customTheme.font.light,
-                      fontWeight: 300,
-                      fontSize: 16,
                     }}
-                  />
+                  >
+                    <Typography variant="body1">{value.title}</Typography>
+                  </ListItemText>
                 </ListItemButton>
               </ListItem>
             );
