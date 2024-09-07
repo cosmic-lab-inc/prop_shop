@@ -89,7 +89,7 @@ const Content = observer(() => {
     } else {
       setLoading(true);
     }
-  }, [client?.loading]);
+  }, [client, client?.loading]);
 
   return (
     <Box sx={{ display: "flex" }}>
