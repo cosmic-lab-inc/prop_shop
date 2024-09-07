@@ -116,7 +116,7 @@ function PnlIcon({ invert }: { invert?: boolean }) {
       }}
     >
       <MovingIcon
-        htmlColor={customTheme.error}
+        htmlColor={invert ? customTheme.error : customTheme.success}
         fontSize={"medium"}
         sx={{
           transform: invert ? "rotate(180deg)" : "none",

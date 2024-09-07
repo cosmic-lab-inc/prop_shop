@@ -1,26 +1,35 @@
 import "./globals.css";
 import { createTheme, Theme } from "@mui/material";
 
+const SECONDARY = "#c2a058";
+const LETTER_SPACING = "0px";
+const LINE_HEIGHT = "2rem";
+const FONT_WEIGHT = "bolder";
+
 export const customTheme = {
-  light: "#e3e3e3",
-  grey: "#171515",
-  grey2: "#13100f",
-  dark: "#0d0908",
+  light: "#2c2c2c",
+  grey: "#dad8d6",
+  grey2: "#cccccc",
+  dark: "#e3e2e2",
 
-  secondary: "#5f8ea0",
-  blue: "#5f8ea0",
+  secondary: SECONDARY,
+  blue: SECONDARY,
 
-  success: "#5f8ea0",
-  error: "#d47755",
+  success: SECONDARY,
+  error: "#b64747",
 
   font: {
-    // --- yes ---
+    // --- too soft ---
     // light: "dosisLight",
     // heavy: "dosisHeavy",
+    // --- default light ---
     // light: "mulishLight",
     // heavy: "mulishHeavy",
-    light: "titilliumLight",
-    heavy: "titilliumHeavy",
+    // --- default light ---
+    // light: "titilliumLight",
+    // heavy: "titilliumHeavy",
+    light: "abel",
+    heavy: "abel",
   },
 };
 
@@ -60,102 +69,51 @@ export const theme: Theme = createTheme({
     fontWeightBold: 700,
     h1: {
       fontSize: 46,
+      letterSpacing: LETTER_SPACING,
+      lineHeight: LINE_HEIGHT,
+      fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      letterSpacing: "2px",
-      lineHeight: "2rem",
-      fontWeight: "bolder",
       color: customTheme.light,
     },
     h2: {
       fontSize: 30,
+      letterSpacing: LETTER_SPACING,
+      lineHeight: LINE_HEIGHT,
+      fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      letterSpacing: "2px",
-      lineHeight: "2rem",
-      fontWeight: "bolder",
       color: customTheme.light,
     },
     h3: {
       fontSize: 24,
+      letterSpacing: LETTER_SPACING,
+      lineHeight: LINE_HEIGHT,
+      fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      letterSpacing: "2px",
-      lineHeight: "2rem",
-      fontWeight: "bolder",
       color: customTheme.light,
     },
     h4: {
       fontSize: 24,
+      letterSpacing: LETTER_SPACING,
+      lineHeight: LINE_HEIGHT,
+      fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      letterSpacing: "2px",
-      lineHeight: "2rem",
-      fontWeight: "bolder",
       color: customTheme.light,
     },
     body1: {
-      textTransform: "none",
-      letterSpacing: "2px",
-      lineHeight: "2rem",
-      fontWeight: "bolder",
       fontFamily: customTheme.font.light,
+      letterSpacing: LETTER_SPACING,
+      lineHeight: LINE_HEIGHT,
+      fontWeight: FONT_WEIGHT,
+      textTransform: "none",
       color: customTheme.light,
     },
     button: {
       fontSize: 24,
+      letterSpacing: LETTER_SPACING,
+      lineHeight: LINE_HEIGHT,
+      fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      letterSpacing: "2px",
-      lineHeight: "2rem",
-      fontWeight: "bolder",
       color: customTheme.light,
     },
-  },
-  components: {
-    // MuiMenu: {
-    //   styleOverrides: {
-    //     list: {
-    //       backgroundColor: customTheme.light,
-    //     },
-    //   },
-    // },
-    // MuiDialog: {
-    //   styleOverrides: {
-    //     root: {
-    //       backgroundColor: customTheme.grey2,
-    //     },
-    //   },
-    // },
-    // MuiDialogContent: {
-    //   styleOverrides: {
-    //     root: {
-    //       backgroundColor: customTheme.grey2,
-    //     },
-    //   },
-    // },
-    // MuiDialogTitle: {
-    //   styleOverrides: {
-    //     root: {
-    //       backgroundColor: customTheme.light,
-    //     },
-    //   },
-    // },
-    // MuiDialogActions: {
-    //   styleOverrides: {
-    //     root: {
-    //       backgroundColor: customTheme.light,
-    //     },
-    //   },
-    // },
-    // MuiDialogContentText: {
-    //   styleOverrides: {
-    //     root: {
-    //       backgroundColor: customTheme.light,
-    //     },
-    //   },
-    // },
-    // MuiCard: {
-    //   styleOverrides: {
-    //     root: {
-    //       backgroundColor: customTheme.light,
-    //     },
-    //   },
-    // },
   },
 });
