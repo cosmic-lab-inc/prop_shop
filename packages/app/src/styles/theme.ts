@@ -59,8 +59,8 @@ export const theme: Theme = createTheme({
       color: customTheme.light,
     },
     h2: {
-      fontSize: 30,
-      fontWeight: 600,
+      fontSize: 34,
+      fontWeight: 400,
       lineHeight: "2rem",
       letterSpacing: "2px",
       fontFamily: customTheme.font.heavy,

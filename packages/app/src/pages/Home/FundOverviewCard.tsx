@@ -10,7 +10,9 @@ import {
   yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { FundDialog } from "./FundDialog";
-import { ActionButton } from "../../components";
+import { ActionButton, CakeIcon, UsdcIcon } from "../../components";
+import MovingIcon from "@mui/icons-material/Moving";
+import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 
 function calcMaxDrawdown(values: number[]): number {
   let maxDrawdown = 0;
@@ -63,17 +65,16 @@ export function FundOverviewCard({
         onClose={() => setOpen(false)}
       />
       <Container onClick={() => setOpen(true)}>
-        <Header title={title} investors={investors} />
+        <Header title={title} />
         <Box
           sx={{
             width: "350px",
             flexDirection: "column",
             display: "flex",
-            gap: 0,
           }}
         >
           <TableRow hover divider footer square>
-            <Typography variant="h4">{pnl < 0 ? "Loss" : "Profit"}</Typography>
+            <PnlIcon />
             <Typography
               variant="h3"
               sx={{
@@ -85,22 +86,42 @@ export function FundOverviewCard({
           </TableRow>
 
           <TableRow hover square>
-            <Typography variant="h4">TVL</Typography>
+            <UsdcIcon />
             <Typography variant="h4">${prettyNumber(tvl)}</Typography>
           </TableRow>
 
-          <TableRow hover square>
-            <Typography variant="h4">Volume 30d</Typography>
-            <Typography variant="h4">${prettyNumber(volume30d)}</Typography>
+          <TableRow hover footer>
+            <PeopleAltIcon htmlColor={customTheme.light} fontSize={"medium"} />
+            <Typography variant="h4">{formatNumber(investors)}</Typography>
           </TableRow>
 
           <TableRow hover footer>
-            <Typography variant="h4">Birthday</Typography>
+            <CakeIcon />
             <Typography variant="h4">{yyyymmdd(birth)}</Typography>
           </TableRow>
         </Box>
       </Container>
     </>
+  );
+}
+
+function PnlIcon({ invert }: { invert?: boolean }) {
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <MovingIcon
+        htmlColor={customTheme.error}
+        fontSize={"medium"}
+        sx={{
+          transform: invert ? "rotate(180deg)" : "none",
+        }}
+      />
+    </Box>
   );
 }
 
@@ -119,6 +140,7 @@ function Container({
         cursor: "pointer",
         position: "relative",
         minWidth: 0,
+        borderRadius: "10px",
         flex: `0 0 var(calc(100% / 3))`,
         paddingLeft: `var(calc(100% / 3))`,
       }}
@@ -128,7 +150,6 @@ function Container({
           bgcolor: customTheme.grey,
           borderRadius: "10px",
           display: "flex",
-          alignItems: "center",
           flexDirection: "column",
           cursor: "pointer",
           p: 1,
@@ -170,25 +191,16 @@ function Container({
   );
 }
 
-function Header({ title, investors }: { title: string; investors: number }) {
+function Header({ title }: { title: string }) {
   return (
-    <Box>
-      <TableRow
-        header
-        divider
-        style={{
-          paddingTop: "10px",
-          paddingBottom: "10px",
-          flexDirection: "column",
-          display: "flex",
-          gap: 5,
-        }}
-      >
+    <Box
+      sx={{
+        display: "flex",
+        pb: "10px",
+      }}
+    >
+      <TableRow header>
         <Typography variant="h2">{truncateString(title, 15)}</Typography>
-
-        <Typography variant="body1">
-          {formatNumber(investors)} {investors === 1 ? "investor" : "investors"}
-        </Typography>
       </TableRow>
     </Box>
   );
