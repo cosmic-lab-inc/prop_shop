@@ -36,9 +36,9 @@ export const SearchIconWrapper = styled("div")`
 `;
 
 export const SearchInput = styled("input")`
-  font-family: ${customTheme.font.heavy};
-  font-weight: 300;
-  font-size: 20px;
+  font-family: ${customTheme.font.light};
+  font-weight: 700;
+  font-size: 24px;
   width: 100%;
   background: transparent;
   border-radius: 10px;

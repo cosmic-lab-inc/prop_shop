@@ -4,6 +4,7 @@ import { customTheme } from "../../styles";
 import {
   formatNumber,
   FundOverview,
+  fundPctPnl,
   prettyNumber,
   PropShopClient,
   truncateString,
@@ -81,7 +82,7 @@ export function FundOverviewCard({
                 color: pnl < 0 ? customTheme.error : customTheme.success,
               }}
             >
-              ${prettyNumber(pnl)}
+              {prettyNumber(fundPctPnl(fundOverview))}%
             </Typography>
           </TableRow>
 
@@ -90,7 +91,7 @@ export function FundOverviewCard({
             <Typography variant="h4">${prettyNumber(tvl)}</Typography>
           </TableRow>
 
-          <TableRow hover footer>
+          <TableRow hover square>
             <PeopleAltIcon htmlColor={customTheme.light} fontSize={"medium"} />
             <Typography variant="h4">{formatNumber(investors)}</Typography>
           </TableRow>
@@ -193,13 +194,8 @@ function Container({
 
 function Header({ title }: { title: string }) {
   return (
-    <Box
-      sx={{
-        display: "flex",
-        pb: "10px",
-      }}
-    >
-      <TableRow header>
+    <Box>
+      <TableRow square>
         <Typography variant="h2">{truncateString(title, 15)}</Typography>
       </TableRow>
     </Box>

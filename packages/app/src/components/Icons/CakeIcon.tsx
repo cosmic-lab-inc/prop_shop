@@ -7,11 +7,12 @@ type IconProps = {
 };
 
 export function CakeIcon({ size, color }: IconProps) {
+  const _size = size ?? 50;
   return (
     <svg
       fill={color ?? customTheme.light}
-      width={size ?? 40}
-      viewBox="0 0 32 32"
+      width={_size}
+      viewBox="0 0 40 32"
       version="1.1"
       xmlns="http://www.w3.org/2000/svg"
     >
