@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Box, Button, ButtonProps, styled, Typography } from "@mui/material";
-import { FundOverviewCard } from "./FundOverviewCard";
 import { FundOverview, PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 import useEmblaCarousel from "embla-carousel-react";
 import { EmblaCarouselType, EmblaOptionsType } from "embla-carousel";
@@ -9,6 +8,8 @@ import { observer } from "mobx-react";
 import { mockFundOverviews } from "../../lib";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import "./embla.css";
+import { FundOverviewCard } from "./FundOverviewCard";
 
 type EmblaViewportRefType = <ViewportElement extends HTMLElement>(
   instance: ViewportElement | null,
@@ -47,6 +48,9 @@ export const Funds = observer(({ client }: { client: PropShopClient }) => {
     onNextButtonClick,
   } = usePrevNextButtons(emblaApi);
 
+  const SLIDE_COUNT = 6;
+  const slides = Array.from(Array(SLIDE_COUNT).keys());
+
   return (
     <Box
       sx={{
@@ -54,18 +58,11 @@ export const Funds = observer(({ client }: { client: PropShopClient }) => {
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
-        pb: 5,
       }}
     >
       <Header />
 
-      <CarouselContainer emblaRef={emblaRef}>
-        {funds.map((fund, i) => {
-          return (
-            <FundOverviewCard key={i} client={client} fundOverview={fund} />
-          );
-        })}
-      </CarouselContainer>
+      <Carousel emblaRef={emblaRef} client={client} funds={funds} />
 
       <ButtonControls>
         <PrevButton onClick={onPrevButtonClick} disabled={prevBtnDisabled} />
@@ -97,32 +94,29 @@ function Header() {
   );
 }
 
-function CarouselContainer({
+function Carousel({
   emblaRef,
-  children,
+  client,
+  funds,
 }: {
   emblaRef: EmblaViewportRefType;
-  children: React.ReactNode;
+  client: PropShopClient;
+  funds: FundOverview[];
 }) {
   return (
-    <div
-      ref={emblaRef}
-      style={{
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          backfaceVisibility: "hidden",
-          display: "flex",
-          touchAction: "pan-y pinch-zoom",
-          gap: "20px",
-          marginLeft: `calc(var(calc(100% / 3)) * -1)`,
-        }}
-      >
-        {children}
+    <section className="embla">
+      <div className="embla__viewport" ref={emblaRef}>
+        <div className="embla__container">
+          {funds.map((fund, i) => (
+            <div className="embla__slide" key={i}>
+              <div className="embla__slide__number">
+                <FundOverviewCard key={i} client={client} fundOverview={fund} />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 

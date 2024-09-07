@@ -172,7 +172,7 @@ function Container({
 
 function Header({ title, investors }: { title: string; investors: number }) {
   return (
-    <Box sx={{ width: "100%" }}>
+    <Box>
       <TableRow
         header
         divider
