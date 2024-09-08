@@ -568,12 +568,11 @@ const Toggle = styled((props: ToggleProps) => {
     />
   );
 })(({ theme }) => ({
-  width: "100px",
+  width: "82px",
   height: 34,
   padding: 0,
   "& .MuiSwitch-switchBase": {
-    padding: 0,
-    margin: 2,
+    padding: 2,
     transitionDuration: "300ms",
     "&.Mui-checked": {
       transform: "translateX(48px)",
@@ -600,7 +599,7 @@ const Toggle = styled((props: ToggleProps) => {
   "& .MuiSwitch-thumb": {
     boxSizing: "border-box",
     borderRadius: 10,
-    width: 48,
+    width: 40,
     height: 30,
   },
   "& .MuiSwitch-track": {

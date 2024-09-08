@@ -53,7 +53,7 @@ export const theme: Theme = createTheme({
     },
   },
   typography: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: customTheme.font.light,
     fontWeightLight: 700,
     fontWeightRegular: 700,
