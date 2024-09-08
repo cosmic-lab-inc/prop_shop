@@ -11,6 +11,7 @@ import {
   ListItemIcon,
   ListItemText,
   styled,
+  Typography,
 } from "@mui/material";
 import { useWalletMultiButton } from "@solana/wallet-adapter-base-ui";
 import { BaseWalletConnectionButton } from "./BaseWalletConnectionButton";
@@ -186,7 +187,11 @@ export function BaseWalletMultiButton({
                 await navigator.clipboard.writeText(publicKey.toBase58());
               }}
               icon={<CopyIcon />}
-              text={labels["copy-address"]}
+              text={
+                <Typography variant="body1">
+                  {labels["copy-address"]}
+                </Typography>
+              }
             />
           )}
 
@@ -196,7 +201,9 @@ export function BaseWalletMultiButton({
               setModalVisible(true);
             }}
             icon={<SwitchIcon />}
-            text={labels["change-wallet"]}
+            text={
+              <Typography variant="body1">{labels["change-wallet"]}</Typography>
+            }
           />
 
           {onDisconnect && (
@@ -206,7 +213,9 @@ export function BaseWalletMultiButton({
                 onDisconnect();
               }}
               icon={<DisconnectIcon />}
-              text={labels["disconnect"]}
+              text={
+                <Typography variant="body1">{labels["disconnect"]}</Typography>
+              }
             />
           )}
 
@@ -214,7 +223,7 @@ export function BaseWalletMultiButton({
             <ListEntry
               onClick={airdropSol}
               icon={<AirdropIcon color={customTheme.dark} size={30} />}
-              text={"Airdrop SOL"}
+              text={<Typography variant="body1">Airdrop SOL</Typography>}
             />
           )}
 
@@ -222,7 +231,7 @@ export function BaseWalletMultiButton({
             <ListEntry
               onClick={airdropUsdc}
               icon={<AirdropIcon color={customTheme.dark} size={30} />}
-              text={"Airdrop USDC"}
+              text={<Typography variant="body1">Airdrop USDC</Typography>}
             />
           )}
 
@@ -233,7 +242,7 @@ export function BaseWalletMultiButton({
               }
             }}
             icon={<AirdropIcon color={customTheme.dark} size={30} />}
-            text={"Toggle Loading"}
+            text={<Typography variant="body1">Toggle Loading</Typography>}
           />
         </List>
       )}
