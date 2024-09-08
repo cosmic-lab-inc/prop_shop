@@ -215,7 +215,6 @@ export class PropShopClient {
     });
     const preDriftSub = Date.now();
     await driftClient.subscribe();
-    // await this.driftClientSubscribe(driftClient);
     console.log(`DriftClient subscribed in ${Date.now() - preDriftSub}ms`);
 
     this._vaultClient = new VaultClient({
@@ -226,6 +225,18 @@ export class PropShopClient {
     });
 
     this.eventEmitter.on(
+      "vaultDepositorUpdate",
+      (payload: Data<PublicKey, VaultDepositor>) => {
+        const update = JSON.stringify(payload.data);
+        const existing = JSON.stringify(
+          this._vaultDepositors.get(payload.key.toString()),
+        );
+        if (update !== existing) {
+          this._vaultDepositors.set(payload.key.toString(), payload.data);
+        }
+      },
+    );
+    this.eventEmitter.on(
       "vaultUpdate",
       async (payload: Data<PublicKey, Vault>) => {
         const update = JSON.stringify(payload.data);
@@ -235,18 +246,6 @@ export class PropShopClient {
         if (update !== existing) {
           this._vaults.set(payload.key.toString(), payload.data);
           await this.fetchFundOverview(payload.key);
-        }
-      },
-    );
-    this.eventEmitter.on(
-      "vaultDepositorUpdate",
-      (payload: Data<PublicKey, VaultDepositor>) => {
-        const update = JSON.stringify(payload.data);
-        const existing = JSON.stringify(
-          this._vaultDepositors.get(payload.key.toString()),
-        );
-        if (update !== existing) {
-          this._vaultDepositors.set(payload.key.toString(), payload.data);
         }
       },
     );
@@ -271,12 +270,12 @@ export class PropShopClient {
       {
         filters: [
           {
-            accountName: "vault",
-            eventType: "vaultUpdate",
-          },
-          {
             accountName: "vaultDepositor",
             eventType: "vaultDepositorUpdate",
+          },
+          {
+            accountName: "vault",
+            eventType: "vaultUpdate",
           },
         ],
       },
@@ -747,21 +746,11 @@ export class PropShopClient {
     const vaultVds = new Map<string, Data<PublicKey, VaultDepositor>[]>();
     for (const vd of vds) {
       const key = vd.data.vault.toString();
-      const value = vaultVds.get(key);
-      if (value) {
-        vaultVds.set(key, [...value, vd]);
-      } else {
-        vaultVds.set(key, [vd]);
-      }
+      const value = vaultVds.get(key) ?? [];
+      vaultVds.set(key, [...value, vd]);
     }
 
     const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-    // const key = RedisClient.vaultPnlFromDriftKey(vault.data.pubkey);
-    // const vaultPNL = await ProxyClient.performance({
-    //   key,
-    //   usePrefix: this.useProxyPrefix,
-    // });
-    // const data = vaultPNL.cumulativeSeriesPNL();
     const data: number[] = [];
     const title = decodeName(vault.data.name);
     const stats = await this.vaultStats(vault.key);
@@ -793,22 +782,12 @@ export class PropShopClient {
     const vaultVds = new Map<string, Data<PublicKey, VaultDepositor>[]>();
     for (const vd of vds) {
       const key = vd.data.vault.toString();
-      const value = vaultVds.get(key);
-      if (value) {
-        vaultVds.set(key, [...value, vd]);
-      } else {
-        vaultVds.set(key, [vd]);
-      }
+      const value = vaultVds.get(key) ?? [];
+      vaultVds.set(key, [...value, vd]);
     }
     const fundOverviews: FundOverview[] = [];
     for (const vault of vaults) {
       const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-      // const key = RedisClient.vaultPnlFromDriftKey(vault.data.pubkey);
-      // const vaultPNL = await ProxyClient.performance({
-      //   key,
-      //   usePrefix: this.useProxyPrefix,
-      // });
-      // const data = vaultPNL.cumulativeSeriesPNL();
       const data: number[] = [];
       const title = decodeName(vault.data.name);
       const stats = await this.vaultStats(vault.key);

@@ -43,10 +43,7 @@
     "update-pyth": "cp deps/pyth.json target/idl/pyth.json && cp deps/pyth.so target/deploy/pyth.so",
     "test": "jest --detectOpenHandles --testPathPattern tests/driftVaults.test.ts",
     "anchor-tests": "yarn setup-target && yarn update-competitions && yarn update-vaults && yarn update-drift && yarn update-pyth && yarn test",
-    "test-redis": "concurrently \"yarn start:proxy\" \"jest --detectOpenHandles --verbose --testPathPattern tests/redis.test.ts\"",
-    "test-subscriber": "jest --detectOpenHandles --verbose --testPathPattern tests/subscriber.test.ts",
-    "test-tx-client": "jest --forceExit --verbose --testPathPattern tests/txClient.test.ts",
-    "test-flipside": "jest --forceExit --verbose --testPathPattern tests/flipside.test.ts",
+    "test-client": "jest --forceExit --verbose --testPathPattern tests/client.test.ts",
     "test-markets": "jest --verbose --testPathPattern tests/markets.test.ts",
     "prettify:fix": "lerna run prettify:fix"
   },

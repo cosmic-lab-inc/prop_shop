@@ -52,8 +52,15 @@ export function FundOverviewCard({
 }) {
   const { vault, tvl, volume30d, lifetimePNL, title, investors, birth } =
     fundOverview;
-
-  const pnl = lifetimePNL;
+  // const pnl = fundPctPnl(fundOverview);
+  const pnl = fundPctPnl(fundOverview);
+  const displayPnl = tvl < 1_000 ? "--" : `${prettyNumber(pnl)}%`;
+  const displayPnlColor =
+    displayPnl !== "--"
+      ? pnl < 0
+        ? customTheme.error
+        : customTheme.success
+      : customTheme.dark;
 
   const [open, setOpen] = React.useState(false);
 
@@ -75,14 +82,14 @@ export function FundOverviewCard({
           }}
         >
           <TableRow hover divider footer square>
-            <PnlIcon />
+            <PnlIcon invert={pnl < 0 && displayPnl !== "--"} />
             <Typography
               variant="h3"
               sx={{
-                color: pnl < 0 ? customTheme.error : customTheme.success,
+                color: displayPnlColor,
               }}
             >
-              {prettyNumber(fundPctPnl(fundOverview))}%
+              {displayPnl}
             </Typography>
           </TableRow>
 
@@ -129,7 +136,7 @@ function PnlIcon({ invert }: { invert?: boolean }) {
         htmlColor={invert ? customTheme.error : customTheme.success}
         fontSize={"medium"}
         sx={{
-          transform: invert ? "rotate(180deg)" : "none",
+          transform: invert ? "rotate(90deg)" : "none",
         }}
       />
     </Box>

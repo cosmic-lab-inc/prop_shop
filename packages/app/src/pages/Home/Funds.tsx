@@ -19,20 +19,20 @@ export const Funds = observer(({ client }: { client: PropShopClient }) => {
   const [funds, setFunds] = React.useState<FundOverview[]>([]);
 
   React.useEffect(() => {
+    let _funds = client.fundOverviews;
     if (
       process.env.ENV === "dev" ||
       process.env.RPC_URL === "http://localhost:8899"
     ) {
-      const _funds: FundOverview[] = client.fundOverviews.map((fund) => {
+      _funds = _funds.map((fund) => {
         return {
           ...fund,
           data: mockFundOverviews()[0].data,
         };
       });
-      setFunds(_funds);
-    } else {
-      setFunds(client.fundOverviews);
     }
+    _funds = _funds.filter((fund) => fund.tvl > 1_000);
+    setFunds(_funds);
   }, [client.fundOverviews]);
 
   const options: EmblaOptionsType = {
