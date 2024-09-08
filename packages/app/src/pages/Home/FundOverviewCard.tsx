@@ -179,8 +179,6 @@ function Container({
             left: 0,
             right: 0,
             bottom: 0,
-            // ml: 1,
-            // mr: 1,
             zIndex: isHovered ? 0 : -1,
             backdropFilter: "blur(4px)",
             transition: "backdrop-filter 0.2s linear",

@@ -430,9 +430,6 @@ function DaysInput({
       }}
     >
       <OutlinedInput
-        sx={{
-          fontSize: 20,
-        }}
         slotProps={{
           input: {
             style: {
@@ -440,7 +437,6 @@ function DaysInput({
             },
           },
         }}
-        // defaultValue={defaultValue}
         label={value}
         value={value}
         multiline={false}
@@ -576,7 +572,7 @@ const Toggle = styled((props: ToggleProps) => {
   },
   "& .MuiSwitch-thumb": {
     boxSizing: "border-box",
-    borderRadius: 10,
+    borderRadius: 9,
     width: 40,
     height: 30,
   },
