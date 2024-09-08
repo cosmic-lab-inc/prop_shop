@@ -110,13 +110,35 @@ export const Toolbar = observer(
                 gap: 2,
               }}
             >
-              <StoreIcon size={70} />
-              <Typography
-                variant="h2"
-                sx={{ fontFamily: customTheme.font.heavy }}
+              <StoreIcon size={60} color={customTheme.secondary} />
+              <Box
+                sx={{
+                  gap: 0,
+                  display: "flex",
+                  flexDirection: "row",
+                  justifyContent: "left",
+                  alignItems: "center",
+                }}
               >
-                PROP SHOP
-              </Typography>
+                <Typography
+                  variant="h2"
+                  sx={{
+                    fontFamily: customTheme.font.heavy,
+                    color: customTheme.dark,
+                  }}
+                >
+                  PROP
+                </Typography>
+                <Typography
+                  variant="h2"
+                  sx={{
+                    fontFamily: customTheme.font.heavy,
+                    color: customTheme.dark,
+                  }}
+                >
+                  SHOP
+                </Typography>
+              </Box>
             </Box>
 
             <Box

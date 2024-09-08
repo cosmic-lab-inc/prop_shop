@@ -78,7 +78,7 @@ function Header() {
   return (
     <Box
       sx={{
-        width: "80%",
+        width: "90%",
         height: "100%",
         display: "flex",
         pt: 10,

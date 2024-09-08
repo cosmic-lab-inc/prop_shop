@@ -11,7 +11,7 @@ import {
   yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
 import { FundDialog } from "./FundDialog";
-import { ActionButton, CakeIcon, UsdcIcon } from "../../components";
+import { ActionButton, CakeIcon } from "../../components";
 import MovingIcon from "@mui/icons-material/Moving";
 import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 
@@ -87,8 +87,10 @@ export function FundOverviewCard({
           </TableRow>
 
           <TableRow hover square>
-            <UsdcIcon />
-            <Typography variant="h4">${prettyNumber(tvl)}</Typography>
+            <Typography variant="h3" sx={{ pl: "5px" }}>
+              $
+            </Typography>
+            <Typography variant="h4">{prettyNumber(tvl)}</Typography>
           </TableRow>
 
           <TableRow hover square>
@@ -96,9 +98,17 @@ export function FundOverviewCard({
             <Typography variant="h4">{formatNumber(investors)}</Typography>
           </TableRow>
 
-          <TableRow hover footer>
+          <TableRow hover footer narrow>
             <CakeIcon />
-            <Typography variant="h4">{yyyymmdd(birth)}</Typography>
+            <Typography
+              variant="h4"
+              sx={{
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              {yyyymmdd(birth)}
+            </Typography>
           </TableRow>
         </Box>
       </Container>
@@ -202,8 +212,8 @@ function Container({
 function Header({ title }: { title: string }) {
   return (
     <Box>
-      <TableRow square>
-        <Typography variant="h3">{truncateString(title, 12)}</Typography>
+      <TableRow header>
+        <Typography variant="h3">{truncateString(title, 14)}</Typography>
       </TableRow>
     </Box>
   );
@@ -220,15 +230,29 @@ const TableRow = styled("div")<{
   divider?: boolean;
   // no border radius anywhere
   square?: boolean;
-}>(({ theme, hover, header, footer, divider, square }) => ({
+  narrow?: boolean;
+  color?: string;
+}>(({ theme, hover, header, footer, divider, square, narrow, color }) => ({
   display: "flex",
   flexDirection: "row",
   justifyContent: "space-between",
 
+  ...(color && {
+    backgroundColor: color,
+  }),
+
   paddingLeft: 20,
   paddingRight: 20,
-  paddingTop: 10,
-  paddingBottom: 10,
+
+  ...(narrow
+    ? {
+        paddingTop: 0,
+        paddingBottom: 0,
+      }
+    : {
+        paddingTop: 10,
+        paddingBottom: 10,
+      }),
 
   "&:hover": {
     backgroundColor: `${hover ? customTheme.grey2 : "transparent"}`,

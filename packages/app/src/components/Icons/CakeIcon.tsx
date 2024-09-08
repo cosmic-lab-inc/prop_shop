@@ -12,7 +12,7 @@ export function CakeIcon({ size, color }: IconProps) {
     <svg
       fill={color ?? customTheme.dark}
       width={_size}
-      viewBox="0 0 40 32"
+      viewBox="0 0 36 36"
       version="1.1"
       xmlns="http://www.w3.org/2000/svg"
     >
