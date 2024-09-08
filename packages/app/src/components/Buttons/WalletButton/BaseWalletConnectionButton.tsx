@@ -10,7 +10,7 @@ type Props = ButtonProps & {
 export const BaseWalletConnectionButton = React.forwardRef(
   function BaseWalletConnectionButton(
     {
-      color = "primary",
+      color = "secondary",
       type = "button",
       walletIcon,
       variant = "contained",

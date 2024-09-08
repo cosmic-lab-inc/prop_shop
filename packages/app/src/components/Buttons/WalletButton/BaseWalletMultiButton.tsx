@@ -146,9 +146,7 @@ export function BaseWalletMultiButton({
       }}
     >
       <BaseWalletConnectionButton
-        color="secondary"
         fullWidth
-        variant="contained"
         aria-controls="wallet-menu"
         aria-haspopup="true"
         onClick={() => {
@@ -167,14 +165,6 @@ export function BaseWalletMultiButton({
           }
         }}
         ref={anchorRef}
-        // walletIcon={
-        //   walletIcon &&
-        //   walletName && (
-        //     <WalletIcon
-        //       wallet={{ adapter: { icon: walletIcon, name: walletName } }}
-        //     />
-        //   )
-        // }
         walletIcon={<WalletIcon size={30} color={customTheme.light} />}
         sx={{
           bgcolor: customTheme.secondary,

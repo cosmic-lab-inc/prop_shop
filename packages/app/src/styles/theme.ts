@@ -8,6 +8,7 @@ const FONT_WEIGHT = 700;
 
 export const customTheme = {
   dark: "#2c2c2c",
+  shadow: "#a6a6a6",
   grey2: "#e7e6e6",
   grey: "#f5f5f5",
   light: "#ffffff",
