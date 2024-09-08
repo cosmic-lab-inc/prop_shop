@@ -8,54 +8,29 @@
     src: url('./fonts/Mulish-Medium.ttf');
 }
 
+/*@font-face {*/
+/*    font-family: dosisLight;*/
+/*    src: url('./fonts/Dosis-Light.ttf');*/
+/*}*/
+
+/*@font-face {*/
+/*    font-family: dosisHeavy;*/
+/*    src: url('./fonts/Dosis-SemiBold.ttf');*/
+/*}*/
+
 @font-face {
     font-family: dosisLight;
-    src: url('./fonts/Dosis-Light.ttf');
+    src: url('./fonts/Dosis-Regular.ttf');
 }
 
 @font-face {
     font-family: dosisHeavy;
-    src: url('./fonts/Dosis-SemiBold.ttf');
-}
-
-@font-face {
-    font-family: juraLight;
-    src: url('./fonts/Jura-Medium.ttf');
-}
-
-@font-face {
-    font-family: juraHeavy;
-    src: url('./fonts/Jura-SemiBold.ttf');
+    src: url('./fonts/Dosis-ExtraBold.ttf');
 }
 
 @font-face {
     font-family: abel;
     src: url('./fonts/Abel-Regular.ttf');
-}
-
-@font-face {
-    font-family: eurostileLight;
-    src: url('./fonts/Eurostile-Light.ttf');
-}
-
-@font-face {
-    font-family: eurostileHeavy;
-    src: url('./fonts/Eurostile-Heavy.ttf');
-}
-
-@font-face {
-    font-family: michroma;
-    src: url('./fonts/Michroma-Regular.ttf');
-}
-
-@font-face {
-    font-family: orbitronLight;
-    src: url('./fonts/Orbitron-Light.ttf');
-}
-
-@font-face {
-    font-family: orbitronHeavy;
-    src: url('./fonts/Orbitron-Bold.ttf');
 }
 
 @font-face {
@@ -73,12 +48,13 @@
     src: url('./fonts/White-Rabbit.ttf');
 }
 
+
 @font-face {
-    font-family: firaCodeLight;
-    src: url('./fonts/FiraCode-Light.ttf');
+    font-family: libreLight;
+    src: url('./fonts/LibreFranklin-Regular.ttf');
 }
 
 @font-face {
-    font-family: firaCodeHeavy;
-    src: url('./fonts/FiraCode-Bold.ttf');
+    font-family: libreHeavy;
+    src: url('./fonts/LibreFranklin-ExtraBold.ttf');
 }

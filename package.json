@@ -47,7 +47,8 @@
     "test-subscriber": "jest --detectOpenHandles --verbose --testPathPattern tests/subscriber.test.ts",
     "test-tx-client": "jest --forceExit --verbose --testPathPattern tests/txClient.test.ts",
     "test-flipside": "jest --forceExit --verbose --testPathPattern tests/flipside.test.ts",
-    "test-markets": "jest --verbose --testPathPattern tests/markets.test.ts"
+    "test-markets": "jest --verbose --testPathPattern tests/markets.test.ts",
+    "prettify:fix": "lerna run prettify:fix"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",

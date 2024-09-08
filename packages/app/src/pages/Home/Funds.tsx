@@ -54,10 +54,12 @@ export const Funds = observer(({ client }: { client: PropShopClient }) => {
   return (
     <Box
       sx={{
-        width: "70%",
+        width: "80%",
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
+        pt: 5,
+        pb: 8,
       }}
     >
       <Header />
@@ -76,20 +78,21 @@ function Header() {
   return (
     <Box
       sx={{
-        width: "60%",
+        width: "80%",
         height: "100%",
         display: "flex",
-        p: 5,
+        pt: 10,
+        pb: 15,
         borderRadius: "10px",
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
         textAlign: "center",
-        gap: 2,
+        gap: 8,
       }}
     >
       <Typography variant="h1">Build wealth while you sleep</Typography>
-      <Typography variant="h3">Invest in the best traders on Solana</Typography>
+      <Typography variant="h2">Invest in the best traders on Solana</Typography>
     </Box>
   );
 }

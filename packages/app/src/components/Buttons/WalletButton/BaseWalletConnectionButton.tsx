@@ -1,10 +1,9 @@
 import React from "react";
 import { Button, ButtonProps } from "@mui/material";
 import type { WalletName } from "@solana/wallet-adapter-base";
-import { WalletIcon } from "./WalletIcon";
 
 type Props = ButtonProps & {
-  walletIcon?: string;
+  walletIcon?: React.ReactNode;
   walletName?: WalletName;
 };
 
@@ -14,7 +13,6 @@ export const BaseWalletConnectionButton = React.forwardRef(
       color = "primary",
       type = "button",
       walletIcon,
-      walletName,
       variant = "contained",
       ...props
     }: Props,
@@ -24,13 +22,7 @@ export const BaseWalletConnectionButton = React.forwardRef(
       <Button
         {...props}
         color={color}
-        startIcon={
-          walletIcon && walletName ? (
-            <WalletIcon
-              wallet={{ adapter: { icon: walletIcon, name: walletName } }}
-            />
-          ) : undefined
-        }
+        startIcon={walletIcon}
         ref={forwardedRef}
         type={type}
         variant={variant}

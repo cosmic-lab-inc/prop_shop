@@ -15,7 +15,8 @@
     "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint",
     "build": "tsc",
     "watch": "tsc-watch -p tsconfig.json --onSuccess 'echo Compiled successfully!'",
-    "test": "jest"
+    "test": "jest",
+    "prettify:fix": "prettier --write './src/**/*.ts'"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",

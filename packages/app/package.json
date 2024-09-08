@@ -15,7 +15,8 @@
     "build": "yarn generate-meta-tag && vite build --debug --force",
     "watch": "vite build --debug --force --watch",
     "start": "vite --force --port 3001 --host 0.0.0.0 --open",
-    "generate-meta-tag": "node ../../node_modules/react-cache-buster/dist/generate-meta-tag.js"
+    "generate-meta-tag": "node ../../node_modules/react-cache-buster/dist/generate-meta-tag.js",
+    "prettify:fix": "prettier --write './src/**/*.tsx' './src/**/*.ts'"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",

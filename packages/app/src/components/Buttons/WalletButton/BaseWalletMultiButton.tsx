@@ -20,7 +20,7 @@ import { customTheme } from "../../../styles";
 import Box from "@mui/material/Box";
 import { darken } from "@mui/system/colorManipulator";
 import { useOutsideClick } from "../../../lib";
-import { AirdropIcon } from "../../Icons";
+import { AirdropIcon, WalletIcon } from "../../Icons";
 import { PropShopClient } from "@cosmic-lab/prop-shop-sdk";
 
 const List = styled("ul")(({ theme }) => ({
@@ -146,6 +146,7 @@ export function BaseWalletMultiButton({
       }}
     >
       <BaseWalletConnectionButton
+        color="secondary"
         fullWidth
         variant="contained"
         aria-controls="wallet-menu"
@@ -166,8 +167,15 @@ export function BaseWalletMultiButton({
           }
         }}
         ref={anchorRef}
-        walletIcon={walletIcon}
-        walletName={walletName}
+        // walletIcon={
+        //   walletIcon &&
+        //   walletName && (
+        //     <WalletIcon
+        //       wallet={{ adapter: { icon: walletIcon, name: walletName } }}
+        //     />
+        //   )
+        // }
+        walletIcon={<WalletIcon size={30} color={customTheme.light} />}
         sx={{
           bgcolor: customTheme.secondary,
           borderRadius: "10px",
@@ -186,7 +194,7 @@ export function BaseWalletMultiButton({
                 setMenuOpen(false);
                 await navigator.clipboard.writeText(publicKey.toBase58());
               }}
-              icon={<CopyIcon />}
+              icon={<CopyIcon fontSize="small" />}
               text={
                 <Typography variant="body1">
                   {labels["copy-address"]}

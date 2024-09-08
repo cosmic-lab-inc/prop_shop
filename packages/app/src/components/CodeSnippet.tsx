@@ -34,7 +34,7 @@ export function CodeSnippet({ code }: { code: string }) {
             fontSize: 20,
             lineHeight: "1.5rem",
             letterSpacing: "1px",
-            fontFamily: customTheme.font.titilliumBold,
+            fontFamily: customTheme.font.heavy,
           }}
           ref={codeRef}
         >

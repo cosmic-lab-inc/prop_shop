@@ -6,3 +6,4 @@ export * from "./MinusIcon";
 export * from "./PropShopIcon";
 export * from "./IconSpinner";
 export * from "./CakeIcon";
+export * from "./WalletIcon";

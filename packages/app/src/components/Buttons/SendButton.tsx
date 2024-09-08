@@ -18,7 +18,7 @@ export function SendButton(props: IconButtonProps) {
     if (disabled) {
       setIconColor(customTheme.grey);
     } else {
-      setIconColor(customTheme.dark);
+      setIconColor(customTheme.light);
     }
   }, [disabled]);
 
@@ -32,7 +32,7 @@ export function SendButton(props: IconButtonProps) {
         display: "flex",
         justifyContent: "center",
 
-        color: disabled ? customTheme.light : customTheme.dark,
+        color: disabled ? customTheme.dark : customTheme.light,
         bgcolor: disabled
           ? darken(customTheme.grey2, 0.2)
           : customTheme.secondary,

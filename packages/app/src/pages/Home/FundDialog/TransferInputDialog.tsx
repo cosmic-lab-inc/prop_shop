@@ -126,7 +126,7 @@ function Input({
         </FormControl>
         <Box
           sx={{
-            width: "15%",
+            width: "20%",
           }}
         >
           <SendButton onClick={onSubmit} />

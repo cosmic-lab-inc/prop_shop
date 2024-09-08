@@ -1,16 +1,16 @@
 import "./globals.css";
 import { createTheme, Theme } from "@mui/material";
 
-const SECONDARY = "#c2a058";
+const SECONDARY = "#e82e2e";
 const LETTER_SPACING = "0px";
 const LINE_HEIGHT = "2rem";
-const FONT_WEIGHT = "bolder";
+const FONT_WEIGHT = 700;
 
 export const customTheme = {
   dark: "#2c2c2c",
-  grey2: "#cccccc",
-  grey: "#dad8d6",
-  light: "#e3e2e2",
+  grey2: "#e7e6e6",
+  grey: "#f5f5f5",
+  light: "#ffffff",
 
   secondary: SECONDARY,
   blue: SECONDARY,
@@ -19,10 +19,17 @@ export const customTheme = {
   error: "#b64747",
 
   font: {
-    light: "abel",
-    heavy: "abel",
-    // light: "titilliumHeavy",
+    // light: "abel",
+    // heavy: "abel",
+    // light: "titilliumLight",
     // heavy: "titilliumHeavy",
+    // light: "mulishLight",
+    // heavy: "mulishHeavy",
+    light: "libreLight",
+    heavy: "libreHeavy",
+
+    // --- maybe ---
+    // mulish
   },
 };
 
@@ -55,13 +62,14 @@ export const theme: Theme = createTheme({
     },
   },
   typography: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: customTheme.font.light,
-    fontWeightLight: 300,
-    fontWeightRegular: 300,
+    fontWeightLight: 700,
+    fontWeightRegular: 700,
     fontWeightBold: 700,
     h1: {
-      fontSize: 50,
+      fontSize: 80,
+      fontFamily: customTheme.font.heavy,
       letterSpacing: LETTER_SPACING,
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
@@ -69,7 +77,7 @@ export const theme: Theme = createTheme({
       color: customTheme.dark,
     },
     h2: {
-      fontSize: 40,
+      fontSize: 42,
       letterSpacing: LETTER_SPACING,
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
@@ -77,7 +85,7 @@ export const theme: Theme = createTheme({
       color: customTheme.dark,
     },
     h3: {
-      fontSize: 32,
+      fontSize: 34,
       letterSpacing: LETTER_SPACING,
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
@@ -85,7 +93,7 @@ export const theme: Theme = createTheme({
       color: customTheme.dark,
     },
     h4: {
-      fontSize: 24,
+      fontSize: 26,
       letterSpacing: LETTER_SPACING,
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
@@ -101,12 +109,12 @@ export const theme: Theme = createTheme({
       color: customTheme.dark,
     },
     button: {
-      fontSize: 24,
+      fontSize: 26,
       letterSpacing: LETTER_SPACING,
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
       textTransform: "none",
-      color: customTheme.dark,
+      color: customTheme.light,
     },
   },
 });

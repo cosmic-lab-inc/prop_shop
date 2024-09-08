@@ -3,7 +3,6 @@ import { AppBar, Box, Toolbar as MuiToolbar, Typography } from "@mui/material";
 import { TOOLBAR_HEIGHT } from "../../constants";
 import { WalletButton } from "../Buttons";
 import { customTheme } from "../../styles";
-import { PropShopIcon } from "../Icons";
 import { SearchBar } from "../SearchBar";
 import {
   driftVaults,
@@ -13,6 +12,7 @@ import {
 import { FundDialog } from "../../pages";
 import { PublicKey } from "@solana/web3.js";
 import { observer } from "mobx-react";
+import { StoreIcon } from "../Icons/StoreIcon";
 
 export const Toolbar = observer(
   ({ client }: { client: PropShopClient | undefined }) => {
@@ -96,7 +96,7 @@ export const Toolbar = observer(
               justifyContent: "space-between",
               flexDirection: "row",
               height: TOOLBAR_HEIGHT,
-              width: "70%",
+              width: "80%",
               bgcolor: customTheme.light,
               gap: 2,
             }}
@@ -110,8 +110,13 @@ export const Toolbar = observer(
                 gap: 2,
               }}
             >
-              <PropShopIcon size={70} />
-              <Typography variant="h2">Prop Shop</Typography>
+              <StoreIcon size={70} />
+              <Typography
+                variant="h2"
+                sx={{ fontFamily: customTheme.font.heavy }}
+              >
+                PROP SHOP
+              </Typography>
             </Box>
 
             <Box

@@ -203,7 +203,7 @@ function Header({ title }: { title: string }) {
   return (
     <Box>
       <TableRow square>
-        <Typography variant="h2">{truncateString(title, 10)}</Typography>
+        <Typography variant="h3">{truncateString(title, 12)}</Typography>
       </TableRow>
     </Box>
   );

@@ -22,7 +22,7 @@ export function NewFund({ client }: { client: PropShopClient }) {
           alignItems: "center",
           justifyContent: "center",
           flexDirection: "row",
-          gap: 3,
+          gap: 5,
         }}
       >
         <Typography variant="h2">Think you can beat the market?</Typography>
