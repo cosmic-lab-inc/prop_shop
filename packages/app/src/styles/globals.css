@@ -1,24 +1,4 @@
 @font-face {
-    font-family: mulishLight;
-    src: url('./fonts/Mulish-Light.ttf');
-}
-
-@font-face {
-    font-family: mulishHeavy;
-    src: url('./fonts/Mulish-Medium.ttf');
-}
-
-/*@font-face {*/
-/*    font-family: dosisLight;*/
-/*    src: url('./fonts/Dosis-Light.ttf');*/
-/*}*/
-
-/*@font-face {*/
-/*    font-family: dosisHeavy;*/
-/*    src: url('./fonts/Dosis-SemiBold.ttf');*/
-/*}*/
-
-@font-face {
     font-family: dosisLight;
     src: url('./fonts/Dosis-Regular.ttf');
 }
@@ -32,22 +12,6 @@
     font-family: abel;
     src: url('./fonts/Abel-Regular.ttf');
 }
-
-@font-face {
-    font-family: titilliumLight;
-    src: url('./fonts/Titillium-Light.ttf');
-}
-
-@font-face {
-    font-family: titilliumHeavy;
-    src: url('./fonts/Titillium-Bold.ttf');
-}
-
-@font-face {
-    font-family: whiteRabbit;
-    src: url('./fonts/White-Rabbit.ttf');
-}
-
 
 @font-face {
     font-family: libreLight;

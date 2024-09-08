@@ -19,17 +19,8 @@ export const customTheme = {
   error: "#b64747",
 
   font: {
-    // light: "abel",
-    // heavy: "abel",
-    // light: "titilliumLight",
-    // heavy: "titilliumHeavy",
-    // light: "mulishLight",
-    // heavy: "mulishHeavy",
     light: "libreLight",
     heavy: "libreHeavy",
-
-    // --- maybe ---
-    // mulish
   },
 };
 
