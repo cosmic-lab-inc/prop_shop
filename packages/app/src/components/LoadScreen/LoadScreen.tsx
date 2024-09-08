@@ -2,8 +2,9 @@ import React from "react";
 import { Box, Dialog, Typography } from "@mui/material";
 import { customTheme } from "../../styles";
 import { observer } from "mobx-react";
-import { IconSpinner, PropShopIcon } from "../Icons";
+import { IconSpinner } from "../Icons";
 import { ProgressBar } from "./ProgressBar";
+import { StoreIcon } from "../Icons/StoreIcon";
 
 // const messages = [randomName(5), randomName(7), randomName(4), randomName(6)];
 const messages = [
@@ -79,7 +80,7 @@ export const LoadScreen = observer(({ open }: { open: boolean }) => {
             }}
           >
             <IconSpinner>
-              <PropShopIcon size={150} />
+              <StoreIcon size={100} />
             </IconSpinner>
 
             <Typography variant="h4">{text}</Typography>

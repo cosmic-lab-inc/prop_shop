@@ -110,7 +110,7 @@ export const Toolbar = observer(
                 gap: 2,
               }}
             >
-              <StoreIcon size={60} color={customTheme.secondary} />
+              <StoreIcon size={60} />
               <Box
                 sx={{
                   gap: 0,

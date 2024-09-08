@@ -30,8 +30,9 @@ export const Funds = observer(({ client }: { client: PropShopClient }) => {
           data: mockFundOverviews()[0].data,
         };
       });
+    } else {
+      _funds = _funds.filter((fund) => fund.tvl > 1_000);
     }
-    _funds = _funds.filter((fund) => fund.tvl > 1_000);
     setFunds(_funds);
   }, [client.fundOverviews]);
 
