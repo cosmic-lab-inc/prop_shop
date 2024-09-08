@@ -446,12 +446,7 @@ function DaysInput({
         multiline={false}
         endAdornment={
           <InputAdornment position="end">
-            <Typography
-              variant="h4"
-              sx={{ color: customTheme.dark, fontWeight: 300 }}
-            >
-              {value === 1 ? "day" : "days"}
-            </Typography>
+            <Typography variant="h4">{value === 1 ? "day" : "days"}</Typography>
           </InputAdornment>
         }
         type={"tel"}
@@ -561,7 +556,6 @@ const Toggle = styled((props: ToggleProps) => {
     transitionDuration: "300ms",
     "&.Mui-checked": {
       transform: "translateX(48px)",
-      color: customTheme.dark,
       "& + .MuiSwitch-track": {
         backgroundColor: customTheme.secondary,
         opacity: 1,

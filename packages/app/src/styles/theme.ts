@@ -21,6 +21,8 @@ export const customTheme = {
   font: {
     light: "abel",
     heavy: "abel",
+    // light: "titilliumHeavy",
+    // heavy: "titilliumHeavy",
   },
 };
 
@@ -53,13 +55,13 @@ export const theme: Theme = createTheme({
     },
   },
   typography: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: customTheme.font.light,
     fontWeightLight: 300,
     fontWeightRegular: 300,
     fontWeightBold: 700,
     h1: {
-      fontSize: 46,
+      fontSize: 50,
       letterSpacing: LETTER_SPACING,
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
@@ -67,7 +69,7 @@ export const theme: Theme = createTheme({
       color: customTheme.dark,
     },
     h2: {
-      fontSize: 30,
+      fontSize: 40,
       letterSpacing: LETTER_SPACING,
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,
@@ -75,7 +77,7 @@ export const theme: Theme = createTheme({
       color: customTheme.dark,
     },
     h3: {
-      fontSize: 24,
+      fontSize: 32,
       letterSpacing: LETTER_SPACING,
       lineHeight: LINE_HEIGHT,
       fontWeight: FONT_WEIGHT,

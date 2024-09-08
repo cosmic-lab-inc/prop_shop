@@ -156,7 +156,7 @@ function Container({
           cursor: "pointer",
           ml: 1,
           mr: 1,
-          boxShadow: `0px 5px 5px 0px ${customTheme.dark}`,
+          boxShadow: isHovered ? "none" : `0px 0px 5px 0px ${customTheme.dark}`,
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -169,6 +169,8 @@ function Container({
             left: 0,
             right: 0,
             bottom: 0,
+            // ml: 1,
+            // mr: 1,
             zIndex: isHovered ? 0 : -1,
             backdropFilter: "blur(4px)",
             transition: "backdrop-filter 0.2s linear",
@@ -185,6 +187,8 @@ function Container({
             width: "50%",
             left: "50%",
             top: "50%",
+            ml: 1,
+            mr: 1,
             transform: "translate(-50%, -50%)",
           }}
         >
@@ -199,7 +203,7 @@ function Header({ title }: { title: string }) {
   return (
     <Box>
       <TableRow square>
-        <Typography variant="h2">{truncateString(title, 15)}</Typography>
+        <Typography variant="h2">{truncateString(title, 10)}</Typography>
       </TableRow>
     </Box>
   );
@@ -221,20 +225,19 @@ const TableRow = styled("div")<{
   flexDirection: "row",
   justifyContent: "space-between",
 
+  paddingLeft: 20,
+  paddingRight: 20,
+  paddingTop: 10,
+  paddingBottom: 10,
+
   "&:hover": {
     backgroundColor: `${hover ? customTheme.grey2 : "transparent"}`,
   },
-
-  paddingLeft: "15px",
-  paddingRight: "15px",
 
   borderRadius: "10px",
   ...(square && {
     borderRadius: "0",
   }),
-
-  paddingTop: "5px",
-  paddingBottom: "5px",
 
   ...(header && {
     borderBottomRightRadius: "0",

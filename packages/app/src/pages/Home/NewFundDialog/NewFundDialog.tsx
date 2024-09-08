@@ -28,7 +28,7 @@ export const NewFundDialog = observer(
     return (
       <>
         <Dialog
-          maxWidth="lg"
+          maxWidth="md"
           fullWidth={true}
           fullScreen={false}
           scroll="paper"
