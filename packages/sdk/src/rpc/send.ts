@@ -88,14 +88,17 @@ export async function sendTransactionWithResult(
   connection: Connection,
 ): Promise<Result<string, TransactionError>> {
   try {
-    const trx = await buildAndSignTransaction(instructions, funder, {
-      connection: connection,
+    let tx = await buildAndSignTransaction(instructions, funder, {
+      connection,
       commitment: "confirmed",
     });
-
-    const res = await sendTransaction(trx, connection, {
+    console.debug(
+      "message:",
+      formatExplorerMessageLink(tx.transaction, connection),
+    );
+    const res = await sendTransaction(tx, connection, {
       sendOptions: {
-        skipPreflight: true,
+        skipPreflight: false,
       },
     });
     if (res.value.isErr()) {
@@ -113,17 +116,15 @@ export async function sendTransactionWithSnack(
   funder: AsyncSigner,
   connection: Connection,
 ): Promise<SnackInfo> {
-  const trx = await buildAndSignTransaction(instructions, funder, {
-    connection: connection,
+  const tx = await buildAndSignTransaction(instructions, funder, {
+    connection,
     commitment: "confirmed",
   });
-
   console.debug(
     "Message:",
-    formatExplorerMessageLink(trx.transaction, connection),
+    formatExplorerMessageLink(tx.transaction, connection),
   );
-
-  const res = await sendTransaction(trx, connection, {
+  const res = await sendTransaction(tx, connection, {
     sendOptions: {
       skipPreflight: true,
     },

@@ -5,19 +5,19 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Error, Home } from "./pages";
 import { observer } from "mobx-react";
 import type { Adapter, WalletError } from "@solana/wallet-adapter-base";
-import { WalletDialogProvider } from "@solana/wallet-adapter-material-ui";
 import {
   ConnectionProvider,
   WalletProvider,
 } from "@solana/wallet-adapter-react";
 import { useSnackbar } from "notistack";
 import {
+  BackpackWalletAdapter,
   PhantomWalletAdapter,
   SolflareWalletAdapter,
 } from "@solana/wallet-adapter-wallets";
 import { CssBaseline } from "@mui/material";
 import Box from "@mui/material/Box";
-import { LoadScreen, Toolbar } from "./components";
+import { LoadScreen, Toolbar, WalletDialogProvider } from "./components";
 import { TOOLBAR_HEIGHT } from "./constants";
 import { ThemeWrapper } from "./styles";
 import { useClient } from "./lib";
@@ -49,7 +49,11 @@ const Context = observer(({ children }: { children: ReactNode }) => {
   );
 
   const wallets = useMemo(
-    () => [new SolflareWalletAdapter(), new PhantomWalletAdapter()],
+    () => [
+      new SolflareWalletAdapter(),
+      new PhantomWalletAdapter(),
+      new BackpackWalletAdapter(),
+    ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );

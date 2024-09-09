@@ -6,3 +6,4 @@ export * from "./Typing";
 export * from "./CodeSnippet";
 export * from "./HttpDisplay";
 export * from "./LoadScreen";
+export * from "./WalletDialogProvider";

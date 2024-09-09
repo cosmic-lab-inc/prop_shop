@@ -39,6 +39,7 @@ import {
   getVaultAddressSync,
   getVaultDepositorAddressSync,
   getVaultProtocolAddressSync,
+  IDL as DRIFT_VAULTS_IDL,
   VaultClient,
   VaultProtocolParams,
   WithdrawUnit,
@@ -51,13 +52,14 @@ import {
 } from "@drift-labs/competitions-sdk";
 import { afterAll, beforeAll, describe, it } from "@jest/globals";
 import {
+  DRIFT_VAULTS_PROGRAM_ID,
   TEST_MANAGER,
   TEST_USDC_MINT,
   TEST_USDC_MINT_AUTHORITY,
   TEST_VAULT_DEPOSITOR,
 } from "@cosmic-lab/prop-shop-sdk";
 
-describe("driftProtocolVaults", () => {
+describe("driftVaults", () => {
   const opts: ConfirmOptions = {
     preflightCommitment: "confirmed",
     skipPreflight: false,
@@ -68,7 +70,13 @@ describe("driftProtocolVaults", () => {
   anchor.setProvider(provider);
   const connection = provider.connection;
 
-  const program = anchor.workspace.DriftVaults as Program<DriftVaults>;
+  console.log("workspace:", anchor.workspace.DriftVaults);
+  // const program = anchor.workspace.DriftVaults as Program<DriftVaults>;
+  const program = new Program(
+    DRIFT_VAULTS_IDL as any as anchor.Idl,
+    DRIFT_VAULTS_PROGRAM_ID,
+    provider,
+  ) as any as Program<DriftVaults>;
 
   const bulkAccountLoader = new BulkAccountLoader(connection, "confirmed", 1);
 
@@ -1066,7 +1074,7 @@ describe("driftProtocolVaults", () => {
   it("Settle Pnl", async () => {
     const vaultUser = delegateClient.driftClient.getUser(0, protocolVault);
     const uA = vaultUser.getUserAccount();
-    assert(uA.idle === false);
+    assert(!uA.idle);
     const solPerpPos = vaultUser.getPerpPosition(0)!;
     const solPerpQuote =
       solPerpPos.quoteAssetAmount.toNumber() / QUOTE_PRECISION.toNumber();
@@ -1106,7 +1114,7 @@ describe("driftProtocolVaults", () => {
     console.log("upnl:", upnl.toString());
     assert(pnl === upnl);
     assert(
-      solPerpPos.quoteAssetAmount.toNumber() / QUOTE_PRECISION.toNumber() ==
+      solPerpPos.quoteAssetAmount.toNumber() / QUOTE_PRECISION.toNumber() ===
         upnl,
     );
     assert(solPerpQuote === pnl);
@@ -1139,7 +1147,7 @@ describe("driftProtocolVaults", () => {
     console.log("vault settled pnl:", settledPnl);
     assert(settledPnl === pnl);
   });
-
+  //
   // it("Withdraw", async () => {
   //   const vaultDepositor = getVaultDepositorAddressSync(
   //     program.programId,
@@ -1229,7 +1237,7 @@ describe("driftProtocolVaults", () => {
   //     await vdClient.program.methods
   //       .withdraw()
   //       .accounts({
-  //         userTokenAccount: vdUserUSDCAccount.publicKey,
+  //         userTokenAccount: vdUserUSDCAccount,
   //         vault: protocolVault,
   //         vaultDepositor,
   //         vaultTokenAccount: vaultAccount.tokenAccount,
@@ -1317,7 +1325,7 @@ describe("driftProtocolVaults", () => {
   //     await protocolClient.program.methods
   //       .protocolWithdraw()
   //       .accounts({
-  //         userTokenAccount: protocolVdUserUSDCAccount.publicKey,
+  //         userTokenAccount: protocolVdUserUSDCAccount,
   //         vault: protocolVault,
   //         vaultProtocol,
   //         vaultTokenAccount: vaultAccount.tokenAccount,

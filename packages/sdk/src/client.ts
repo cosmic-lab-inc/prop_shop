@@ -49,7 +49,6 @@ import {
   fundDollarPnl,
   percentPrecisionToPercent,
   percentToPercentPrecision,
-  shortenAddress,
 } from "./utils";
 import {
   confirmTransactions,
@@ -72,6 +71,7 @@ import {
   getVaultAddressSync,
   getVaultDepositorAddressSync,
   IDL as DRIFT_VAULTS_IDL,
+  TxParams,
   UpdateVaultParams,
   Vault,
   VaultClient,
@@ -309,7 +309,6 @@ export class PropShopClient {
     const iWallet = PropShopClient.walletAdapterToIWallet(this.wallet);
     await this.driftClient.updateWallet(iWallet, undefined, 0);
     console.log(`updated wallet in ${Date.now() - now}ms`);
-    // this.loading = false;
   }
 
   private async driftMarkets(
@@ -1278,6 +1277,59 @@ export class PropShopClient {
     };
   }
 
+  private async requestWithdrawIx(
+    vaultDepositor: PublicKey,
+    amount: BN,
+    withdrawUnit: WithdrawUnit,
+    txParams?: TxParams,
+  ): Promise<Result<TransactionInstruction[], SnackInfo>> {
+    const vaultDepositorAccount =
+      await this.vaultProgram.account.vaultDepositor.fetch(vaultDepositor);
+    const vaultAccount = await this.vaultProgram.account.vault.fetch(
+      vaultDepositorAccount.vault,
+    );
+
+    const user = await this.vaultClient.getSubscribedVaultUser(
+      vaultAccount.user,
+    );
+    const remainingAccounts = this.driftClient.getRemainingAccounts({
+      userAccounts: [user.getUserAccount()],
+    });
+    if (vaultAccount.vaultProtocol) {
+      const vaultProtocol = this.vaultClient.getVaultProtocolAddress(
+        vaultDepositorAccount.vault,
+      );
+      remainingAccounts.push({
+        pubkey: vaultProtocol,
+        isSigner: false,
+        isWritable: true,
+      });
+    }
+
+    const userStatsKey = getUserStatsAccountPublicKey(
+      this.driftClient.program.programId,
+      vaultDepositorAccount.vault,
+    );
+
+    const driftStateKey = await this.driftClient.getStatePublicKey();
+
+    const accounts = {
+      vault: vaultDepositorAccount.vault,
+      vaultDepositor,
+      driftUserStats: userStatsKey,
+      driftUser: vaultAccount.user,
+      driftState: driftStateKey,
+    };
+
+    const ix = await this.vaultProgram.methods
+      // @ts-ignore
+      .requestWithdraw(amount, withdrawUnit)
+      .accounts(accounts)
+      .remainingAccounts(remainingAccounts)
+      .instruction();
+    return ok([ix]);
+  }
+
   public async requestWithdraw(
     vault: PublicKey,
     usdc: number,
@@ -1291,11 +1343,13 @@ export class PropShopClient {
     // check if wallet is protocol
     const isProtocolResult = await this.isProtocol(vault);
     if (isProtocolResult.isErr()) {
+      console.error(isProtocolResult.error);
       return isProtocolResult.error;
     }
     if (isProtocolResult.value) {
       const ix = await this.protocolRequestWithdrawIx(vault, usdc);
       if (ix.isErr()) {
+        console.error(ix.error);
         return ix.error;
       }
       const res = await this.sendTx([ix.value]);
@@ -1323,11 +1377,13 @@ export class PropShopClient {
 
     const isManagerResult = this.isManager(vault);
     if (isManagerResult.isErr()) {
+      console.error(isManagerResult.error);
       return isManagerResult.error;
     }
     if (isManagerResult.value) {
       const ix = await this.managerRequestWithdrawIx(vault, usdc);
       if (ix.isErr()) {
+        console.error(ix.error);
         return ix.error;
       }
       const res = await this.sendTx([ix.value]);
@@ -1353,23 +1409,43 @@ export class PropShopClient {
       };
     }
 
-    const sig = await this.vaultClient.requestWithdraw(
-      vaultDepositor,
-      amount,
-      WithdrawUnit.TOKEN,
-    );
-    await this.fetchVaultEquity(vault);
-    await this.fetchFundOverviews();
+    try {
+      const ix = await this.requestWithdrawIx(
+        vaultDepositor,
+        amount,
+        WithdrawUnit.TOKEN,
+      );
+      if (ix.isErr()) {
+        console.error(ix.error);
+        return ix.error;
+      }
+      const res = await this.sendTx(ix.value);
+      if (res.isErr()) {
+        console.error(res.error);
+        return {
+          variant: "error",
+          message: "Failed to request withdraw",
+        };
+      }
+      console.debug("request withdraw:", formatExplorerLink(res.value));
+      await this.fetchVaultEquity(vault);
+      await this.fetchFundOverviews();
 
-    // cache timer so frontend can track withdraw request
-    await this.createWithdrawTimer(vault);
+      // cache timer so frontend can track withdraw request
+      await this.createWithdrawTimer(vault);
 
-    console.debug("request withdraw:", formatExplorerLink(sig));
-    const vaultName = decodeName(this.vault(vault)!.data.name);
-    return {
-      variant: "success",
-      message: `Requested withdraw from ${vaultName}`,
-    };
+      const vaultName = decodeName(this.vault(vault)!.data.name);
+      return {
+        variant: "success",
+        message: `Requested withdraw from ${vaultName}`,
+      };
+    } catch (e: any) {
+      console.error(e);
+      return {
+        variant: "error",
+        message: `Failed to request withdraw`,
+      };
+    }
   }
 
   public async cancelWithdrawRequest(vault: PublicKey): Promise<SnackInfo> {
@@ -2634,7 +2710,7 @@ export class PropShopClient {
     if (!usdc) {
       return undefined;
     }
-    console.log(`vd: ${shortenAddress(key.toString())}, equity: ${usdc}`);
+    // console.debug(`vd: ${shortenAddress(key.toString())}, equity: ${usdc}`);
     this._equities.set(vault.toString(), usdc);
     return usdc;
   }
