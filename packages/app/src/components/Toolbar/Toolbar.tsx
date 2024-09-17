@@ -145,7 +145,7 @@ export const Toolbar = observer(
               <SearchBar
                 search={searchInput}
                 changeSearch={changeSearchInput}
-                placeholder="Search your vaults"
+                placeholder="Search your funds"
                 options={vaults}
                 show={showSearch}
                 setShow={setShowSearch}
