@@ -14,10 +14,10 @@ import {
   TransactionVersion,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { makeAutoObservable } from "mobx";
+import {makeAutoObservable} from "mobx";
 import * as anchor from "@coral-xyz/anchor";
-import { AnchorProvider, BN, Program, ProgramAccount } from "@coral-xyz/anchor";
-import { Wallet as AnchorWallet } from "@coral-xyz/anchor/dist/cjs/provider";
+import {AnchorProvider, BN, Program, ProgramAccount} from "@coral-xyz/anchor";
+import {Wallet as AnchorWallet} from "@coral-xyz/anchor/dist/cjs/provider";
 import {
   decodeName,
   DriftClient,
@@ -44,17 +44,9 @@ import {
   TEST_USDC_MINT,
   TEST_USDC_MINT_AUTHORITY,
 } from "./constants";
-import { getAssociatedTokenAddress } from "./programs";
-import {
-  fundDollarPnl,
-  percentPrecisionToPercent,
-  percentToPercentPrecision,
-} from "./utils";
-import {
-  confirmTransactions,
-  formatExplorerLink,
-  sendTransactionWithResult,
-} from "./rpc";
+import {getAssociatedTokenAddress} from "./programs";
+import {fundDollarPnl, percentPrecisionToPercent, percentToPercentPrecision,} from "./utils";
+import {confirmTransactions, formatExplorerLink, sendTransactionWithResult,} from "./rpc";
 import {
   CreateVaultConfig,
   Data,
@@ -79,9 +71,10 @@ import {
   VaultParams,
   VaultProtocol,
   VaultProtocolParams,
+  VaultWithProtocolParams,
   WithdrawUnit,
 } from "@drift-labs/vaults-sdk";
-import { EventEmitter } from "events";
+import {EventEmitter} from "events";
 import bs58 from "bs58";
 import StrictEventEmitter from "strict-event-emitter-types";
 import {
@@ -93,20 +86,16 @@ import {
   WalletName,
   WalletReadyState,
 } from "@solana/wallet-adapter-base";
-import { Wallet, WalletContextState } from "@solana/wallet-adapter-react";
+import {Wallet, WalletContextState} from "@solana/wallet-adapter-react";
 import {
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { err, ok, Result } from "neverthrow";
-import {
-  InstructionReturn,
-  keypairToAsyncSigner,
-  walletAdapterToAsyncSigner,
-} from "@cosmic-lab/data-source";
-import { WebSocketSubscriber } from "./websocketSubscriber";
+import {err, ok, Result} from "neverthrow";
+import {InstructionReturn, keypairToAsyncSigner, walletAdapterToAsyncSigner,} from "@cosmic-lab/data-source";
+import {WebSocketSubscriber} from "./websocketSubscriber";
 
 interface DriftMarkets {
   spotMarkets: SpotMarketAccount[];
@@ -184,7 +173,7 @@ export class PropShopClient {
       skipLoadUsers: this.dummyWallet,
     };
 
-    const { connection, accountSubscription, opts, activeSubAccountId } =
+    const {connection, accountSubscription, opts, activeSubAccountId} =
       config;
     const iWallet = PropShopClient.walletAdapterToIWallet(this.wallet);
     const anchorWallet = PropShopClient.walletAdapterToAnchorWallet(
@@ -533,8 +522,8 @@ export class PropShopClient {
           : true;
         const investedFilter = filters?.invested
           ? this.investedVaults()
-              .map((k) => k.toString())
-              .includes(value.pubkey.toString())
+            .map((k) => k.toString())
+            .includes(value.pubkey.toString())
           : true;
         return protocolFilter && managedFilter && investedFilter;
       })
@@ -683,12 +672,12 @@ export class PropShopClient {
 
   public async vaultStats(vault: PublicKey): Promise<
     | {
-        equity: number;
-        netDeposits: number;
-        lifetimePNL: number;
-        volume30d: number;
-        birth: Date;
-      }
+    equity: number;
+    netDeposits: number;
+    lifetimePNL: number;
+    volume30d: number;
+    birth: Date;
+  }
     | undefined
   > {
     const acct = this.vault(vault)?.data;
@@ -1622,14 +1611,7 @@ export class PropShopClient {
     },
     delegate: PublicKey,
   ): Promise<string> {
-    // This is a workaround to make client backwards compatible.
-    // VaultProtocol is optionally undefined, but the anchor type is optionally null.
-    // Old clients will default to undefined which prevents old clients from having to pass in a null value.
-    // Instead, we can cast to null internally.
-    const _params: VaultParams = {
-      ...params,
-      vaultProtocol: params.vaultProtocol ? params.vaultProtocol : null,
-    };
+    const {vaultProtocol: vaultProtocolParams, ...vaultParams} = params;
 
     const vault = getVaultAddressSync(this.vaultProgram.programId, params.name);
     const tokenAccount = getTokenVaultAddressSync(
@@ -1669,24 +1651,24 @@ export class PropShopClient {
 
     const updateDelegateIx = await this.delegateVaultIx(vault, delegate);
 
-    if (params.vaultProtocol) {
+    if (vaultProtocolParams) {
+      const _params: VaultWithProtocolParams = {
+        ...vaultParams,
+        vaultProtocol: vaultProtocolParams,
+      };
       const vaultProtocol = this.vaultClient.getVaultProtocolAddress(
         getVaultAddressSync(this.vaultProgram.programId, params.name),
       );
-      const remainingAccounts: AccountMeta[] = [
-        {
-          pubkey: vaultProtocol,
-          isSigner: false,
-          isWritable: true,
-        },
-      ];
       return await this.vaultProgram.methods
-        .initializeVault(_params)
-        .accounts(accounts)
-        .remainingAccounts(remainingAccounts)
+        .initializeVaultWithProtocol(_params)
+        .accounts({
+          ...accounts,
+          vaultProtocol
+        })
         .postInstructions([updateDelegateIx])
         .rpc();
     } else {
+      const _params: VaultParams = vaultParams;
       return await this.vaultProgram.methods
         .initializeVault(_params)
         .accounts(accounts)

@@ -17,7 +17,7 @@
     "@solana/spl-token": "^0.3.7",
     "@solana/web3.js": "^1.77.3",
     "@cosmic-lab/prop-shop-sdk": "^0.2.10",
-    "@drift-labs/sdk": "2.93.0-beta.3",
+    "@drift-labs/sdk": "2.96.0-beta.0",
     "axios": "^1.7.2",
     "bs58": "4.0.1",
     "cors": "^2.8.5",
