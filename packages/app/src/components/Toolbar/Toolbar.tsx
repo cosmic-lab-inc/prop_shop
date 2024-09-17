@@ -1,21 +1,17 @@
 import React from "react";
-import { AppBar, Box, Toolbar as MuiToolbar, Typography } from "@mui/material";
-import { TOOLBAR_HEIGHT } from "../../constants";
-import { WalletButton } from "../Buttons";
-import { customTheme } from "../../styles";
-import { SearchBar } from "../SearchBar";
-import {
-  driftVaults,
-  PropShopClient,
-  Searchable,
-} from "@cosmic-lab/prop-shop-sdk";
-import { FundDialog } from "../../pages";
-import { PublicKey } from "@solana/web3.js";
-import { observer } from "mobx-react";
-import { StoreIcon } from "../Icons/StoreIcon";
+import {AppBar, Box, Toolbar as MuiToolbar, Typography} from "@mui/material";
+import {TOOLBAR_HEIGHT} from "../../constants";
+import {WalletButton} from "../Buttons";
+import {customTheme} from "../../styles";
+import {SearchBar} from "../SearchBar";
+import {driftVaults, PropShopClient, Searchable,} from "@cosmic-lab/prop-shop-sdk";
+import {FundDialog} from "../../pages";
+import {PublicKey} from "@solana/web3.js";
+import {observer} from "mobx-react";
+import {PropShopIcon} from "../Icons/PropShopIcon";
 
 export const Toolbar = observer(
-  ({ client }: { client: PropShopClient | undefined }) => {
+  ({client}: { client: PropShopClient | undefined }) => {
     const [searchInput, setSearchInput] = React.useState("");
     const [showSearch, setShowSearch] = React.useState(false);
     const [vaults, setVaults] = React.useState<Searchable<driftVaults.Vault>[]>(
@@ -110,7 +106,7 @@ export const Toolbar = observer(
                 gap: 2,
               }}
             >
-              <StoreIcon size={60} />
+              <PropShopIcon size={60}/>
               <Box
                 sx={{
                   gap: 0,
@@ -165,7 +161,7 @@ export const Toolbar = observer(
                 p: 1,
               }}
             >
-              <WalletButton client={client} />
+              <WalletButton client={client}/>
             </Box>
           </MuiToolbar>
         </AppBar>

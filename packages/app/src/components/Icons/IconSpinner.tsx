@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, keyframes, styled } from "@mui/material";
+import {Box, keyframes, styled} from "@mui/material";
 
 const SpinnerAnimation = keyframes`
     0% {
@@ -9,17 +9,17 @@ const SpinnerAnimation = keyframes`
         transform: rotate(360deg);
     }
 `;
-const Spinner = styled("div")(({ theme }) => ({
+const Animation = styled("div")(({theme}) => ({
   width: "100px",
   height: "100px",
   borderRadius: "50%",
   animation: `${SpinnerAnimation} 1s linear infinite`,
 }));
 
-export function IconSpinner({ children }: { children: React.ReactNode }) {
+export function IconSpinner({children}: { children: React.ReactNode }) {
   return (
     <Box>
-      <Spinner>{children}</Spinner>
+      <Animation>{children}</Animation>
     </Box>
   );
 }

@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import {Program} from "@coral-xyz/anchor";
 import {
   AdminClient,
   BASE_PRECISION,
@@ -32,7 +32,7 @@ import {
   printTxLogs,
   setFeedPrice,
 } from "./testHelpers";
-import { ConfirmOptions, Keypair } from "@solana/web3.js";
+import {ConfirmOptions, Keypair} from "@solana/web3.js";
 import {
   DriftVaults,
   encodeName,
@@ -44,13 +44,9 @@ import {
   VaultProtocolParams,
   WithdrawUnit,
 } from "@drift-labs/vaults-sdk";
-import { assert } from "chai";
-import {
-  CompetitionsClient,
-  getCompetitionAddressSync,
-  getCompetitorAddressSync,
-} from "@drift-labs/competitions-sdk";
-import { afterAll, beforeAll, describe, it } from "@jest/globals";
+import {assert} from "chai";
+import {CompetitionsClient, getCompetitionAddressSync, getCompetitorAddressSync,} from "@drift-labs/competitions-sdk";
+import {afterAll, beforeAll, describe, it} from "@jest/globals";
 import {
   DRIFT_VAULTS_PROGRAM_ID,
   TEST_MANAGER,
@@ -70,7 +66,6 @@ describe("driftVaults", () => {
   anchor.setProvider(provider);
   const connection = provider.connection;
 
-  console.log("workspace:", anchor.workspace.DriftVaults);
   // const program = anchor.workspace.DriftVaults as Program<DriftVaults>;
   const program = new Program(
     DRIFT_VAULTS_IDL as any as anchor.Idl,
@@ -142,7 +137,7 @@ describe("driftVaults", () => {
       const perpMarketIndexes = [0];
       const spotMarketIndexes = [0];
       const oracleInfos = [
-        { publicKey: solPerpOracle, source: OracleSource.PYTH },
+        {publicKey: solPerpOracle, source: OracleSource.PYTH},
       ];
 
       adminClient = new AdminClient({
@@ -896,7 +891,7 @@ describe("driftVaults", () => {
           .remainingAccounts(remainingAccounts)
           .instruction();
 
-      const { slot } = await delegateClient.driftClient.sendTransaction(
+      const {slot} = await delegateClient.driftClient.sendTransaction(
         await delegateClient.driftClient.buildTransaction(
           placeAndMakeOrderIx,
           delegateClient.driftClient.txParams,
@@ -1044,7 +1039,7 @@ describe("driftVaults", () => {
           .remainingAccounts(remainingAccounts)
           .instruction();
 
-      const { slot } = await delegateClient.driftClient.sendTransaction(
+      const {slot} = await delegateClient.driftClient.sendTransaction(
         await delegateClient.driftClient.buildTransaction(
           placeAndMakeOrderIx,
           delegateClient.driftClient.txParams,
@@ -1097,7 +1092,7 @@ describe("driftVaults", () => {
     );
     assert(
       finalSolPerpPrice ===
-        solPrice.price.toNumber() / PRICE_PRECISION.toNumber(),
+      solPrice.price.toNumber() / PRICE_PRECISION.toNumber(),
     );
 
     const solPerpMarket = delegateClient.driftClient.getPerpMarketAccount(0)!;
@@ -1115,7 +1110,7 @@ describe("driftVaults", () => {
     assert(pnl === upnl);
     assert(
       solPerpPos.quoteAssetAmount.toNumber() / QUOTE_PRECISION.toNumber() ===
-        upnl,
+      upnl,
     );
     assert(solPerpQuote === pnl);
 
