@@ -1,6 +1,6 @@
-import { BN } from "@coral-xyz/anchor";
-import { QUOTE_PRECISION, SettlePnlRecord } from "@drift-labs/sdk";
-import { PublicKey } from "@solana/web3.js";
+import {BN} from "@coral-xyz/anchor";
+import {QUOTE_PRECISION, SettlePnlRecord} from "@drift-labs/sdk";
+import {PublicKey} from "@solana/web3.js";
 
 export interface CreateVaultConfig {
   // The name of the vault
@@ -35,12 +35,10 @@ export interface UpdateVaultConfig {
 export interface FundOverview {
   vault: PublicKey;
   lifetimePNL: number;
-  volume30d: number;
   tvl: number;
   birth: Date;
   title: string;
   investors: number;
-  data: number[];
 }
 
 export interface HistoricalSettlePNL {

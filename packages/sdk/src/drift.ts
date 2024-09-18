@@ -56,9 +56,9 @@ import {confirmTransactions, formatExplorerLink, sendTransactionWithResult,} fro
 import {
   CreateVaultConfig,
   Data,
-  DriftVaultsSubscriber,
+  DriftSubscriber,
+  DriftVaultsAccountEvents,
   FundOverview,
-  PropShopAccountEvents,
   SnackInfo,
   UpdateVaultConfig,
   WithdrawRequestTimer,
@@ -101,7 +101,7 @@ import {
 } from "@solana/spl-token";
 import {err, ok, Result} from "neverthrow";
 import {InstructionReturn, keypairToAsyncSigner, walletAdapterToAsyncSigner,} from "@cosmic-lab/data-source";
-import {WebSocketSubscriber} from "./websocketSubscriber";
+import {DriftWebsocketSubscriber} from "./driftWebsocketSubscriber";
 
 interface DriftMarkets {
   spotMarkets: SpotMarketAccount[];
@@ -122,9 +122,9 @@ export class DriftVaultsClient {
 
   private eventEmitter: StrictEventEmitter<
     EventEmitter,
-    PropShopAccountEvents
+    DriftVaultsAccountEvents
   > = new EventEmitter();
-  private _cache: DriftVaultsSubscriber | undefined = undefined;
+  private _cache: DriftSubscriber | undefined = undefined;
 
   private _vaults: Map<string, Vault> = new Map();
   private _vaultDepositors: Map<string, VaultDepositor> = new Map();
@@ -248,7 +248,6 @@ export class DriftVaultsClient {
     if (!this.disableCache) {
       const preSub = Date.now();
       await this.loadCache(driftVaultsProgram);
-      // 2500ms websocket, 1500ms polling
       console.log(`cache loaded in ${Date.now() - preSub}ms`);
     }
 
@@ -260,7 +259,7 @@ export class DriftVaultsClient {
     if (this.disableCache) {
       return;
     }
-    this._cache = new WebSocketSubscriber(
+    this._cache = new DriftWebsocketSubscriber(
       program,
       {
         filters: [
@@ -745,7 +744,6 @@ export class DriftVaultsClient {
     }
 
     const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-    const data: number[] = [];
     const title = decodeName(vault.data.name);
     const stats = await this.vaultStats(vault.key);
     if (!stats) {
@@ -754,12 +752,10 @@ export class DriftVaultsClient {
     const fo: FundOverview = {
       vault: vault.data.pubkey,
       lifetimePNL: stats.lifetimePNL,
-      volume30d: stats.volume30d,
       tvl: stats.equity,
       birth: stats.birth,
       title,
       investors: investors.length,
-      data,
     };
     this.setFundOverview(vault.key, fo);
     return fo;
@@ -782,7 +778,6 @@ export class DriftVaultsClient {
     const fundOverviews: FundOverview[] = [];
     for (const vault of vaults) {
       const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-      const data: number[] = [];
       const title = decodeName(vault.data.name);
       const stats = await this.vaultStats(vault.key);
       if (!stats) {
@@ -791,12 +786,10 @@ export class DriftVaultsClient {
       const fo: FundOverview = {
         vault: vault.data.pubkey,
         lifetimePNL: stats.lifetimePNL,
-        volume30d: stats.volume30d,
         tvl: stats.equity,
         birth: stats.birth,
         title: decodeName(vault.data.name),
         investors: investors.length,
-        data,
       };
       fundOverviews.push(fo);
       this.setFundOverview(vault.key, fo);
@@ -2832,7 +2825,7 @@ export class DriftVaultsClient {
 
   public get vaultClient(): VaultClient {
     if (!this._vaultClient) {
-      throw new Error("VaultClient not initialized");
+      throw new Error("Drift VaultClient not initialized");
     }
     return this._vaultClient;
   }

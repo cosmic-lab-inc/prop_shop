@@ -1,48 +1,38 @@
-import { DataAndSlot, NotSubscribedError } from "@drift-labs/sdk";
-import {
-  AccountNamespace,
-  BorshAccountsCoder,
-  Program,
-  ProgramAccount,
-} from "@coral-xyz/anchor";
+import {DataAndSlot, NotSubscribedError} from "@drift-labs/sdk";
+import {AccountNamespace, BorshAccountsCoder, Program, ProgramAccount,} from "@coral-xyz/anchor";
 import StrictEventEmitter from "strict-event-emitter-types";
-import { EventEmitter } from "events";
-import { capitalize } from "./utils";
+import {EventEmitter} from "events";
+import {capitalize} from "./utils";
+import {AccountInfo, GetProgramAccountsConfig, GetProgramAccountsResponse, PublicKey,} from "@solana/web3.js";
+import {DriftVaults} from "@drift-labs/vaults-sdk";
 import {
-  AccountInfo,
-  GetProgramAccountsConfig,
-  GetProgramAccountsResponse,
-  PublicKey,
-} from "@solana/web3.js";
-import { DriftVaults } from "@drift-labs/vaults-sdk";
-import {
-  AccountGpaFilter,
-  AccountSubscription,
-  DriftVaultsSubscriber,
-  PropShopAccountEvents,
-  SubscriptionConfig,
+  DriftSubscriber,
+  DriftVaultsAccountEvents,
+  DriftVaultsAccountGpaFilter,
+  DriftVaultsAccountSubscription,
+  DriftVaultsSubscriptionConfig,
 } from "./types";
-import { Buffer } from "buffer";
+import {Buffer} from "buffer";
 import bs58 from "bs58";
-import { AccountLoader } from "./accountLoader";
+import {AccountLoader} from "./accountLoader";
 
-export class PollingSubscriber implements DriftVaultsSubscriber {
+export class DriftPollingSubscriber implements DriftSubscriber {
   isSubscribed: boolean;
   program: Program<DriftVaults>;
-  eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>;
+  eventEmitter: StrictEventEmitter<EventEmitter, DriftVaultsAccountEvents>;
   accountLoader: AccountLoader;
-  accountsToPoll = new Map<string, AccountSubscription>();
+  accountsToPoll = new Map<string, DriftVaultsAccountSubscription>();
   errorCallbackId?: string;
-  _subscriptionConfig: SubscriptionConfig;
-  subscriptions: Map<string, AccountSubscription>;
+  _subscriptionConfig: DriftVaultsSubscriptionConfig;
+  subscriptions: Map<string, DriftVaultsAccountSubscription>;
 
   private isSubscribing = false;
 
   public constructor(
     program: Program<DriftVaults>,
     accountLoader: AccountLoader,
-    subscriptionConfig: SubscriptionConfig,
-    eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>,
+    subscriptionConfig: DriftVaultsSubscriptionConfig,
+    eventEmitter: StrictEventEmitter<EventEmitter, DriftVaultsAccountEvents>,
   ) {
     this.isSubscribed = false;
     this.program = program;
@@ -53,7 +43,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
   }
 
   async subscribe(): Promise<void> {
-    const subs: AccountSubscription[] = [];
+    const subs: DriftVaultsAccountSubscription[] = [];
     const slot = await this.program.provider.connection.getSlot();
 
     if (this._subscriptionConfig.accounts) {
@@ -97,9 +87,9 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         );
         accountInfos.forEach((accountInfo, index) => {
           if (accountInfo) {
-            const value: AccountSubscription =
+            const value: DriftVaultsAccountSubscription =
               this._subscriptionConfig.accounts![index];
-            const sub: AccountSubscription = {
+            const sub: DriftVaultsAccountSubscription = {
               ...value,
               dataAndSlot: {
                 data: accountInfo.data,
@@ -115,7 +105,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
 
     if (this._subscriptionConfig.filters) {
       const gpas: GetProgramAccountsResponse[] = [];
-      const discrims: Map<string, AccountGpaFilter> = new Map();
+      const discrims: Map<string, DriftVaultsAccountGpaFilter> = new Map();
       for (const filter of this._subscriptionConfig.filters) {
         const gpaConfig: GetProgramAccountsConfig = {
           filters: [
@@ -154,12 +144,12 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
                 this.program.account[filter.accountName].idlAccount.name;
               const decoded = this.program.account[
                 filter.accountName
-              ].coder.accounts.decodeUnchecked(accountName, value.account.data);
+                ].coder.accounts.decodeUnchecked(accountName, value.account.data);
               const dataAndSlot = {
                 data: value.account.data,
                 slot,
               };
-              const sub: AccountSubscription = {
+              const sub: DriftVaultsAccountSubscription = {
                 accountName: filter.accountName,
                 eventType: filter.eventType,
                 publicKey: value.pubkey,
@@ -191,7 +181,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
     this.isSubscribed = true;
   }
 
-  async updateAccountsToPoll(accounts: AccountSubscription[]): Promise<void> {
+  async updateAccountsToPoll(accounts: DriftVaultsAccountSubscription[]): Promise<void> {
     if (this.accountsToPoll.size > 0) {
       return;
     }
@@ -211,7 +201,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
             this.program.account[accountToPoll.accountName].idlAccount.name;
           const decoded = this.program.account[
             accountToPoll.accountName
-          ].coder.accounts.decodeUnchecked(accountName, buffer);
+            ].coder.accounts.decodeUnchecked(accountName, buffer);
           const dataAndSlot = {
             data: buffer,
             slot,
@@ -252,14 +242,14 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         continue;
       }
 
-      const { buffer, slot } = bufferAndSlot;
+      const {buffer, slot} = bufferAndSlot;
 
       if (buffer) {
         const accountName =
           this.program.account[accountToPoll.accountName].idlAccount.name;
         const decoded = this.program.account[
           accountToPoll.accountName
-        ].coder.accounts.decodeUnchecked(accountName, buffer);
+          ].coder.accounts.decodeUnchecked(accountName, buffer);
         this.subscriptions.set(accountToPoll.publicKey.toString(), {
           ...accountToPoll,
           dataAndSlot: {
@@ -315,7 +305,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         const _accountName = this.program.account[accountName].idlAccount.name;
         const data = this.program.account[
           accountName
-        ].coder.accounts.decodeUnchecked(_accountName, value.dataAndSlot.data);
+          ].coder.accounts.decodeUnchecked(_accountName, value.dataAndSlot.data);
         return {
           data,
           slot: value.dataAndSlot.slot,
@@ -336,7 +326,7 @@ export class PollingSubscriber implements DriftVaultsSubscriber {
         const _accountName = this.program.account[accountName].idlAccount.name;
         const data = this.program.account[
           accountName
-        ].coder.accounts.decodeUnchecked(_accountName, sub.dataAndSlot!.data);
+          ].coder.accounts.decodeUnchecked(_accountName, sub.dataAndSlot!.data);
         const pa: ProgramAccount<DataAndSlot<any>> = {
           publicKey: sub.publicKey,
           account: {

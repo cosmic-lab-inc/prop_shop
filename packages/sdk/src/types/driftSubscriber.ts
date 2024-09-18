@@ -1,11 +1,11 @@
-import { DataAndSlot } from "@drift-labs/sdk";
-import { PublicKey } from "@solana/web3.js";
-import { AccountNamespace, ProgramAccount } from "@coral-xyz/anchor";
-import { DriftVaults, Vault, VaultDepositor } from "@drift-labs/vaults-sdk";
-import { Buffer } from "buffer";
-import { Data } from "./misc";
+import {DataAndSlot} from "@drift-labs/sdk";
+import {PublicKey} from "@solana/web3.js";
+import {AccountNamespace, ProgramAccount} from "@coral-xyz/anchor";
+import {DriftVaults, Vault, VaultDepositor} from "@drift-labs/vaults-sdk";
+import {Buffer} from "buffer";
+import {Data} from "./misc";
 
-export interface DriftVaultsSubscriber {
+export interface DriftSubscriber {
   getAccount(
     accountName: keyof AccountNamespace<DriftVaults>,
     key: PublicKey,
@@ -22,36 +22,35 @@ export interface DriftVaultsSubscriber {
   unsubscribe(): Promise<any>;
 }
 
-export interface PropShopAccountEvents {
+export interface DriftVaultsAccountEvents {
   vaultUpdate: (payload: Data<PublicKey, Vault>) => void;
   vaultDepositorUpdate: (payload: Data<PublicKey, VaultDepositor>) => void;
   update: void;
   error: (e: Error) => void;
 }
 
-// map AccountNamespace<DriftVaults> to PropShopAccountEvents
-export const PropShopAccountEventsMap: {
-  [key: string]: keyof PropShopAccountEvents;
+export const DriftVaultsAccountEventsMap: {
+  [key: string]: keyof DriftVaultsAccountEvents;
 } = {
   vault: "vaultUpdate",
   vaultDepositor: "vaultDepositorUpdate",
 };
 
-export interface AccountSubscription {
+export interface DriftVaultsAccountSubscription {
   accountName: keyof AccountNamespace<DriftVaults>;
   publicKey: PublicKey;
-  eventType: keyof PropShopAccountEvents;
+  eventType: keyof DriftVaultsAccountEvents;
   id?: string;
   dataAndSlot?: DataAndSlot<Buffer>;
   decoded?: any;
 }
 
-export interface AccountGpaFilter {
+export interface DriftVaultsAccountGpaFilter {
   accountName: keyof AccountNamespace<DriftVaults>;
-  eventType: keyof PropShopAccountEvents;
+  eventType: keyof DriftVaultsAccountEvents;
 }
 
-export interface SubscriptionConfig {
-  accounts?: Omit<AccountSubscription, "id" & "accountInfo" & "dataAndSlot">[];
-  filters?: AccountGpaFilter[];
+export interface DriftVaultsSubscriptionConfig {
+  accounts?: Omit<DriftVaultsAccountSubscription, "id" & "accountInfo" & "dataAndSlot">[];
+  filters?: DriftVaultsAccountGpaFilter[];
 }

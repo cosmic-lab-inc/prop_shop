@@ -1,11 +1,5 @@
-import { DataAndSlot, ResubOpts } from "@drift-labs/sdk";
-import {
-  AccountNamespace,
-  AnchorProvider,
-  BorshAccountsCoder,
-  Program,
-  ProgramAccount,
-} from "@coral-xyz/anchor";
+import {DataAndSlot, ResubOpts} from "@drift-labs/sdk";
+import {AccountNamespace, AnchorProvider, BorshAccountsCoder, Program, ProgramAccount,} from "@coral-xyz/anchor";
 import {
   AccountInfo,
   Commitment,
@@ -15,35 +9,35 @@ import {
   GetProgramAccountsResponse,
   PublicKey,
 } from "@solana/web3.js";
-import { capitalize } from "./utils";
+import {capitalize} from "./utils";
 import {
-  AccountSubscription,
-  DriftVaultsSubscriber,
-  PropShopAccountEvents,
-  PropShopAccountEventsMap,
-  SubscriptionConfig,
+  DriftSubscriber,
+  DriftVaultsAccountEvents,
+  DriftVaultsAccountEventsMap,
+  DriftVaultsAccountSubscription,
+  DriftVaultsSubscriptionConfig,
 } from "./types";
-import { Buffer } from "buffer";
-import { DriftVaults } from "@drift-labs/vaults-sdk";
+import {Buffer} from "buffer";
+import {DriftVaults} from "@drift-labs/vaults-sdk";
 import bs58 from "bs58";
 import StrictEventEmitter from "strict-event-emitter-types";
-import { EventEmitter } from "events";
+import {EventEmitter} from "events";
 
-export class WebSocketSubscriber implements DriftVaultsSubscriber {
-  _subscriptionConfig: SubscriptionConfig;
-  subscriptions: Map<string, AccountSubscription>;
+export class DriftWebsocketSubscriber implements DriftSubscriber {
+  _subscriptionConfig: DriftVaultsSubscriptionConfig;
+  subscriptions: Map<string, DriftVaultsAccountSubscription>;
   program: Program<DriftVaults>;
   resubOpts?: ResubOpts;
   commitment?: Commitment;
   isUnsubscribing = false;
   timeoutId?: NodeJS.Timeout;
   receivingData: boolean;
-  eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>;
+  eventEmitter: StrictEventEmitter<EventEmitter, DriftVaultsAccountEvents>;
 
   public constructor(
     program: Program<DriftVaults>,
-    subscriptionConfig: SubscriptionConfig,
-    eventEmitter: StrictEventEmitter<EventEmitter, PropShopAccountEvents>,
+    subscriptionConfig: DriftVaultsSubscriptionConfig,
+    eventEmitter: StrictEventEmitter<EventEmitter, DriftVaultsAccountEvents>,
     resubOpts?: ResubOpts,
     commitment?: Commitment,
   ) {
@@ -110,7 +104,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
         );
         accountInfos.forEach((accountInfo, index) => {
           if (accountInfo) {
-            const value: AccountSubscription =
+            const value: DriftVaultsAccountSubscription =
               this._subscriptionConfig.accounts![index];
 
             accounts.push({
@@ -165,7 +159,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
 
           const id = this.program.provider.connection.onProgramAccountChange(
             this.program.programId,
-            ({ accountId, accountInfo }, context) => {
+            ({accountId, accountInfo}, context) => {
               if (this.resubOpts?.resubTimeoutMs) {
                 this.receivingData = true;
                 clearTimeout(this.timeoutId);
@@ -199,7 +193,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
       });
     }
 
-    this.handleRpcResponse({ slot }, accounts);
+    this.handleRpcResponse({slot}, accounts);
   }
 
   async subscribe() {
@@ -207,7 +201,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
       return;
     }
 
-    const subs: AccountSubscription[] = [];
+    const subs: DriftVaultsAccountSubscription[] = [];
 
     if (this._subscriptionConfig.accounts) {
       const slot = await this.program.provider.connection.getSlot();
@@ -251,7 +245,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
         );
         accountInfos.forEach((accountInfo, index) => {
           if (accountInfo) {
-            const value: AccountSubscription =
+            const value: DriftVaultsAccountSubscription =
               this._subscriptionConfig.accounts![index];
 
             const id = this.program.provider.connection.onAccountChange(
@@ -293,9 +287,9 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
               this.program.account[value.accountName].idlAccount.name;
             const decoded = this.program.account[
               value.accountName
-            ].coder.accounts.decodeUnchecked(_accountName, accountInfo.data);
+              ].coder.accounts.decodeUnchecked(_accountName, accountInfo.data);
 
-            const sub: AccountSubscription = {
+            const sub: DriftVaultsAccountSubscription = {
               ...value,
               dataAndSlot,
               id: id.toString(),
@@ -358,7 +352,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
 
           const id = this.program.provider.connection.onProgramAccountChange(
             this.program.programId,
-            ({ accountId, accountInfo }, context) => {
+            ({accountId, accountInfo}, context) => {
               if (accountInfo.data.length < 8) {
                 console.error(
                   `onProgramAccountChange, empty account (${accountInfo.data.length}) for account ${accountId.toString()}`,
@@ -398,13 +392,13 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
               this.program.account[filter.accountName].idlAccount.name;
             const decoded = this.program.account[
               filter.accountName
-            ].coder.accounts.decodeUnchecked(_accountName, value.account.data);
+              ].coder.accounts.decodeUnchecked(_accountName, value.account.data);
 
             const dataAndSlot = {
               data: value.account.data,
               slot,
             };
-            const sub: AccountSubscription = {
+            const sub: DriftVaultsAccountSubscription = {
               accountName: filter.accountName,
               eventType: filter.eventType,
               publicKey: value.pubkey,
@@ -478,7 +472,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
             this.program.account[value.accountName].idlAccount.name;
           const decoded = this.program.account[
             value.accountName
-          ].coder.accounts.decodeUnchecked(_accountName, account.account.data);
+            ].coder.accounts.decodeUnchecked(_accountName, account.account.data);
           value = {
             ...value,
             dataAndSlot: {
@@ -502,7 +496,7 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
           const namespace =
             this.program.account[
               accountType as any as keyof AccountNamespace<DriftVaults>
-            ];
+              ];
           const accountName = namespace.idlAccount.name;
           const expected = BorshAccountsCoder.accountDiscriminator(accountName);
           if (actual.equals(expected)) {
@@ -510,9 +504,9 @@ export class WebSocketSubscriber implements DriftVaultsSubscriber {
               accountName,
               account.account.data,
             );
-            const sub: AccountSubscription = {
+            const sub: DriftVaultsAccountSubscription = {
               accountName,
-              eventType: PropShopAccountEventsMap[accountType],
+              eventType: DriftVaultsAccountEventsMap[accountType],
               publicKey: account.publicKey,
               dataAndSlot: {
                 data: account.account.data,

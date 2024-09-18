@@ -31,7 +31,7 @@ import {
   mockUSDCMint,
   printTxLogs,
   setFeedPrice,
-} from "./testHelpers";
+} from "./driftHelpers";
 import {ConfirmOptions, Keypair} from "@solana/web3.js";
 import {
   DriftVaults,
@@ -46,7 +46,6 @@ import {
 } from "@drift-labs/vaults-sdk";
 import {assert} from "chai";
 import {CompetitionsClient, getCompetitionAddressSync, getCompetitorAddressSync,} from "@drift-labs/competitions-sdk";
-import {afterAll, beforeAll, describe, it} from "@jest/globals";
 import {
   DRIFT_VAULTS_PROGRAM_ID,
   TEST_MANAGER,
@@ -135,7 +134,7 @@ describe("driftVaults", () => {
   const usdcAmount = new BN(1_000).mul(QUOTE_PRECISION);
   const baseAssetAmount = new BN(1).mul(BASE_PRECISION);
 
-  beforeAll(async () => {
+  before(async () => {
     try {
       await mockUSDCMint(provider, usdcMint, usdcMintAuth);
       solPerpOracle = await mockOracle(initialSolPerpPrice);
@@ -328,7 +327,7 @@ describe("driftVaults", () => {
     }
   });
 
-  afterAll(async () => {
+  after(async () => {
     await managerClient.driftClient.unsubscribe();
     await fillerClient.driftClient.unsubscribe();
     await vdClient.driftClient.unsubscribe();

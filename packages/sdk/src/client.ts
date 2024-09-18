@@ -50,9 +50,9 @@ import {confirmTransactions, formatExplorerLink, sendTransactionWithResult,} fro
 import {
   CreateVaultConfig,
   Data,
-  DriftVaultsSubscriber,
+  DriftSubscriber,
+  DriftVaultsAccountEvents,
   FundOverview,
-  PropShopAccountEvents,
   SnackInfo,
   UpdateVaultConfig,
   WithdrawRequestTimer,
@@ -95,7 +95,7 @@ import {
 } from "@solana/spl-token";
 import {err, ok, Result} from "neverthrow";
 import {InstructionReturn, keypairToAsyncSigner, walletAdapterToAsyncSigner,} from "@cosmic-lab/data-source";
-import {WebSocketSubscriber} from "./websocketSubscriber";
+import {DriftWebsocketSubscriber} from "./driftWebsocketSubscriber";
 
 interface DriftMarkets {
   spotMarkets: SpotMarketAccount[];
@@ -116,9 +116,9 @@ export class PropShopClient {
 
   private eventEmitter: StrictEventEmitter<
     EventEmitter,
-    PropShopAccountEvents
+    DriftVaultsAccountEvents
   > = new EventEmitter();
-  private _cache: DriftVaultsSubscriber | undefined = undefined;
+  private _cache: DriftSubscriber | undefined = undefined;
 
   private _vaults: Map<string, Vault> = new Map();
   private _vaultDepositors: Map<string, VaultDepositor> = new Map();
@@ -254,7 +254,7 @@ export class PropShopClient {
     if (this.disableCache) {
       return;
     }
-    this._cache = new WebSocketSubscriber(
+    this._cache = new DriftWebsocketSubscriber(
       program,
       {
         filters: [
@@ -748,12 +748,10 @@ export class PropShopClient {
     const fo: FundOverview = {
       vault: vault.data.pubkey,
       lifetimePNL: stats.lifetimePNL,
-      volume30d: stats.volume30d,
       tvl: stats.equity,
       birth: stats.birth,
       title,
       investors: investors.length,
-      data,
     };
     this.setFundOverview(vault.key, fo);
     return fo;
@@ -785,12 +783,10 @@ export class PropShopClient {
       const fo: FundOverview = {
         vault: vault.data.pubkey,
         lifetimePNL: stats.lifetimePNL,
-        volume30d: stats.volume30d,
         tvl: stats.equity,
         birth: stats.birth,
         title: decodeName(vault.data.name),
         investors: investors.length,
-        data,
       };
       fundOverviews.push(fo);
       this.setFundOverview(vault.key, fo);

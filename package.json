@@ -48,10 +48,9 @@
     "dep:drift": "cp deps/drift.json target/idl/drift.json && cp deps/drift.so target/deploy/drift.so",
     "dep:pyth": "cp deps/pyth.json target/idl/pyth.json && cp deps/pyth.so target/deploy/pyth.so",
     "dep:all": "yarn dep:competitions && yarn dep:vaults && yarn dep:drift && yarn dep:pyth",
-    "test:client": "jest --forceExit --verbose --testPathPattern tests/client.test.ts",
-    "test:markets": "jest --verbose --testPathPattern tests/markets.test.ts",
-    "test:vaults": "jest --detectOpenHandles --testPathPattern tests/driftVaults.test.ts",
-    "anchor-tests": "yarn setup-target && yarn dep:all && yarn test:vaults"
+    "test:drift": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/driftVaults.ts",
+    "test:phoenix": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/phoenixVaults.ts",
+    "anchor-tests": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
@@ -59,6 +58,7 @@
     "@types/mocha": "^9.0.0",
     "@drift-labs/vaults-sdk": "0.1.456",
     "@cosmic-lab/phoenix-vaults-sdk": "0.1.1",
+    "@ellipsis-labs/phoenix-sdk": "2.0.3",
     "chai": "^4.3.6",
     "concurrently": "^8.2.2",
     "jest": "^29.7.0",
