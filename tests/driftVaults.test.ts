@@ -66,7 +66,6 @@ describe("driftVaults", () => {
   anchor.setProvider(provider);
   const connection = provider.connection;
 
-  // const program = anchor.workspace.DriftVaults as Program<DriftVaults>;
   const program = new Program(
     DRIFT_VAULTS_IDL as any as anchor.Idl,
     DRIFT_VAULTS_PROGRAM_ID,

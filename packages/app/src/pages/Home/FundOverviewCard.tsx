@@ -160,8 +160,8 @@ function Container({
         position: "relative",
         minWidth: 0,
         borderRadius: "10px",
-        flex: `0 0 var(calc(100% / 3))`,
-        paddingLeft: `var(calc(100% / 3))`,
+        flex: `0 0 var(calc(100% / 4))`,
+        paddingLeft: `var(calc(100% / 4))`,
       }}
     >
       <Box
@@ -173,7 +173,7 @@ function Container({
           cursor: "pointer",
           ml: 1,
           mr: 1,
-          boxShadow: isHovered ? "none" : `0px 0px 5px 0px ${customTheme.dark}`,
+          boxShadow: isHovered ? "none" : `0px 0px 5px 0px ${customTheme.shadow}`,
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
