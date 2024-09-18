@@ -514,13 +514,12 @@
     neverthrow "^6.0.0"
     tweetnacl "^1.0.3"
 
-"@cosmic-lab/phoenix-vaults-sdk@0.1.0":
-  version "0.1.0"
-  resolved "https://registry.yarnpkg.com/@cosmic-lab/phoenix-vaults-sdk/-/phoenix-vaults-sdk-0.1.0.tgz#518608ba4f45eaba0499ba863f0b6aa49122a194"
-  integrity sha512-bAhAPiGAPlarP7a5wNIMVPTyaESXff+SgsC6NG+SGDFy+54CRmKEyQXBdHIAVQdp0gbKuDyEFFqzQeK1RX/XLA==
+"@cosmic-lab/phoenix-vaults-sdk@0.1.1":
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/@cosmic-lab/phoenix-vaults-sdk/-/phoenix-vaults-sdk-0.1.1.tgz#12bafd29898461d5696a3c3a7e9afaa7df6966e9"
+  integrity sha512-LihzxhSIkfDtMdbt6JPHZ3s1kr/ik3UkYF2C3/klOTIg2QHE2OyX0gnpeSKit/zOFvyuE4S7+pAbKsODfukvsw==
   dependencies:
     "@coral-xyz/anchor" "0.28.0"
-    "@cosmic-lab/data-source" "^0.7.4"
     "@solana/spl-token" "0.4.8"
     "@solana/web3.js" "1.91.6"
     commander "^11.0.0"

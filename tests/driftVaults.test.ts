@@ -54,6 +54,7 @@ import {
   TEST_USDC_MINT_AUTHORITY,
   TEST_VAULT_DEPOSITOR,
 } from "@cosmic-lab/prop-shop-sdk";
+import {IDL as PHOENIX_VAULTS_IDL, PHOENIX_VAULTS_PROGRAM_ID, PhoenixVaults} from '@cosmic-lab/phoenix-vaults-sdk';
 
 describe("driftVaults", () => {
   const opts: ConfirmOptions = {
@@ -71,6 +72,12 @@ describe("driftVaults", () => {
     DRIFT_VAULTS_PROGRAM_ID,
     provider,
   ) as any as Program<DriftVaults>;
+
+  const phoenixVaults = new Program(
+    PHOENIX_VAULTS_IDL as any as anchor.Idl,
+    PHOENIX_VAULTS_PROGRAM_ID,
+    provider,
+  ) as any as Program<PhoenixVaults>;
 
   const bulkAccountLoader = new BulkAccountLoader(connection, "confirmed", 1);
 

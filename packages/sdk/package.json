@@ -23,12 +23,12 @@
     "@cosmic-lab/data-source": "^0.7.4",
     "@drift-labs/sdk": "2.96.0-beta.0",
     "@drift-labs/vaults-sdk": "0.1.456",
-    "@cosmic-lab/phoenix-vaults-sdk": "0.1.0",
+    "@cosmic-lab/phoenix-vaults-sdk": "0.1.1",
     "@flipsidecrypto/sdk": "^2.1.0",
-    "@solana/spl-token": "^0.3.7",
     "@solana/wallet-adapter-base": "0.9.23",
     "@solana/wallet-adapter-react": "0.15.35",
-    "@solana/web3.js": "^1.77.3",
+    "@solana/spl-token": "0.4.8",
+    "@solana/web3.js": "1.91.6",
     "axios": "^1.7.2",
     "bs58": "4.0.1",
     "csv-parse": "^5.5.6",
@@ -73,5 +73,9 @@
     "tsc-watch": "^6.2.0",
     "typescript": "^5",
     "util": "^0.12.3"
+  },
+  "resolutions": {
+    "rpc-websockets": "7.10.0",
+    "@solana/web3.js": "1.91.6"
   }
 }
