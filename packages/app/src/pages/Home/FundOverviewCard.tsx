@@ -1,6 +1,6 @@
-import React, { ReactNode } from "react";
-import { Box, styled, Typography } from "@mui/material";
-import { customTheme } from "../../styles";
+import React, {ReactNode} from "react";
+import {Box, styled, Typography} from "@mui/material";
+import {customTheme} from "../../styles";
 import {
   formatNumber,
   FundOverview,
@@ -10,8 +10,8 @@ import {
   truncateString,
   yyyymmdd,
 } from "@cosmic-lab/prop-shop-sdk";
-import { FundDialog } from "./FundDialog";
-import { ActionButton, CakeIcon } from "../../components";
+import {FundDialog} from "./FundDialog";
+import {ActionButton, CakeIcon, DriftIcon} from "../../components";
 import MovingIcon from "@mui/icons-material/Moving";
 import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 
@@ -44,13 +44,13 @@ function calcRoi(data: number[]): number {
 }
 
 export function FundOverviewCard({
-  client,
-  fundOverview,
-}: {
+                                   client,
+                                   fundOverview,
+                                 }: {
   client: PropShopClient;
   fundOverview: FundOverview;
 }) {
-  const { vault, tvl, volume30d, lifetimePNL, title, investors, birth } =
+  const {vault, tvl, volume30d, lifetimePNL, title, investors, birth} =
     fundOverview;
   // const pnl = fundPctPnl(fundOverview);
   const pnl = fundPctPnl(fundOverview);
@@ -73,7 +73,7 @@ export function FundOverviewCard({
         onClose={() => setOpen(false)}
       />
       <Container onClick={() => setOpen(true)}>
-        <Header title={title} />
+        <Header title={title}/>
         <Box
           sx={{
             width: "100%",
@@ -82,7 +82,7 @@ export function FundOverviewCard({
           }}
         >
           <TableRow hover divider footer square>
-            <PnlIcon invert={pnl < 0 && displayPnl !== "--"} />
+            <PnlIcon invert={pnl < 0 && displayPnl !== "--"}/>
             <Typography
               variant="h3"
               sx={{
@@ -94,19 +94,19 @@ export function FundOverviewCard({
           </TableRow>
 
           <TableRow hover square>
-            <Typography variant="h3" sx={{ pl: "5px" }}>
+            <Typography variant="h3" sx={{pl: "5px"}}>
               $
             </Typography>
             <Typography variant="h4">{prettyNumber(tvl)}</Typography>
           </TableRow>
 
           <TableRow hover square>
-            <PeopleAltIcon htmlColor={customTheme.dark} fontSize={"medium"} />
+            <PeopleAltIcon htmlColor={customTheme.dark} fontSize={"medium"}/>
             <Typography variant="h4">{formatNumber(investors)}</Typography>
           </TableRow>
 
           <TableRow hover footer narrow>
-            <CakeIcon />
+            <CakeIcon/>
             <Typography
               variant="h4"
               sx={{
@@ -123,7 +123,7 @@ export function FundOverviewCard({
   );
 }
 
-function PnlIcon({ invert }: { invert?: boolean }) {
+function PnlIcon({invert}: { invert?: boolean }) {
   return (
     <Box
       sx={{
@@ -144,9 +144,9 @@ function PnlIcon({ invert }: { invert?: boolean }) {
 }
 
 function Container({
-  onClick,
-  children,
-}: {
+                     onClick,
+                     children,
+                   }: {
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -214,11 +214,12 @@ function Container({
   );
 }
 
-function Header({ title }: { title: string }) {
+function Header({title}: { title: string }) {
   return (
     <Box>
       <TableRow header>
         <Typography variant="h3">{truncateString(title, 14)}</Typography>
+        <DriftIcon/>
       </TableRow>
     </Box>
   );
@@ -237,7 +238,7 @@ const TableRow = styled("div")<{
   square?: boolean;
   narrow?: boolean;
   color?: string;
-}>(({ theme, hover, header, footer, divider, square, narrow, color }) => ({
+}>(({theme, hover, header, footer, divider, square, narrow, color}) => ({
   display: "flex",
   flexDirection: "row",
   justifyContent: "space-between",
@@ -251,13 +252,13 @@ const TableRow = styled("div")<{
 
   ...(narrow
     ? {
-        paddingTop: 0,
-        paddingBottom: 0,
-      }
+      paddingTop: 0,
+      paddingBottom: 0,
+    }
     : {
-        paddingTop: 10,
-        paddingBottom: 10,
-      }),
+      paddingTop: 10,
+      paddingBottom: 10,
+    }),
 
   "&:hover": {
     backgroundColor: `${hover ? customTheme.grey2 : "transparent"}`,

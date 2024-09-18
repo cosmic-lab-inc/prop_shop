@@ -8,3 +8,5 @@ export * from "./IconSpinner";
 export * from "./CakeIcon";
 export * from "./WalletIcon";
 export * from './IconPulse';
+export * from './DriftIcon';
+export * from './PhoenixIcon';
