@@ -1,10 +1,10 @@
-import React from "react";
-import * as ReactDOM from "react-dom/client";
-import { AppRoot } from "./AppRoot";
+import React from 'react';
+import * as ReactDOM from 'react-dom/client';
+import { AppRoot } from './AppRoot';
 
-const el = document.getElementById("root");
+const el = document.getElementById('root');
 if (el === null) {
-  throw new Error("Root container missing in index.html");
+	throw new Error('Root container missing in index.html');
 }
 
 const root = ReactDOM.createRoot(el);

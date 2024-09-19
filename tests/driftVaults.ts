@@ -53,7 +53,6 @@ import {
   TEST_USDC_MINT_AUTHORITY,
   TEST_VAULT_DEPOSITOR,
 } from "@cosmic-lab/prop-shop-sdk";
-import {IDL as PHOENIX_VAULTS_IDL, PHOENIX_VAULTS_PROGRAM_ID, PhoenixVaults} from '@cosmic-lab/phoenix-vaults-sdk';
 
 describe("driftVaults", () => {
   const opts: ConfirmOptions = {
@@ -72,11 +71,11 @@ describe("driftVaults", () => {
     provider,
   ) as any as Program<DriftVaults>;
 
-  const phoenixVaults = new Program(
-    PHOENIX_VAULTS_IDL as any as anchor.Idl,
-    PHOENIX_VAULTS_PROGRAM_ID,
-    provider,
-  ) as any as Program<PhoenixVaults>;
+  // const pythProgram = new Program(
+  //   PYTH_IDL as any as anchor.Idl,
+  //   PYTH_PROGRAM_ID,
+  //   provider,
+  // );
 
   const bulkAccountLoader = new BulkAccountLoader(connection, "confirmed", 1);
 
@@ -103,7 +102,6 @@ describe("driftVaults", () => {
 
   let protocol: Keypair;
   let protocolClient: VaultClient;
-  let protocolVdUserUSDCAccount: PublicKey;
 
   // ammInvariant == k == x * y
   const mantissaSqrtScale = new BN(100_000);
@@ -316,7 +314,6 @@ describe("driftVaults", () => {
       });
       protocol = bootstrapProtocol.signer;
       protocolClient = bootstrapProtocol.vaultClient;
-      protocolVdUserUSDCAccount = bootstrapProtocol.userUSDCAccount;
 
       // start account loader
       bulkAccountLoader.startPolling();
@@ -946,19 +943,17 @@ describe("driftVaults", () => {
       assert(false);
     }
 
-    const solPerpMarket = adminClient.getPerpMarketAccount(0)!;
-
-    try {
-      // increase oracle
-      await setFeedPrice(
-        anchor.workspace.Pyth,
-        finalSolPerpPrice,
-        solPerpMarket.amm.oracle,
-      );
-    } catch (e) {
-      console.log("failed to set feed price:", e);
-      assert(false);
+    const solPerpMarket = adminClient.getPerpMarketAccount(0);
+    if (!solPerpMarket) {
+      throw new Error("SOL-PERP market not found");
     }
+    console.log(`pyth workspace: ${anchor.workspace.Pyth?.programId}`);
+
+    await setFeedPrice(
+      anchor.workspace.Pyth,
+      finalSolPerpPrice,
+      solPerpMarket.amm.oracle,
+    );
 
     const postOD = adminClient.getOracleDataForPerpMarket(0);
     const priceAfter = postOD.price.toNumber() / PRICE_PRECISION.toNumber();

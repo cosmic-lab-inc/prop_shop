@@ -1,1 +1,1 @@
-export * from "./drift";
+export * from './drift';

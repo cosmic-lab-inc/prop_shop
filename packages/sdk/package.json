@@ -73,7 +73,8 @@
     "ts-node": "^10.9.2",
     "tsc-watch": "^6.2.0",
     "typescript": "^5",
-    "util": "^0.12.3"
+    "util": "^0.12.3",
+    "rpc-websockets": "7.10.0"
   },
   "resolutions": {
     "rpc-websockets": "7.10.0",

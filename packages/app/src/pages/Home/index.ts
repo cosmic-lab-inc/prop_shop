@@ -1,2 +1,2 @@
-export * from "./Home";
-export * from "./FundDialog";
+export * from './Home';
+export * from './FundDialog';

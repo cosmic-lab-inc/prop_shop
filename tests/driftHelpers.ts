@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import { AnchorProvider, Program, Provider } from "@coral-xyz/anchor";
+import {AnchorProvider, Program, Provider} from "@coral-xyz/anchor";
 import {
   AccountLayout,
   createAssociatedTokenAccountInstruction,
@@ -22,10 +22,11 @@ import {
   sendAndConfirmTransaction,
   SystemProgram,
   Transaction,
+  TransactionConfirmationStrategy,
   TransactionError,
   TransactionSignature,
 } from "@solana/web3.js";
-import { assert } from "chai";
+import {assert} from "chai";
 import buffer from "buffer";
 import {
   BN,
@@ -44,17 +45,9 @@ import {
   User,
   Wallet,
 } from "@drift-labs/sdk";
-import { IDL, VaultClient } from "@drift-labs/vaults-sdk";
-import {
-  formatExplorerLink,
-  sendTransactionWithResult,
-} from "@cosmic-lab/prop-shop-sdk";
-import {
-  AsyncSigner,
-  InstructionReturn,
-  keypairToAsyncSigner,
-  walletToAsyncSigner,
-} from "@cosmic-lab/data-source";
+import {IDL, VaultClient} from "@drift-labs/vaults-sdk";
+import {formatExplorerLink, sendTransactionWithResult,} from "@cosmic-lab/prop-shop-sdk";
+import {AsyncSigner, InstructionReturn, keypairToAsyncSigner, walletToAsyncSigner,} from "@cosmic-lab/data-source";
 
 export async function mockOracle(
   price: number = 50 * 10e7,
@@ -215,8 +208,7 @@ export async function mockUserUSDCAssociatedTokenAccount(
       `Error creating user ATA: ${JSON.stringify(res.error as TransactionError)}`,
     );
   }
-  console.debug("User ATA created", formatExplorerLink(res.value));
-
+  // console.debug("User ATA created", formatExplorerLink(res.value));
   return userUSDCAccount;
 }
 
@@ -351,12 +343,12 @@ export async function initializeAndSubscribeDriftClient(
     oracleInfos,
     accountSubscription: accountLoader
       ? {
-          type: "polling",
-          accountLoader,
-        }
+        type: "polling",
+        accountLoader,
+      }
       : {
-          type: "websocket",
-        },
+        type: "websocket",
+      },
   });
   await driftClient.subscribe();
   await driftClient.initializeUserAccount();
@@ -403,7 +395,7 @@ export async function createWSolTokenAccountForUser(
   await provider.connection.requestAirdrop(
     userKeypair.publicKey,
     amount.toNumber() +
-      (await getMinimumBalanceForRentExemptAccount(provider.connection)),
+    (await getMinimumBalanceForRentExemptAccount(provider.connection)),
   );
   return await createWrappedNativeAccount(
     provider.connection,
@@ -458,7 +450,7 @@ export async function printTxLogs(
 ): Promise<void> {
   console.log(
     "tx logs",
-    (await connection.getTransaction(txSig, { commitment: "confirmed" }))?.meta
+    (await connection.getTransaction(txSig, {commitment: "confirmed"}))?.meta
       ?.logMessages,
   );
 }
@@ -540,12 +532,12 @@ export async function initUserAccounts(
       oracleInfos,
       accountSubscription: accountLoader
         ? {
-            type: "polling",
-            accountLoader,
-          }
+          type: "polling",
+          accountLoader,
+        }
         : {
-            type: "websocket",
-          },
+          type: "websocket",
+        },
     });
 
     // await driftClient1.initialize(usdcMint.publicKey, false);
@@ -586,12 +578,12 @@ const PKorNull = (data: Buffer) =>
   data.equals(empty32Buffer) ? null : new anchor.web3.PublicKey(data);
 
 export const createPriceFeed = async ({
-  oracleProgram,
-  initPrice,
-  confidence = undefined,
-  expo = -4,
-  tokenFeed,
-}: {
+                                        oracleProgram,
+                                        initPrice,
+                                        confidence = undefined,
+                                        expo = -4,
+                                        tokenFeed,
+                                      }: {
   oracleProgram: Program;
   initPrice: number;
   confidence?: number;
@@ -609,7 +601,7 @@ export const createPriceFeed = async ({
   }
   await oracleProgram.methods
     .initialize(new BN(initPrice * 10 ** -expo), expo, conf)
-    .accounts({ price: collateralTokenFeed.publicKey })
+    .accounts({price: collateralTokenFeed.publicKey})
     .signers([collateralTokenFeed])
     .preInstructions([
       anchor.web3.SystemProgram.createAccount({
@@ -639,10 +631,29 @@ export const setFeedPrice = async (
     throw new Error("Price feed account not found");
   }
   const data = parsePriceData(info.data);
-  await oracleProgram.rpc.setPrice(new BN(newPrice * 10 ** -data.exponent), {
-    accounts: { price: priceFeed },
-  });
+  try {
+    // await oracleProgram.rpc.setPrice(new BN(newPrice * 10 ** -data.exponent), {
+    //   accounts: {price: priceFeed},
+    // });
+    const sig = await oracleProgram.methods
+      .setPrice(new BN(newPrice * 10 ** -data.exponent))
+      .accounts({
+        price: priceFeed
+      })
+      .rpc();
+    console.log('set feed price:', formatExplorerLink(sig));
+    const strategy = {
+      signature: sig,
+    } as TransactionConfirmationStrategy;
+    const confirm = await oracleProgram.provider.connection.confirmTransaction(strategy);
+    if (confirm.value.err) {
+      throw new Error(JSON.stringify(confirm.value.err));
+    }
+  } catch (e: any) {
+    throw new Error(`Failed to set feed price: ${e}`);
+  }
 };
+
 export const setFeedTwap = async (
   oracleProgram: Program,
   newTwap: number,
@@ -655,7 +666,7 @@ export const setFeedTwap = async (
   }
   const data = parsePriceData(info.data);
   await oracleProgram.rpc.setTwap(new BN(newTwap * 10 ** -data.exponent), {
-    accounts: { price: priceFeed },
+    accounts: {price: priceFeed},
   });
 };
 export const getFeedData = async (
@@ -720,7 +731,7 @@ function boundsError(value: any, length: number) {
   throw ERR_OUT_OF_RANGE("offset", `>= 0 and <= ${length}`, value);
 }
 
-function readBigInt64LE(buffer: Buffer, offset: number = 0) {
+function readBigInt64LE(buffer: Buffer, offset = 0) {
   validateNumber(offset, "offset");
   const first = buffer[offset];
   const last = buffer[offset + 7];
@@ -735,15 +746,15 @@ function readBigInt64LE(buffer: Buffer, offset: number = 0) {
     (BigInt(val) << BigInt(32)) +
     BigInt(
       first +
-        buffer[++offset] * 2 ** 8 +
-        buffer[++offset] * 2 ** 16 +
-        buffer[++offset] * 2 ** 24,
+      buffer[++offset] * 2 ** 8 +
+      buffer[++offset] * 2 ** 16 +
+      buffer[++offset] * 2 ** 24,
     )
   );
 }
 
 // https://github.com/nodejs/node/blob/v14.17.0/lib/internal/buffer.js#L89-L107
-function readBigUInt64LE(buffer: Buffer, offset: number = 0) {
+function readBigUInt64LE(buffer: Buffer, offset = 0) {
   validateNumber(offset, "offset");
   const first = buffer[offset];
   const last = buffer[offset + 7];
@@ -826,7 +837,7 @@ const parsePriceData = (data: Buffer) => {
       offset += 32;
       const latest = parsePriceInfo(data.slice(offset, offset + 32), exponent);
       offset += 32;
-      priceComponents.push({ publisher, aggregate, latest });
+      priceComponents.push({publisher, aggregate, latest});
     } else {
       shouldContinue = false;
     }
@@ -865,7 +876,7 @@ const parsePriceData = (data: Buffer) => {
       },
       aggregatePriceInfo,
     ),
-    { priceComponents },
+    {priceComponents},
   );
 };
 const _parseProductData = (data: Buffer) => {
@@ -895,7 +906,7 @@ const _parseProductData = (data: Buffer) => {
       product[key] = value;
     }
   }
-  return { magic, version, type, size, priceAccountKey, product };
+  return {magic, version, type, size, priceAccountKey, product};
 };
 
 const parsePriceInfo = (data: Buffer, exponent: number) => {

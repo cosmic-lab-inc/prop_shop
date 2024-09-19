@@ -35,5 +35,13 @@ program = "./deps/pyth.so"
 address = "VAULT8EhRg1mduZJYCab7xkNq7ieXMQ1Tqec2LPU6jv"
 program = "./deps/phoenix_vaults.so"
 
+[[test.genesis]]
+address = "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY"
+program = "./deps/phoenix.so"
+
+[[test.genesis]]
+address = "PSMxQbAoDWDbvd9ezQJgARyq6R9L5kJAasaLDVcZwf1"
+program = "./deps/phoenix_seat_manager.so"
+
 [scripts]
 test = "yarn anchor-tests"

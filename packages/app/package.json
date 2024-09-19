@@ -35,7 +35,7 @@
     "@solana/wallet-adapter-react": "0.15.35",
     "@solana/wallet-adapter-react-ui": "0.9.34",
     "@solana/wallet-adapter-wallets": "0.18.1",
-    "@solana/web3.js": "^1.77.3",
+    "@solana/web3.js": "1.91.6",
     "@types/react-router-dom": "^5.3.3",
     "axios": "^1.5.1",
     "bip32": "^4.0.0",

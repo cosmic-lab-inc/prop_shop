@@ -1,1 +1,1 @@
-export * from "./NewFundDialog";
+export * from './NewFundDialog';

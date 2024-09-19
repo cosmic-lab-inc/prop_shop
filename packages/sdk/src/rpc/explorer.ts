@@ -1,30 +1,30 @@
 import {
-  Connection,
-  Transaction,
-  TransactionSignature,
-  VersionedTransaction,
-} from "@solana/web3.js";
-import { isVersionedTransaction } from "@cosmic-lab/data-source";
+	Connection,
+	Transaction,
+	TransactionSignature,
+	VersionedTransaction,
+} from '@solana/web3.js';
+import { isVersionedTransaction } from '@cosmic-lab/data-source';
 
 export type AnyTransaction = VersionedTransaction | Transaction;
 
 export function formatExplorerMessageLink(
-  transaction: AnyTransaction,
-  connection: Connection,
+	transaction: AnyTransaction,
+	connection: Connection
 ): string {
-  const clusterUrl = encodeURIComponent(connection.rpcEndpoint);
-  let serializedMessage: Buffer;
-  if (isVersionedTransaction(transaction)) {
-    serializedMessage = Buffer.from(transaction.message.serialize());
-  } else {
-    serializedMessage = transaction.serializeMessage();
-  }
-  const message = encodeURIComponent(serializedMessage.toString("base64"));
-  return `https://explorer.solana.com/tx/inspector?message=${message}&cluster=custom&customUrl=${clusterUrl}`;
+	const clusterUrl = encodeURIComponent(connection.rpcEndpoint);
+	let serializedMessage: Buffer;
+	if (isVersionedTransaction(transaction)) {
+		serializedMessage = Buffer.from(transaction.message.serialize());
+	} else {
+		serializedMessage = transaction.serializeMessage();
+	}
+	const message = encodeURIComponent(serializedMessage.toString('base64'));
+	return `https://explorer.solana.com/tx/inspector?message=${message}&cluster=custom&customUrl=${clusterUrl}`;
 }
 
 export function formatExplorerLink(
-  signature: TransactionSignature | string,
+	signature: TransactionSignature | string
 ): string {
-  return `https://solana.fm/tx/${signature}`;
+	return `https://solana.fm/tx/${signature}`;
 }

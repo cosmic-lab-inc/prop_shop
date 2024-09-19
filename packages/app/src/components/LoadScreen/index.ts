@@ -1,1 +1,1 @@
-export * from "./LoadScreen";
+export * from './LoadScreen';
