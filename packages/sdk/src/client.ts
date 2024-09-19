@@ -2634,19 +2634,6 @@ export class PropShopClient {
     this._timers.delete(vault.toString());
   }
 
-  public hasWithdrawRequest(vault: PublicKey): boolean {
-    return !!this.withdrawTimer(vault);
-  }
-
-  printProgramLogs(error: any) {
-    if (error.logs) {
-      const logs = error.logs as string[];
-      console.error(`Program error: ${logs}`);
-    } else {
-      console.error(`Program error: ${error}`);
-    }
-  }
-
   public async fetchVaultEquity(vault: PublicKey): Promise<number | undefined> {
     const isManager = this.isManager(vault).unwrapOr(false);
     if (isManager) {

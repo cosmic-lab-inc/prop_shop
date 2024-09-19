@@ -52,11 +52,7 @@ import {
   walletAdapterToAnchorWallet,
   walletAdapterToIWallet,
 } from './utils';
-import {
-  confirmTransactions,
-  formatExplorerLink,
-  sendTransactionWithResult,
-} from './rpc';
+import {confirmTransactions, formatExplorerLink, sendTransactionWithResult,} from './rpc';
 import {
   CreateVaultConfig,
   Data,
@@ -103,11 +99,7 @@ import {
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
 import {err, ok, Result} from 'neverthrow';
-import {
-  InstructionReturn,
-  keypairToAsyncSigner,
-  walletAdapterToAsyncSigner,
-} from '@cosmic-lab/data-source';
+import {InstructionReturn, keypairToAsyncSigner, walletAdapterToAsyncSigner,} from '@cosmic-lab/data-source';
 import {DriftWebsocketSubscriber} from './driftWebsocketSubscriber';
 
 interface DriftMarkets {
@@ -2641,19 +2633,6 @@ export class DriftVaultsClient {
       clearInterval(result.timer);
     }
     this._timers.delete(vault.toString());
-  }
-
-  public hasWithdrawRequest(vault: PublicKey): boolean {
-    return !!this.withdrawTimer(vault);
-  }
-
-  printProgramLogs(error: any) {
-    if (error.logs) {
-      const logs = error.logs as string[];
-      console.error(`Program error: ${logs}`);
-    } else {
-      console.error(`Program error: ${error}`);
-    }
   }
 
   public async fetchVaultEquity(vault: PublicKey): Promise<number | undefined> {

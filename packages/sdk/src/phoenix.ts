@@ -3,21 +3,30 @@ import {makeAutoObservable} from 'mobx';
 import * as anchor from '@coral-xyz/anchor';
 import {BN, Program} from '@coral-xyz/anchor';
 import {calculateRealizedInvestorEquity, getTokenBalance, getTraderEquity, walletAdapterToAnchorWallet,} from './utils';
-import {Data, FundOverview, PhoenixSubscriber, PhoenixVaultsAccountEvents, WithdrawRequestTimer,} from './types';
+import {
+  Data,
+  FundOverview,
+  PhoenixSubscriber,
+  PhoenixVaultsAccountEvents,
+  SnackInfo,
+  WithdrawRequestTimer,
+} from './types';
 import {EventEmitter} from 'events';
 import StrictEventEmitter from 'strict-event-emitter-types';
 import {WalletContextState} from '@solana/wallet-adapter-react';
 import {PhoenixWebsocketSubscriber} from './phoenixWebsocketSubscriber';
 import {Client as PhoenixClient} from '@ellipsis-labs/phoenix-sdk';
 import {
-	IDL as PHOENIX_VAULTS_IDL,
-	Investor,
-	LOCALNET_MARKET_CONFIG,
-	PHOENIX_VAULTS_PROGRAM_ID,
-	PhoenixVaults,
-	Vault,
+  getInvestorAddressSync,
+  IDL as PHOENIX_VAULTS_IDL,
+  Investor,
+  LOCALNET_MARKET_CONFIG,
+  PHOENIX_VAULTS_PROGRAM_ID,
+  PhoenixVaults,
+  Vault,
 } from '@cosmic-lab/phoenix-vaults-sdk';
 import {decodeName, QUOTE_PRECISION} from '@drift-labs/sdk';
+import {err, ok, Result} from "neverthrow";
 
 export class PhoenixVaultsClient {
   private readonly conn: Connection;
@@ -58,7 +67,7 @@ export class PhoenixVaultsClient {
   }
 
   //
-  // Initialization and state
+  // Initialization and getters
   //
 
   /**
@@ -193,6 +202,42 @@ export class PhoenixVaultsClient {
     return this.wallet.publicKey;
   }
 
+  public async isProtocol(
+    vault: PublicKey
+  ): Promise<Result<boolean, SnackInfo>> {
+    const vaultAcct = this.vault(vault)?.data;
+    if (!vaultAcct) {
+      return err({
+        variant: 'error',
+        message: `Vault ${vault.toString()} not found`,
+      });
+    }
+    if (vaultAcct.protocol.equals(this.publicKey)) {
+      return ok(true);
+    } else {
+      return ok(false);
+    }
+  }
+
+  public isManager(vault: PublicKey): Result<boolean, SnackInfo> {
+    const vaultAcct = this.vault(vault)?.data;
+    if (!vaultAcct) {
+      return err({
+        variant: 'error',
+        message: `Vault ${vault.toString()} not found`,
+      });
+    }
+    // check if wallet is manager
+    if (vaultAcct.manager.equals(this.publicKey)) {
+      return ok(true);
+    }
+    return ok(false);
+  }
+
+  //
+  // State and cache
+  //
+
   public vault(
     key: PublicKey,
     errorIfMissing = true
@@ -212,9 +257,6 @@ export class PhoenixVaultsClient {
     }
   }
 
-  /**
-   * Vaults the connected wallet manages.
-   */
   public managedVaults(): Data<PublicKey, Vault>[] {
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
     const vaults = this.vaults();
@@ -223,12 +265,31 @@ export class PhoenixVaultsClient {
     });
   }
 
-  /**
-   * Vaults the connected wallet is invested in.
-   */
   public investedVaults(): PublicKey[] {
     const vds = this.investors(true);
     return vds.map((vd) => vd.data.vault);
+  }
+
+  public async fetchVault(key: PublicKey): Promise<Vault | undefined> {
+    try {
+      // @ts-ignore ... Vault type omits padding fields, but this is safe.
+      const vault: Vault = await this.vaultProgram.account.vault.fetch(key);
+      return vault;
+    } catch (e: any) {
+      return undefined;
+    }
+  }
+
+  public async fetchInvestor(
+    key: PublicKey
+  ): Promise<Investor | undefined> {
+    try {
+      const vd: Investor =
+        await this.program.account.investor.fetch(key);
+      return vd;
+    } catch (e: any) {
+      return undefined;
+    }
   }
 
   public vaults(filters?: {
@@ -397,5 +458,155 @@ export class PhoenixVaultsClient {
       this.setFundOverview(vault.key, fo);
     }
     return fundOverviews;
+  }
+
+  //
+  // Withdraw timers
+  //
+
+  public withdrawTimer(vault: PublicKey): WithdrawRequestTimer | undefined {
+    return this._timers.get(vault.toString());
+  }
+
+  private async createInvestorWithdrawTimer(
+    vault: PublicKey
+  ): Promise<void> {
+    const vaultAcct = this.vault(vault)?.data;
+    if (!vaultAcct) {
+      throw new Error(`Vault ${vault.toString()} not found`);
+    }
+    const investorKey = getInvestorAddressSync(
+      vault,
+      this.publicKey
+    );
+
+    // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
+    await this.fetchVault(vault);
+    await this.fetchInvestor(investorKey);
+
+    const investorAcct = this.investor(investorKey, false)?.data;
+    if (!investorAcct) {
+      this.removeWithdrawTimer(vault);
+      return;
+    }
+    const reqTs = investorAcct.lastWithdrawRequest.ts.toNumber();
+
+    if (investorAcct.lastWithdrawRequest.value.toNumber() === 0 || reqTs === 0) {
+      this.removeWithdrawTimer(vault);
+      return;
+    }
+
+    const equity =
+      investorAcct.lastWithdrawRequest.value.toNumber() / QUOTE_PRECISION.toNumber();
+
+    const checkTime = () => {
+      const now = Math.floor(Date.now() / 1000);
+      const timeSinceReq = now - reqTs;
+      const redeemPeriod = vaultAcct.redeemPeriod.toNumber();
+      return Math.max(redeemPeriod - timeSinceReq, 0);
+    };
+
+    const timer = setInterval(() => {
+      this._timers.set(vault.toString(), {
+        timer,
+        secondsRemaining: checkTime(),
+        equity,
+      });
+    }, 1000);
+  }
+
+  private async createManagerWithdrawTimer(vault: PublicKey): Promise<void> {
+    const isManager = this.isManager(vault).unwrapOr(false);
+    if (!isManager) {
+      return;
+    }
+    // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
+    // await this._cache?.fetch();
+    await this.fetchVault(vault);
+
+    const vaultAcct = this.vault(vault)!.data;
+
+    const reqTs = vaultAcct.lastManagerWithdrawRequest.ts.toNumber();
+
+    if (
+      vaultAcct.lastManagerWithdrawRequest.value.toNumber() === 0 ||
+      reqTs === 0
+    ) {
+      this.removeWithdrawTimer(vault);
+      return;
+    }
+
+    const equity =
+      vaultAcct.lastManagerWithdrawRequest.value.toNumber() /
+      QUOTE_PRECISION.toNumber();
+
+    const checkTime = () => {
+      const now = Math.floor(Date.now() / 1000);
+      const timeSinceReq = now - reqTs;
+      const redeemPeriod = vaultAcct.redeemPeriod.toNumber();
+      return Math.max(redeemPeriod - timeSinceReq, 0);
+    };
+
+    const timer = setInterval(() => {
+      this._timers.set(vault.toString(), {
+        timer,
+        secondsRemaining: checkTime(),
+        equity,
+      });
+    }, 1000);
+  }
+
+  private async createProtocolWithdrawTimer(vault: PublicKey): Promise<void> {
+    const isProtocol = (await this.isProtocol(vault)).unwrapOr(false);
+    if (!isProtocol) {
+      return;
+    }
+    // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
+    // await this._cache?.fetch();
+    await this.fetchVault(vault);
+
+    const vaultAcct = this.vault(vault)!.data;
+
+    const reqTs = vaultAcct.lastProtocolWithdrawRequest.ts.toNumber();
+    if (
+      vaultAcct.lastProtocolWithdrawRequest.value.toNumber() === 0 ||
+      reqTs === 0
+    ) {
+      this.removeWithdrawTimer(vault);
+      return;
+    }
+
+    const equity =
+      vaultAcct.lastProtocolWithdrawRequest.value.toNumber() /
+      QUOTE_PRECISION.toNumber();
+
+    const checkTime = () => {
+      const now = Math.floor(Date.now() / 1000);
+      const timeSinceReq = now - reqTs;
+      const redeemPeriod = vaultAcct.redeemPeriod.toNumber();
+      return Math.max(redeemPeriod - timeSinceReq, 0);
+    };
+
+    const timer = setInterval(() => {
+      this._timers.set(vault.toString(), {
+        timer,
+        secondsRemaining: checkTime(),
+        equity,
+      });
+    }, 1000);
+  }
+
+  public async createWithdrawTimer(vault: PublicKey): Promise<void> {
+    await this.createManagerWithdrawTimer(vault);
+    await this.createProtocolWithdrawTimer(vault);
+    await this.createInvestorWithdrawTimer(vault);
+  }
+
+  private removeWithdrawTimer(vault: PublicKey) {
+    const result = this._timers.get(vault.toString());
+    if (result) {
+      clearInterval(result.timer);
+    }
+    this._timers.delete(vault.toString());
   }
 }
