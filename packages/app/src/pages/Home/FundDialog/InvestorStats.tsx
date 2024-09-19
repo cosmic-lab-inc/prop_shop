@@ -91,7 +91,7 @@ export const InvestorStats = observer(
 
 		async function clickRequestWithdraw() {
 			setAction(TransferInputAction.WITHDRAW);
-			const equity = await client.fetchVaultEquity(vault);
+			const equity = await client.fetchEquityInVault(vault);
 			setInput(equity ?? 0);
 			setDefaultValue(equity ?? 0);
 		}
@@ -115,7 +115,7 @@ export const InvestorStats = observer(
 				console.error('Invalid action on submit');
 			}
 			resetTransferDialog();
-			await client.fetchVaultEquity(vault);
+			await client.fetchEquityInVault(vault);
 		}
 
 		return (
@@ -219,7 +219,7 @@ const Stats = observer(
 			async function run() {
 				// fetchVaultEquity sets the observed value, then this runs on initial render, yet the value isn't updated.
 				// so we manually fetch here to update state and re-render (eye-roll...)
-				await client.fetchVaultEquity(vault);
+				await client.fetchEquityInVault(vault);
 				setEquity(client.vaultEquity(vault));
 				setTimer(client.withdrawTimer(vault));
 			}

@@ -23,7 +23,7 @@ export const FundDialog = observer(
 			async function run() {
 				if (open) {
 					await client.createWithdrawTimer(vault);
-					await client.fetchVaultEquity(vault);
+					await client.fetchEquityInVault(vault);
 				}
 			}
 

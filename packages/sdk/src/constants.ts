@@ -4,6 +4,10 @@ export const DRIFT_VAULTS_PROGRAM_ID = new PublicKey(
 	'vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR'
 );
 
+export const PHOENIX_VAULTS_PROGRAM_ID = new PublicKey(
+	'VAULT8EhRg1mduZJYCab7xkNq7ieXMQ1Tqec2LPU6jv'
+);
+
 export const PYTH_PROGRAM_ID = new PublicKey(
 	'FsJ3A3u2vn5cTVofAjvy6y5kwABJAqYWpe4975bi2epH'
 );
