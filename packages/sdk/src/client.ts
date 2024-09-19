@@ -71,7 +71,6 @@ import {
 	getVaultAddressSync,
 	getVaultDepositorAddressSync,
 	IDL as DRIFT_VAULTS_IDL,
-	TxParams,
 	UpdateVaultParams,
 	Vault,
 	VaultClient,
@@ -120,11 +119,9 @@ export class PropShopClient {
 	private wallet: WalletContextState;
 	_vaultClient: VaultClient | undefined;
 
-	loading: boolean = false;
+	loading = false;
 	private readonly disableCache: boolean = false;
-	private readonly skipFetching: boolean = false;
-	private readonly useProxyPrefix: boolean = false;
-	dummyWallet: boolean = false;
+	dummyWallet = false;
 
 	private eventEmitter: StrictEventEmitter<
 		EventEmitter,
@@ -142,16 +139,12 @@ export class PropShopClient {
 		wallet: WalletContextState;
 		connection: Connection;
 		disableCache?: boolean;
-		skipFetching?: boolean;
-		useProxyPrefix?: boolean;
 		dummyWallet?: boolean;
 	}) {
 		makeAutoObservable(this);
 		this.wallet = config.wallet;
 		this.connection = config.connection;
 		this.disableCache = config.disableCache ?? false;
-		this.skipFetching = config.skipFetching ?? false;
-		this.useProxyPrefix = config.useProxyPrefix ?? false;
 		this.dummyWallet = config.dummyWallet ?? false;
 	}
 
@@ -367,7 +360,7 @@ export class PropShopClient {
 			`DriftClient subscribed to accounts in ${Date.now() - preAcctSub}ms`
 		);
 
-		let subUserStats: boolean = false;
+		let subUserStats = false;
 		if (driftClient.userStats !== undefined) {
 			const preStatsSub = Date.now();
 			subUserStats = await driftClient.userStats.subscribe();
@@ -502,7 +495,7 @@ export class PropShopClient {
 
 	public vault(
 		key: PublicKey,
-		errorIfMissing: boolean = true
+		errorIfMissing = true
 	): Data<PublicKey, Vault> | undefined {
 		const data = this._vaults.get(key.toString());
 		if (!data) {
@@ -550,7 +543,7 @@ export class PropShopClient {
 
 	public vaultDepositor(
 		key: PublicKey,
-		errorIfMissing: boolean = true
+		errorIfMissing = true
 	): Data<PublicKey, VaultDepositor> | undefined {
 		const data = this._vaultDepositors.get(key.toString());
 		if (!data) {
@@ -573,7 +566,6 @@ export class PropShopClient {
 		if (!this._cache) {
 			throw new Error('Cache not initialized');
 		}
-		const preFetch = Date.now();
 		// account subscriber fetches upon subscription, so these should never be undefined
 		const vds = Array.from(this._vaultDepositors.entries())
 			.filter(([_key, data]) => {
@@ -597,7 +589,7 @@ export class PropShopClient {
 	}
 
 	public get fundOverviews(): FundOverview[] {
-		let values = Array.from(this._fundOverviews.values());
+		const values = Array.from(this._fundOverviews.values());
 		values.sort((a, b) => {
 			const _a = fundDollarPnl(a);
 			const _b = fundDollarPnl(b);
@@ -751,7 +743,6 @@ export class PropShopClient {
 		}
 
 		const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-		const data: number[] = [];
 		const title = decodeName(vault.data.name);
 		const stats = await this.vaultStats(vault.key);
 		if (!stats) {
@@ -786,7 +777,6 @@ export class PropShopClient {
 		const fundOverviews: FundOverview[] = [];
 		for (const vault of vaults) {
 			const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
-			const data: number[] = [];
 			const title = decodeName(vault.data.name);
 			const stats = await this.vaultStats(vault.key);
 			if (!stats) {
@@ -950,7 +940,7 @@ export class PropShopClient {
 	public async vaultDepositorEquityInDepositAsset(
 		vdKey: PublicKey,
 		vaultKey: PublicKey,
-		forceFetch: boolean = false
+		forceFetch = false
 	): Promise<number | undefined> {
 		let vault: Vault | undefined = undefined;
 		if (forceFetch) {
@@ -1278,7 +1268,6 @@ export class PropShopClient {
 		vaultDepositor: PublicKey,
 		amount: BN,
 		withdrawUnit: WithdrawUnit,
-		txParams?: TxParams
 	): Promise<Result<TransactionInstruction[], SnackInfo>> {
 		const vaultDepositorAccount =
 			await this.vaultProgram.account.vaultDepositor.fetch(vaultDepositor);
@@ -1757,7 +1746,7 @@ export class PropShopClient {
 			vaultProtocol,
 			snack: {
 				variant: 'success',
-				message: `Created \"${params.name}\"`,
+				message: `Created "${params.name}"`,
 			},
 		};
 	}
@@ -1916,7 +1905,7 @@ export class PropShopClient {
 		}
 		return {
 			variant: 'success',
-			message: `Updated \"${decodeName(vaultAcct.name)}\"`,
+			message: `Updated "${decodeName(vaultAcct.name)}"`,
 		};
 	}
 
@@ -2414,7 +2403,7 @@ export class PropShopClient {
 			connected: true,
 			disconnecting: false,
 
-			select(walletName: WalletName | null) {
+			select(_walletName: WalletName | null) {
 				return;
 			},
 			connect(): Promise<void> {

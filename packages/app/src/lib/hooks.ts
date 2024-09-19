@@ -16,8 +16,6 @@ export function useClient(): PropShopClient | undefined {
 	);
 
 	React.useEffect(() => {
-		const env = process.env.ENV ?? 'dev';
-		const skipFetching = env === 'dev';
 		const dummyWallet = !wallet.publicKey;
 
 		const run = async () => {
@@ -34,7 +32,6 @@ export function useClient(): PropShopClient | undefined {
 				const _client = new PropShopClient({
 					wallet: _wallet,
 					connection: connection.connection,
-					skipFetching,
 					dummyWallet,
 				});
 				console.debug(
