@@ -39,12 +39,13 @@ export interface UpdateVaultConfig {
 
 export interface FundOverview {
   vault: PublicKey;
+  manager: PublicKey;
   venue: Venue;
+  investors: Set<string>;
   lifetimePNL: number;
   tvl: number;
   birth: Date;
   title: string;
-  investors: number;
 }
 
 export interface HistoricalSettlePNL {

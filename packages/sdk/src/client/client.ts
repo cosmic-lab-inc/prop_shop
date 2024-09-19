@@ -6,13 +6,13 @@ import {WalletContextState} from '@solana/wallet-adapter-react';
 import {DriftVaultsClient} from './drift';
 import {PhoenixVaultsClient} from './phoenix';
 import {
-	CreateVaultConfig,
-	Data,
-	FundOverview,
-	SnackInfo,
-	UpdateVaultConfig,
-	Venue,
-	WithdrawRequestTimer,
+  CreateVaultConfig,
+  Data,
+  FundOverview,
+  SnackInfo,
+  UpdateVaultConfig,
+  Venue,
+  WithdrawRequestTimer,
 } from '../types';
 import {fundDollarPnl} from '../utils';
 
@@ -65,6 +65,25 @@ export class PropShopClient {
       throw new Error('Wallet not connected');
     }
     return this.wallet.publicKey;
+  }
+
+  public isManager(fund: FundOverview): boolean {
+    return this.publicKey.equals(fund.manager);
+  }
+
+  public isInvested(fund: FundOverview): boolean {
+    return fund.investors.has(this.publicKey.toString());
+  }
+
+  public getInvestorAddress(config: {
+    vault: PublicKey;
+    venue: Venue;
+  }): PublicKey {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.getVaultDepositorAddress(config.vault);
+    } else {
+      return this.phoenixVaultsClient.getInvestorAddress(config.vault);
+    }
   }
 
   public vaults(config: {
@@ -240,6 +259,13 @@ export class PropShopClient {
     }
   }
 
+  public hasWithdrawRequest(config: {
+    vault: PublicKey;
+    venue: Venue;
+  }): boolean {
+    return !!this.withdrawTimer(config);
+  }
+
   public async createWithdrawTimer(config: {
     venue: Venue;
     vault: PublicKey;
@@ -265,8 +291,8 @@ export class PropShopClient {
   }
 
   public vaultEquity(config: {
-    venue: Venue;
     vault: PublicKey;
+    venue: Venue;
   }): number | undefined {
     if (config.venue === Venue.Drift) {
       return this.driftVaultsClient.vaultEquity(config.vault);

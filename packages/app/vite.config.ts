@@ -1,23 +1,23 @@
-import { defineConfig, loadEnv } from "vite";
+import {defineConfig, loadEnv} from "vite";
 import react from "@vitejs/plugin-react";
-import { NodeGlobalsPolyfillPlugin } from "@esbuild-plugins/node-globals-polyfill";
+import {NodeGlobalsPolyfillPlugin} from "@esbuild-plugins/node-globals-polyfill";
 import rollupNodePolyFill from "rollup-plugin-node-polyfills";
 import inject from "@rollup/plugin-inject";
 import * as path from "path";
-import { nodePolyfills } from "vite-plugin-node-polyfills";
+import {nodePolyfills} from "vite-plugin-node-polyfills";
 
 function hash() {
   return Math.floor(Math.random() * 90000) + 10000;
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({mode}) => {
   // get env from root of workspace
   const env = loadEnv(mode, `${process.cwd()}/../../`, "");
   // const env = loadEnv(mode, process.cwd(), "");
   env.PORT = env.PORT ? env.PORT : "3001";
   env.ENV = env.ENV ? env.ENV : "dev";
 
-  let alias: Record<any, any> = {
+  const alias: Record<any, any> = {
     // note: do not uncomment this or vercel says "process is not defined" stack tracing to dependency.
     // crypto: "crypto-browserify",
     buffer: "buffer",

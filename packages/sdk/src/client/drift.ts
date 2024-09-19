@@ -665,14 +665,15 @@ export class DriftVaultsClient {
     }
     const vds = this.vaultDepositors();
     // get count of vds per vault
-    const vaultVds = new Map<string, Data<PublicKey, VaultDepositor>[]>();
-    for (const vd of vds) {
-      const key = vd.data.vault.toString();
-      const value = vaultVds.get(key) ?? [];
-      vaultVds.set(key, [...value, vd]);
+    const vaultVds = new Map<string, Set<string>>();
+    for (const investor of vds) {
+      const vaultKey = investor.data.vault.toString();
+      const investors = vaultVds.get(vaultKey) ?? new Set();
+      investors.add(investor.key.toString());
+      vaultVds.set(vaultKey, investors);
     }
 
-    const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
+    const investors = vaultVds.get(vault.data.pubkey.toString()) ?? new Set();
     const title = decodeName(vault.data.name);
     const stats = await this.vaultStats(vault.key);
     if (!stats) {
@@ -680,12 +681,13 @@ export class DriftVaultsClient {
     }
     const fo: FundOverview = {
       vault: vault.data.pubkey,
+      manager: vault.data.manager,
       venue: Venue.Drift,
       lifetimePNL: stats.lifetimePNL,
       tvl: stats.equity,
       birth: stats.birth,
       title,
-      investors: investors.length,
+      investors,
     };
     this.setFundOverview(vault.key, fo);
     return fo;
@@ -699,15 +701,17 @@ export class DriftVaultsClient {
     });
     const vds = this.vaultDepositors();
     // get count of vds per vault
-    const vaultVds = new Map<string, Data<PublicKey, VaultDepositor>[]>();
-    for (const vd of vds) {
-      const key = vd.data.vault.toString();
-      const value = vaultVds.get(key) ?? [];
-      vaultVds.set(key, [...value, vd]);
+    const vaultVds = new Map<string, Set<string>>();
+    for (const investor of vds) {
+      const vaultKey = investor.data.vault.toString();
+      const investors = vaultVds.get(vaultKey) ?? new Set();
+      investors.add(investor.key.toString());
+      vaultVds.set(vaultKey, investors);
     }
+
     const fundOverviews: FundOverview[] = [];
     for (const vault of vaults) {
-      const investors = vaultVds.get(vault.data.pubkey.toString()) ?? [];
+      const investors = vaultVds.get(vault.data.pubkey.toString()) ?? new Set();
       const title = decodeName(vault.data.name);
       const stats = await this.vaultStats(vault.key);
       if (!stats) {
@@ -715,12 +719,13 @@ export class DriftVaultsClient {
       }
       const fo: FundOverview = {
         vault: vault.data.pubkey,
+        manager: vault.data.manager,
         venue: Venue.Drift,
         lifetimePNL: stats.lifetimePNL,
         tvl: stats.equity,
         birth: stats.birth,
         title: decodeName(vault.data.name),
-        investors: investors.length,
+        investors,
       };
       fundOverviews.push(fo);
       this.setFundOverview(vault.key, fo);
@@ -1089,7 +1094,7 @@ export class DriftVaultsClient {
     return ok(ixs);
   }
 
-  public async isProtocol(
+  private async isProtocol(
     vault: PublicKey
   ): Promise<Result<boolean, SnackInfo>> {
     const vaultAcct = this.vault(vault)?.data;
@@ -1113,7 +1118,7 @@ export class DriftVaultsClient {
     return ok(false);
   }
 
-  public isManager(vault: PublicKey): Result<boolean, SnackInfo> {
+  private isManager(vault: PublicKey): Result<boolean, SnackInfo> {
     const vaultAcct = this.vault(vault)?.data;
     if (!vaultAcct) {
       return err({

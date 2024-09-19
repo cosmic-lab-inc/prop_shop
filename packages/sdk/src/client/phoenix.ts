@@ -214,7 +214,7 @@ export class PhoenixVaultsClient {
     return this.wallet.publicKey;
   }
 
-  public async isProtocol(
+  private async isProtocol(
     vault: PublicKey
   ): Promise<Result<boolean, SnackInfo>> {
     const vaultAcct = this.vault(vault)?.data;
@@ -231,7 +231,7 @@ export class PhoenixVaultsClient {
     }
   }
 
-  public isManager(vault: PublicKey): Result<boolean, SnackInfo> {
+  private isManager(vault: PublicKey): Result<boolean, SnackInfo> {
     const vaultAcct = this.vault(vault)?.data;
     if (!vaultAcct) {
       return err({
@@ -244,6 +244,10 @@ export class PhoenixVaultsClient {
       return ok(true);
     }
     return ok(false);
+  }
+
+  public getInvestorAddress(vault: PublicKey) {
+    return getInvestorAddressSync(vault, this.publicKey);
   }
 
   //
@@ -402,14 +406,15 @@ export class PhoenixVaultsClient {
     if (!vault) {
       return undefined;
     }
-    const vaultInvestors = new Map<string, Data<PublicKey, Investor>[]>();
+    const vaultInvestors = new Map<string, Set<string>>();
     for (const investor of this.investors()) {
-      const key = investor.data.vault.toString();
-      const value = vaultInvestors.get(key) ?? [];
-      vaultInvestors.set(key, [...value, investor]);
+      const vaultKey = investor.data.vault.toString();
+      const investors = vaultInvestors.get(vaultKey) ?? new Set();
+      investors.add(investor.key.toString());
+      vaultInvestors.set(vaultKey, investors);
     }
 
-    const investors = vaultInvestors.get(vault.pubkey.toString()) ?? [];
+    const investors = vaultInvestors.get(vault.pubkey.toString()) ?? new Set();
     const title = decodeName(vault.name);
 
     const tvl = await this.fetchVaultEquity(vault);
@@ -420,27 +425,30 @@ export class PhoenixVaultsClient {
     const birth = new Date(Number(vault.initTs.toNumber() * 1000));
     const fo: FundOverview = {
       vault: vault.pubkey,
+      manager: vault.manager,
       venue: Venue.Phoenix,
       lifetimePNL: tvl - netDeposits,
       tvl,
       birth,
       title,
-      investors: investors.length,
+      investors,
     };
     this.setFundOverview(vault.pubkey, fo);
     return fo;
   }
 
   public async fetchFundOverviews(): Promise<FundOverview[]> {
-    const vaultInvestors = new Map<string, Data<PublicKey, Investor>[]>();
+    const vaultInvestors = new Map<string, Set<string>>();
     for (const investor of this.investors()) {
-      const key = investor.data.vault.toString();
-      const value = vaultInvestors.get(key) ?? [];
-      vaultInvestors.set(key, [...value, investor]);
+      const vaultKey = investor.data.vault.toString();
+      const investors = vaultInvestors.get(vaultKey) ?? new Set();
+      investors.add(investor.key.toString());
+      vaultInvestors.set(vaultKey, investors);
     }
+
     const fundOverviews: FundOverview[] = [];
     for (const vault of this.vaults()) {
-      const investors = vaultInvestors.get(vault.data.pubkey.toString()) ?? [];
+      const investors = vaultInvestors.get(vault.data.pubkey.toString()) ?? new Set();
       const title = decodeName(vault.data.name);
 
       const tvl = await this.fetchVaultEquity(vault.data);
@@ -451,12 +459,13 @@ export class PhoenixVaultsClient {
       const birth = new Date(Number(vault.data.initTs.toNumber() * 1000));
       const fo: FundOverview = {
         vault: vault.data.pubkey,
+        manager: vault.data.manager,
         venue: Venue.Phoenix,
         lifetimePNL: tvl - netDeposits,
         tvl,
         birth,
         title,
-        investors: investors.length,
+        investors,
       };
       fundOverviews.push(fo);
       this.setFundOverview(vault.key, fo);
