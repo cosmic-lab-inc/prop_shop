@@ -3,19 +3,20 @@ import {makeAutoObservable} from 'mobx';
 import * as anchor from '@coral-xyz/anchor';
 import {AnchorProvider, BN, Program} from '@coral-xyz/anchor';
 import {
-	calculateRealizedInvestorEquity,
-	fundDollarPnl,
-	getTokenBalance,
-	getTraderEquity,
-	walletAdapterToAnchorWallet,
+  calculateRealizedInvestorEquity,
+  fundDollarPnl,
+  getTokenBalance,
+  getTraderEquity,
+  walletAdapterToAnchorWallet,
 } from '../utils';
 import {
-	Data,
-	FundOverview,
-	PhoenixSubscriber,
-	PhoenixVaultsAccountEvents,
-	SnackInfo,
-	WithdrawRequestTimer,
+  Data,
+  FundOverview,
+  PhoenixSubscriber,
+  PhoenixVaultsAccountEvents,
+  SnackInfo,
+  Venue,
+  WithdrawRequestTimer,
 } from '../types';
 import {EventEmitter} from 'events';
 import StrictEventEmitter from 'strict-event-emitter-types';
@@ -23,13 +24,13 @@ import {WalletContextState} from '@solana/wallet-adapter-react';
 import {PhoenixWebsocketSubscriber} from '../phoenixWebsocketSubscriber';
 import {Client as PhoenixClient} from '@ellipsis-labs/phoenix-sdk';
 import {
-	getInvestorAddressSync,
-	IDL as PHOENIX_VAULTS_IDL,
-	Investor,
-	LOCALNET_MARKET_CONFIG,
-	PHOENIX_VAULTS_PROGRAM_ID,
-	PhoenixVaults,
-	Vault,
+  getInvestorAddressSync,
+  IDL as PHOENIX_VAULTS_IDL,
+  Investor,
+  LOCALNET_MARKET_CONFIG,
+  PHOENIX_VAULTS_PROGRAM_ID,
+  PhoenixVaults,
+  Vault,
 } from '@cosmic-lab/phoenix-vaults-sdk';
 import {decodeName, QUOTE_PRECISION} from '@drift-labs/sdk';
 import {err, ok, Result} from 'neverthrow';
@@ -419,6 +420,7 @@ export class PhoenixVaultsClient {
     const birth = new Date(Number(vault.initTs.toNumber() * 1000));
     const fo: FundOverview = {
       vault: vault.pubkey,
+      venue: Venue.Phoenix,
       lifetimePNL: tvl - netDeposits,
       tvl,
       birth,
@@ -449,6 +451,7 @@ export class PhoenixVaultsClient {
       const birth = new Date(Number(vault.data.initTs.toNumber() * 1000));
       const fo: FundOverview = {
         vault: vault.data.pubkey,
+        venue: Venue.Phoenix,
         lifetimePNL: tvl - netDeposits,
         tvl,
         birth,

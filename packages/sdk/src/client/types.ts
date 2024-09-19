@@ -1,19 +1,14 @@
-import { WalletContextState } from '@solana/wallet-adapter-react';
-import { Connection } from '@solana/web3.js';
-
-export enum Venue {
-	Drift,
-	Phoenix,
-}
+import {WalletContextState} from '@solana/wallet-adapter-react';
+import {Connection} from '@solana/web3.js';
 
 export interface CreatePropShopClientConfig {
-	wallet: WalletContextState;
-	connection: Connection;
-	disableCache?: boolean;
-	dummyWallet?: boolean;
+  wallet: WalletContextState;
+  connection: Connection;
+  disableCache?: boolean;
+  dummyWallet?: boolean;
 }
 
 export interface UpdateWalletConfig {
-	wallet: WalletContextState;
-	dummyWallet?: boolean;
+  wallet: WalletContextState;
+  dummyWallet?: boolean;
 }
