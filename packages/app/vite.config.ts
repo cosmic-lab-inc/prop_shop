@@ -10,6 +10,7 @@ function hash() {
   return Math.floor(Math.random() * 90000) + 10000;
 }
 
+// @ts-ignore
 export default defineConfig(({mode}) => {
   // get env from root of workspace
   const env = loadEnv(mode, `${process.cwd()}/../../`, "");
