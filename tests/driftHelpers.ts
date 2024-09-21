@@ -46,7 +46,7 @@ import {
   Wallet,
 } from "@drift-labs/sdk";
 import {IDL, VaultClient} from "@drift-labs/vaults-sdk";
-import {formatExplorerLink, sendTransactionWithResult,} from "@cosmic-lab/prop-shop-sdk";
+import {sendTransactionWithResult, signatureLink,} from "@cosmic-lab/prop-shop-sdk";
 import {AsyncSigner, InstructionReturn, keypairToAsyncSigner, walletToAsyncSigner,} from "@cosmic-lab/data-source";
 
 export async function mockOracle(
@@ -146,7 +146,7 @@ export async function mockUSDCMint(
   if (res.isErr()) {
     throw new Error(`Error creating USDC mint: ${res.error}`);
   }
-  console.debug("USDC mint created:", formatExplorerLink(res.value));
+  console.debug("USDC mint created:", signatureLink(res.value));
   return fakeUSDCMint;
 }
 
@@ -208,7 +208,7 @@ export async function mockUserUSDCAssociatedTokenAccount(
       `Error creating user ATA: ${JSON.stringify(res.error as TransactionError)}`,
     );
   }
-  // console.debug("User ATA created", formatExplorerLink(res.value));
+  // console.debug("User ATA created", signatureLink(res.value));
   return userUSDCAccount;
 }
 
@@ -641,7 +641,7 @@ export const setFeedPrice = async (
         price: priceFeed
       })
       .rpc();
-    console.log('set feed price:', formatExplorerLink(sig));
+    console.log('set feed price:', signatureLink(sig));
     const strategy = {
       signature: sig,
     } as TransactionConfirmationStrategy;
