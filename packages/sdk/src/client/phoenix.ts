@@ -1,57 +1,57 @@
 import {
-  AccountMeta,
-  ComputeBudgetProgram,
-  ConfirmOptions,
-  Connection,
-  PublicKey,
-  TransactionInstruction
+	AccountMeta,
+	ComputeBudgetProgram,
+	ConfirmOptions,
+	Connection,
+	PublicKey,
+	TransactionInstruction,
 } from '@solana/web3.js';
 import {makeAutoObservable} from 'mobx';
 import * as anchor from '@coral-xyz/anchor';
 import {AnchorProvider, BN, Program} from '@coral-xyz/anchor';
 import {
-  calculateRealizedInvestorEquity,
-  fundDollarPnl,
-  getTokenBalance,
-  getTraderEquity,
-  walletAdapterToAnchorWallet,
+	calculateRealizedInvestorEquity,
+	fundDollarPnl,
+	getTokenBalance,
+	getTraderEquity,
+	walletAdapterToAnchorWallet,
 } from '../utils';
 import {
-  Data,
-  FundOverview,
-  PhoenixSubscriber,
-  PhoenixVaultsAccountEvents,
-  SnackInfo,
-  Venue,
-  WithdrawRequestTimer,
+	Data,
+	FundOverview,
+	PhoenixSubscriber,
+	PhoenixVaultsAccountEvents,
+	SnackInfo,
+	Venue,
+	WithdrawRequestTimer,
 } from '../types';
 import {EventEmitter} from 'events';
 import StrictEventEmitter from 'strict-event-emitter-types';
 import {WalletContextState} from '@solana/wallet-adapter-react';
 import {PhoenixWebsocketSubscriber} from '../phoenixWebsocketSubscriber';
-import {Client as PhoenixClient, getLogAuthority, getSeatAddress} from '@ellipsis-labs/phoenix-sdk';
+import {Client as PhoenixClient, getLogAuthority, getSeatAddress,} from '@ellipsis-labs/phoenix-sdk';
 import {
-  getInvestorAddressSync,
-  getMarketRegistryAddressSync,
-  IDL as PHOENIX_VAULTS_IDL,
-  Investor,
-  LOCALNET_MARKET_CONFIG,
-  PHOENIX_PROGRAM_ID,
-  PHOENIX_VAULTS_PROGRAM_ID,
-  PhoenixVaults,
-  Vault,
-  WithdrawUnit,
+	getInvestorAddressSync,
+	getMarketRegistryAddressSync,
+	IDL as PHOENIX_VAULTS_IDL,
+	Investor,
+	LOCALNET_MARKET_CONFIG,
+	PHOENIX_PROGRAM_ID,
+	PHOENIX_VAULTS_PROGRAM_ID,
+	PhoenixVaults,
+	Vault,
+	WithdrawUnit,
 } from '@cosmic-lab/phoenix-vaults-sdk';
 import {decodeName, QUOTE_PRECISION} from '@drift-labs/sdk';
 import {err, ok, Result} from 'neverthrow';
 import {CreatePropShopClientConfig, UpdateWalletConfig} from './types';
 import {
-  createAssociatedTokenAccountInstruction,
-  getAssociatedTokenAddressSync,
-  TOKEN_PROGRAM_ID
-} from "@solana/spl-token";
-import {walletAdapterToAsyncSigner} from "@cosmic-lab/data-source";
-import {signatureLink} from "../rpc";
+	createAssociatedTokenAccountInstruction,
+	getAssociatedTokenAddressSync,
+	TOKEN_PROGRAM_ID,
+} from '@solana/spl-token';
+import {walletAdapterToAsyncSigner} from '@cosmic-lab/data-source';
+import {signatureLink} from '../rpc';
 
 interface SolUsdcMarketConfig {
   market: PublicKey;
@@ -135,9 +135,16 @@ export class PhoenixVaultsClient {
       this._phoenixClient = await PhoenixClient.create(this.conn);
       console.log(`loaded Phoenix markets in ${Date.now() - now}ms`);
     }
-    const registry = await this._program.account.marketRegistry.fetch(getMarketRegistryAddressSync());
-    const solUsdcMarketKeyValue = Array.from(this._phoenixClient.marketConfigs.entries()).find(([_, market]) => {
-      return market.baseToken.mint === registry.solMint.toString() && market.quoteToken.mint === registry.usdcMint.toString();
+    const registry = await this._program.account.marketRegistry.fetch(
+      getMarketRegistryAddressSync()
+    );
+    const solUsdcMarketKeyValue = Array.from(
+      this._phoenixClient.marketConfigs.entries()
+    ).find(([_, market]) => {
+      return (
+        market.baseToken.mint === registry.solMint.toString() &&
+        market.quoteToken.mint === registry.usdcMint.toString()
+      );
     });
     if (!solUsdcMarketKeyValue) {
       throw new Error('SOL/USDC market not found');
@@ -360,9 +367,11 @@ export class PhoenixVaultsClient {
     const funder = walletAdapterToAsyncSigner(this.wallet);
     tx = await funder.sign(tx);
 
-    const sim = (await this.conn.simulateTransaction(tx, {
-      sigVerify: false,
-    })).value;
+    const sim = (
+      await this.conn.simulateTransaction(tx, {
+        sigVerify: false,
+      })
+    ).value;
     if (sim.err) {
       const msg = `${errorMessage}: ${JSON.stringify(sim.err)}}`;
       console.error(msg);
@@ -473,9 +482,7 @@ export class PhoenixVaultsClient {
     return vaults;
   }
 
-  public investor(
-    key: PublicKey,
-  ): Data<PublicKey, Investor> | undefined {
+  public investor(key: PublicKey): Data<PublicKey, Investor> | undefined {
     const data = this._investors.get(key.toString());
     if (!data) {
       return undefined;
@@ -540,12 +547,16 @@ export class PhoenixVaultsClient {
     return equity;
   }
 
-  public async fetchInvestorEquity(vaultKey: PublicKey): Promise<number | undefined> {
+  public async fetchInvestorEquity(
+    vaultKey: PublicKey
+  ): Promise<number | undefined> {
     const vault = this.vault(vaultKey)?.data;
     if (!vault) {
       throw new Error(`Vault ${vaultKey.toString()} not found`);
     }
-    const investor = this.investor(getInvestorAddressSync(vaultKey, this.publicKey))?.data;
+    const investor = this.investor(
+      getInvestorAddressSync(vaultKey, this.publicKey)
+    )?.data;
     if (!investor) {
       return undefined;
     }
@@ -556,7 +567,8 @@ export class PhoenixVaultsClient {
       vaultEquityBN,
       vault
     );
-    const usdc = investorEquityBN.toNumber() / QUOTE_PRECISION.toNumber();
+    // const usdc = investorEquityBN.toNumber() / QUOTE_PRECISION.toNumber();
+    const usdc = investorEquityBN.div(QUOTE_PRECISION).toNumber();
     this._equities.set(vault.pubkey.toString(), usdc);
     return usdc;
   }
@@ -854,19 +866,19 @@ export class PhoenixVaultsClient {
     const marketQuoteTokenAccount = this.phoenixClient.getQuoteVaultKey(
       solUsdcMarket.market.toString()
     );
-    const investorKey = getInvestorAddressSync(
-      vaultKey,
-      this.publicKey
-    );
+    const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
     const marketRegistry = getMarketRegistryAddressSync();
-    const registryAcct = await this.program.account.marketRegistry.fetch(marketRegistry);
+    const registryAcct =
+      await this.program.account.marketRegistry.fetch(marketRegistry);
     const investorQuoteTokenAccount = getAssociatedTokenAddressSync(
       solUsdcMarket.usdcMint,
       this.publicKey
     );
 
     const ixs: TransactionInstruction[] = [];
-    const investorUsdcExists = await this.conn.getAccountInfo(investorQuoteTokenAccount);
+    const investorUsdcExists = await this.conn.getAccountInfo(
+      investorQuoteTokenAccount
+    );
     if (investorUsdcExists === null) {
       ixs.push(
         createAssociatedTokenAccountInstruction(
@@ -880,53 +892,63 @@ export class PhoenixVaultsClient {
 
     const investor = this.investor(investorKey)?.data;
     if (!investor) {
-      ixs.push(await this.program.methods
-        .initializeInvestor()
-        .accounts({
-          vault: vaultKey,
-          investor: investorKey,
-          authority: this.publicKey,
-        })
-        .instruction()
+      ixs.push(
+        await this.program.methods
+          .initializeInvestor()
+          .accounts({
+            vault: vaultKey,
+            investor: investorKey,
+            authority: this.publicKey,
+          })
+          .instruction()
       );
     }
 
     const usdcAmount = new BN(usdc).mul(QUOTE_PRECISION);
-    ixs.push(await this.program.methods
-      .investorDeposit(usdcAmount)
-      .accounts({
-        vault: vaultKey,
-        investor: investorKey,
-        authority: this.publicKey,
-        marketRegistry,
-        lut: registryAcct.lut,
-        investorQuoteTokenAccount,
-        phoenix: PHOENIX_PROGRAM_ID,
-        logAuthority: getLogAuthority(),
-        market: solUsdcMarket.market,
-        seat: getSeatAddress(solUsdcMarket.market, vaultKey),
-        baseMint: solUsdcMarket.solMint,
-        quoteMint: solUsdcMarket.usdcMint,
-        vaultBaseTokenAccount,
-        vaultQuoteTokenAccount,
-        marketBaseTokenAccount,
-        marketQuoteTokenAccount,
-      })
-      .remainingAccounts(this.marketAccountMetas)
-      .instruction()
+    ixs.push(
+      await this.program.methods
+        .investorDeposit(usdcAmount)
+        .accounts({
+          vault: vaultKey,
+          investor: investorKey,
+          authority: this.publicKey,
+          marketRegistry,
+          lut: registryAcct.lut,
+          investorQuoteTokenAccount,
+          phoenix: PHOENIX_PROGRAM_ID,
+          logAuthority: getLogAuthority(),
+          market: solUsdcMarket.market,
+          seat: getSeatAddress(solUsdcMarket.market, vaultKey),
+          baseMint: solUsdcMarket.solMint,
+          quoteMint: solUsdcMarket.usdcMint,
+          vaultBaseTokenAccount,
+          vaultQuoteTokenAccount,
+          marketBaseTokenAccount,
+          marketQuoteTokenAccount,
+        })
+        .remainingAccounts(this.marketAccountMetas)
+        .instruction()
     );
-    return await this.sendTx(
+    const snack = await this.sendTx(
       ixs,
       `Deposited to ${decodeName(vault.name)}`,
-      `Failed to deposit to ${decodeName(vault.name)}`,
+      `Failed to deposit to ${decodeName(vault.name)}`
     );
+    await this.fetchVaultEquity(vault);
+    await this.fetchFundOverview(vaultKey);
+    return snack;
   }
 
-  public async requestWithdraw(vaultKey: PublicKey, usdc: number): Promise<SnackInfo> {
+  public async requestWithdraw(
+    vaultKey: PublicKey,
+    usdc: number
+  ): Promise<SnackInfo> {
     const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
     const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
     const marketRegistry = getMarketRegistryAddressSync();
-    const lut = (await this.program.account.marketRegistry.fetch(marketRegistry)).lut;
+    const lut = (
+      await this.program.account.marketRegistry.fetch(marketRegistry)
+    ).lut;
     const vault = this.vault(vaultKey)?.data;
     if (!vault) {
       return {
@@ -947,11 +969,16 @@ export class PhoenixVaultsClient {
       })
       .remainingAccounts(this.marketAccountMetas)
       .instruction();
-    return await this.sendTx(
+    const snack = await this.sendTx(
       [ix],
       `Requested withdrawal of $${usdc} from ${decodeName(vault.name)}`,
-      `Failed to request withdrawal of $${usdc} from ${decodeName(vault.name)}`,
+      `Failed to request withdrawal of $${usdc} from ${decodeName(vault.name)}`
     );
+    await this.fetchVaultEquity(vault);
+    await this.fetchFundOverviews();
+    // cache timer so frontend can track withdraw request
+    await this.createWithdrawTimer(vaultKey);
+    return snack;
   }
 
   public async withdraw(vaultKey: PublicKey): Promise<SnackInfo> {
@@ -964,7 +991,9 @@ export class PhoenixVaultsClient {
     }
     const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
     const marketRegistry = getMarketRegistryAddressSync();
-    const lut = (await this.program.account.marketRegistry.fetch(marketRegistry)).lut;
+    const lut = (
+      await this.program.account.marketRegistry.fetch(marketRegistry)
+    ).lut;
     const investorQuoteTokenAccount = getAssociatedTokenAddressSync(
       this.solUsdcMarket.usdcMint,
       this.publicKey
@@ -1007,10 +1036,14 @@ export class PhoenixVaultsClient {
       })
       .remainingAccounts(this.marketAccountMetas)
       .instruction();
-    return await this.sendTx(
+    const snack = await this.sendTx(
       [ix],
       `Withdrew from ${decodeName(vault.name)}`,
-      `Failed to withdraw from ${decodeName(vault.name)}`,
+      `Failed to withdraw from ${decodeName(vault.name)}`
     );
+    this.removeWithdrawTimer(vaultKey);
+    await this.fetchVaultEquity(vault);
+    await this.fetchFundOverview(vaultKey);
+    return snack;
   }
 }
