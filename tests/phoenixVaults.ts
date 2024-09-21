@@ -767,8 +767,6 @@ describe('phoenixVaults', () => {
     );
     assert.strictEqual(investorEquityBefore, 1249.75002);
 
-    // todo: vaultEquity function that replicates MarketMapProvider::equity()
-
     const vaultEquity = new BN(
       investorEquityBefore * QUOTE_PRECISION.toNumber()
     );

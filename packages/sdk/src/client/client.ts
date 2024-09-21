@@ -297,11 +297,7 @@ export class PropShopClient {
     if (config.venue === Venue.Drift) {
       return this.driftVaultsClient.requestWithdraw(config.vault, config.usdc);
     } else {
-      // todo
-      return {
-        variant: 'error',
-        message: `todo`,
-      };
+      return this.phoenixVaultsClient.requestWithdraw(config.vault, config.usdc);
     }
   }
 
@@ -327,11 +323,7 @@ export class PropShopClient {
     if (config.venue === Venue.Drift) {
       return this.driftVaultsClient.withdraw(config.vault);
     } else {
-      // todo
-      return {
-        variant: 'error',
-        message: `todo`,
-      };
+      return this.phoenixVaultsClient.withdraw(config.vault);
     }
   }
 

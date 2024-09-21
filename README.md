@@ -20,6 +20,8 @@ export const RPC_URL = "https://your-solana-rpc"
 
 ## TODO
 
-Display "Your Profit/Loss" alongside "Your Equity" field in FundDialog.
+Withdraw timer creation and deletion requires refresh to reflect changes.
 
-If manager and vault is invite-only, then display invite button and dialog.
+Request withdraw of equity to 6 decimal places is one share off.
+Rounding to 4 decimal places for now.
+Why?

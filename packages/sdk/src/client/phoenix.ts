@@ -4,9 +4,6 @@ import {
   ConfirmOptions,
   Connection,
   PublicKey,
-  Signer,
-  SimulatedTransactionResponse,
-  TransactionConfirmationStrategy,
   TransactionInstruction
 } from '@solana/web3.js';
 import {makeAutoObservable} from 'mobx';
@@ -43,13 +40,18 @@ import {
   PHOENIX_VAULTS_PROGRAM_ID,
   PhoenixVaults,
   Vault,
+  WithdrawUnit,
 } from '@cosmic-lab/phoenix-vaults-sdk';
 import {decodeName, QUOTE_PRECISION} from '@drift-labs/sdk';
 import {err, ok, Result} from 'neverthrow';
 import {CreatePropShopClientConfig, UpdateWalletConfig} from './types';
-import {createAssociatedTokenAccountInstruction, getAssociatedTokenAddressSync} from "@solana/spl-token";
-import {InstructionReturn, walletAdapterToAsyncSigner} from "@cosmic-lab/data-source";
-import {sendTransactionWithResult, signatureLink} from "../rpc";
+import {
+  createAssociatedTokenAccountInstruction,
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID
+} from "@solana/spl-token";
+import {walletAdapterToAsyncSigner} from "@cosmic-lab/data-source";
+import {signatureLink} from "../rpc";
 
 interface SolUsdcMarketConfig {
   market: PublicKey;
@@ -155,7 +157,6 @@ export class PhoenixVaultsClient {
           this._investors.get(payload.key.toString())
         );
         if (update !== existing) {
-          console.log('new investor:', payload.key.toString());
           this._investors.set(payload.key.toString(), payload.data);
         }
       }
@@ -308,19 +309,44 @@ export class PhoenixVaultsClient {
     return getInvestorAddressSync(vault, this.publicKey);
   }
 
-  private async simulate(
-    instructions: TransactionInstruction[],
-    signers: Signer[] = []
-  ): Promise<SimulatedTransactionResponse> {
-    instructions = [
+  private async sendTx(
+    ixs: TransactionInstruction[],
+    successMessage: string,
+    errorMessage: string
+  ): Promise<SnackInfo> {
+    const instructions = [
       ComputeBudgetProgram.setComputeUnitLimit({
         units: 400_000,
       }),
       ComputeBudgetProgram.setComputeUnitPrice({
         microLamports: 10_000,
       }),
-      ...instructions,
+      ...ixs,
     ];
+
+    // const ixReturns: InstructionReturn[] = instructions.map((ix) => {
+    //   return () => {
+    //     return Promise.resolve({
+    //       instruction: ix,
+    //       signers: [],
+    //     });
+    //   };
+    // });
+    // const funder = walletAdapterToAsyncSigner(this.wallet);
+    // const result = await sendTransactionWithResult(ixReturns, funder, this.conn);
+    // if (result.isErr()) {
+    //   console.error(`${errorMessage}: ${JSON.stringify(result.error)}`);
+    //   return {
+    //     variant: 'error',
+    //     message: errorMessage,
+    //   };
+    // } else {
+    //   console.debug(`${successMessage}: ${signatureLink(result.value)}`);
+    //   return {
+    //     variant: 'success',
+    //     message: successMessage,
+    //   };
+    // }
 
     const recentBlockhash = await this.conn
       .getLatestBlockhash()
@@ -330,118 +356,46 @@ export class PhoenixVaultsClient {
       recentBlockhash,
       instructions,
     }).compileToV0Message();
-
-    const tx = new anchor.web3.VersionedTransaction(msg);
+    let tx = new anchor.web3.VersionedTransaction(msg);
     const funder = walletAdapterToAsyncSigner(this.wallet);
-    await funder.sign(tx);
-    tx.sign([...signers]);
+    tx = await funder.sign(tx);
 
-    try {
-      return (await this.conn.simulateTransaction(tx, {
-        sigVerify: false,
-      })).value;
-    } catch (e: any) {
-      throw new Error(e);
-    }
-  }
-
-  private async sendAndConfirm(
-    instructions: TransactionInstruction[],
-    signers: Signer[] = []
-  ): Promise<string> {
-    try {
-      instructions = [
-        ComputeBudgetProgram.setComputeUnitLimit({
-          units: 400_000,
-        }),
-        ComputeBudgetProgram.setComputeUnitPrice({
-          microLamports: 10_000,
-        }),
-        ...instructions,
-      ];
-
-      const recentBlockhash = await this.conn
-        .getLatestBlockhash()
-        .then((res) => res.blockhash);
-      const msg = new anchor.web3.TransactionMessage({
-        payerKey: this.publicKey,
-        recentBlockhash,
-        instructions,
-      }).compileToV0Message();
-      const tx = new anchor.web3.VersionedTransaction(msg);
-      const funder = walletAdapterToAsyncSigner(this.wallet);
-      await funder.sign(tx);
-      tx.sign([...signers]);
-
-      const sig = await this.conn.sendTransaction(tx, {
-        skipPreflight: true,
-      });
-      const strategy = {
-        signature: sig,
-      } as TransactionConfirmationStrategy;
-      const confirm = await this.conn.confirmTransaction(strategy);
-      if (confirm.value.err) {
-        throw new Error(JSON.stringify(confirm.value.err));
-      }
-      return sig;
-    } catch (e: any) {
-      console.error(e);
-      throw new Error(e);
-    }
-  }
-
-  private async sendTx(
-    ixs: TransactionInstruction[],
-    successMessage: string,
-    errorMessage: string
-  ): Promise<SnackInfo> {
-    const _ixs = [
-      ComputeBudgetProgram.setComputeUnitLimit({
-        units: 400_000,
-      }),
-      ComputeBudgetProgram.setComputeUnitPrice({
-        microLamports: 10_000,
-      }),
-      ...ixs,
-    ];
-    const ixReturns: InstructionReturn[] = ixs.map((ix) => {
-      return () => {
-        return Promise.resolve({
-          instruction: ix,
-          signers: [],
-        });
-      };
-    });
-    const funder = walletAdapterToAsyncSigner(this.wallet);
-    const result = await sendTransactionWithResult(ixReturns, funder, this.conn);
-    if (result.isErr()) {
-      console.error(`${errorMessage}: ${JSON.stringify(result.error)}`);
+    const sim = (await this.conn.simulateTransaction(tx, {
+      sigVerify: false,
+    })).value;
+    if (sim.err) {
+      const msg = `${errorMessage}: ${JSON.stringify(sim.err)}}`;
+      console.error(msg);
       return {
         variant: 'error',
         message: errorMessage,
       };
-    } else {
-      console.debug(`${successMessage}: ${signatureLink(result.value)}`);
-      return {
-        variant: 'success',
-        message: successMessage,
-      };
     }
 
-    // try {
-    //   const sig = await this.sendAndConfirm(_ixs);
-    //   console.debug(`${successMessage}: ${signatureLink(sig)}`);
-    //   return {
-    //     variant: 'success',
-    //     message: successMessage,
-    //   };
-    // } catch (e: any) {
-    //   console.error(`${errorMessage}: ${JSON.stringify(e)}`);
-    //   return {
-    //     variant: 'error',
-    //     message: errorMessage,
-    //   };
-    // }
+    try {
+      const sig = await this.conn.sendTransaction(tx, {
+        skipPreflight: true,
+      });
+      console.debug(`${successMessage}: ${signatureLink(sig)}`);
+      const confirm = await this.conn.confirmTransaction(sig);
+      if (confirm.value.err) {
+        console.error(`${errorMessage}: ${JSON.stringify(confirm.value.err)}`);
+        return {
+          variant: 'error',
+          message: errorMessage,
+        };
+      } else {
+        return {
+          variant: 'success',
+          message: successMessage,
+        };
+      }
+    } catch (e: any) {
+      return {
+        variant: 'error',
+        message: errorMessage,
+      };
+    }
   }
 
   //
@@ -965,6 +919,98 @@ export class PhoenixVaultsClient {
       ixs,
       `Deposited to ${decodeName(vault.name)}`,
       `Failed to deposit to ${decodeName(vault.name)}`,
+    );
+  }
+
+  public async requestWithdraw(vaultKey: PublicKey, usdc: number): Promise<SnackInfo> {
+    const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
+    const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
+    const marketRegistry = getMarketRegistryAddressSync();
+    const lut = (await this.program.account.marketRegistry.fetch(marketRegistry)).lut;
+    const vault = this.vault(vaultKey)?.data;
+    if (!vault) {
+      return {
+        variant: 'error',
+        message: `Vault ${vaultKey.toString()} not found`,
+      };
+    }
+    const vaultUsdcTokenAccount = vault.usdcTokenAccount;
+    const ix = await this.program.methods
+      .requestWithdraw(amount, WithdrawUnit.TOKEN)
+      .accounts({
+        vault: vaultKey,
+        investor: investorKey,
+        authority: this.publicKey,
+        marketRegistry,
+        lut,
+        vaultUsdcTokenAccount,
+      })
+      .remainingAccounts(this.marketAccountMetas)
+      .instruction();
+    return await this.sendTx(
+      [ix],
+      `Requested withdrawal of $${usdc} from ${decodeName(vault.name)}`,
+      `Failed to request withdrawal of $${usdc} from ${decodeName(vault.name)}`,
+    );
+  }
+
+  public async withdraw(vaultKey: PublicKey): Promise<SnackInfo> {
+    const vault = this.vault(vaultKey)?.data;
+    if (!vault) {
+      return {
+        variant: 'error',
+        message: `Vault ${vaultKey.toString()} not found`,
+      };
+    }
+    const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
+    const marketRegistry = getMarketRegistryAddressSync();
+    const lut = (await this.program.account.marketRegistry.fetch(marketRegistry)).lut;
+    const investorQuoteTokenAccount = getAssociatedTokenAddressSync(
+      this.solUsdcMarket.usdcMint,
+      this.publicKey
+    );
+    const vaultBaseTokenAccount = getAssociatedTokenAddressSync(
+      this.solUsdcMarket.solMint,
+      vaultKey,
+      true
+    );
+    const vaultQuoteTokenAccount = getAssociatedTokenAddressSync(
+      this.solUsdcMarket.usdcMint,
+      vaultKey,
+      true
+    );
+
+    const ix = await this.program.methods
+      .investorWithdraw()
+      .accounts({
+        vault: vaultKey,
+        investor: investorKey,
+        authority: this.publicKey,
+        marketRegistry,
+        lut,
+        investorQuoteTokenAccount,
+        phoenix: PHOENIX_PROGRAM_ID,
+        logAuthority: getLogAuthority(),
+        market: this.solUsdcMarket.market,
+        seat: getSeatAddress(this.solUsdcMarket.market, vaultKey),
+        baseMint: this.solUsdcMarket.solMint,
+        quoteMint: this.solUsdcMarket.usdcMint,
+        vaultBaseTokenAccount,
+        vaultQuoteTokenAccount,
+        marketBaseTokenAccount: this.phoenixClient.getBaseVaultKey(
+          this.solUsdcMarket.market.toString()
+        ),
+        marketQuoteTokenAccount: this.phoenixClient.getQuoteVaultKey(
+          this.solUsdcMarket.market.toString()
+        ),
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .remainingAccounts(this.marketAccountMetas)
+      .instruction();
+    return await this.sendTx(
+      [ix],
+      `Withdrew from ${decodeName(vault.name)}`,
+      `Failed to withdraw from ${decodeName(vault.name)}`,
     );
   }
 }
