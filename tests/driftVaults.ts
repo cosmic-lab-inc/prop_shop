@@ -28,7 +28,6 @@ import {
   createUserWithUSDCAccount,
   initializeQuoteSpotMarket,
   mockOracle,
-  mockUSDCMint,
   printTxLogs,
   setFeedPrice,
 } from "./driftHelpers";
@@ -70,12 +69,6 @@ describe("driftVaults", () => {
     DRIFT_VAULTS_PROGRAM_ID,
     provider,
   ) as any as Program<DriftVaults>;
-
-  // const pythProgram = new Program(
-  //   PYTH_IDL as any as anchor.Idl,
-  //   PYTH_PROGRAM_ID,
-  //   provider,
-  // );
 
   const bulkAccountLoader = new BulkAccountLoader(connection, "confirmed", 1);
 
@@ -135,7 +128,7 @@ describe("driftVaults", () => {
 
   before(async () => {
     try {
-      await mockUSDCMint(provider, usdcMint, usdcMintAuth);
+      // await mockUSDCMint(provider, usdcMint, usdcMintAuth);
       solPerpOracle = await mockOracle(initialSolPerpPrice);
 
       const perpMarketIndexes = [0];

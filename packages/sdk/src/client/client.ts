@@ -1,4 +1,4 @@
-import { PublicKey } from '@solana/web3.js';
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { makeAutoObservable } from 'mobx';
 import { CreatePropShopClientConfig, UpdateWalletConfig } from './types';
 import { Vault } from '@drift-labs/vaults-sdk';
@@ -15,8 +15,23 @@ import {
 	WithdrawRequestTimer,
 } from '../types';
 import { fundDollarPnl } from '../utils';
+import { formatExplorerLink, sendTransactionWithResult } from '../rpc';
+import {
+	InstructionReturn,
+	keypairToAsyncSigner,
+	walletAdapterToAsyncSigner,
+} from '@cosmic-lab/data-source';
+import { TEST_USDC_MINT, TEST_USDC_MINT_AUTHORITY } from '../constants';
+import { BN } from '@coral-xyz/anchor';
+import { QUOTE_PRECISION } from '@drift-labs/sdk';
+import {
+	createAssociatedTokenAccountInstruction,
+	createMintToInstruction,
+	getAssociatedTokenAddressSync,
+} from '@solana/spl-token';
 
 export class PropShopClient {
+	private readonly conn: Connection;
 	private readonly wallet: WalletContextState;
 	private driftVaultsClient: DriftVaultsClient;
 	private phoenixVaultsClient: PhoenixVaultsClient;
@@ -26,6 +41,7 @@ export class PropShopClient {
 
 	constructor(config: CreatePropShopClientConfig) {
 		makeAutoObservable(this);
+		this.conn = config.connection;
 		this.wallet = config.wallet;
 		this.dummyWallet = config.dummyWallet ?? false;
 		this.driftVaultsClient = new DriftVaultsClient(config);
@@ -302,8 +318,94 @@ export class PropShopClient {
 		}
 	}
 
-	public async fetchWalletUSDC(): Promise<number | undefined> {
-		// todo
-		return undefined;
+	public async fetchWalletUsdc(): Promise<number | undefined> {
+		return this.driftVaultsClient.fetchWalletUsdc();
+	}
+
+	public async airdropSol(): Promise<SnackInfo> {
+		try {
+			const sig = await this.conn.requestAirdrop(
+				this.publicKey,
+				LAMPORTS_PER_SOL
+			);
+			await this.conn.confirmTransaction(sig);
+			console.debug(`airdrop sol: ${formatExplorerLink(sig)}`);
+			return {
+				variant: 'success',
+				message: 'Airdropped 1 SOL',
+			};
+		} catch (e: any) {
+			console.error(e);
+			return {
+				variant: 'error',
+				message: e.toString(),
+			};
+		}
+	}
+
+	public async airdropUsdc(usdc = 1000): Promise<SnackInfo> {
+		const mintSigner = keypairToAsyncSigner(TEST_USDC_MINT);
+		const mintAuthSigner = keypairToAsyncSigner(TEST_USDC_MINT_AUTHORITY);
+		const funderSigner = walletAdapterToAsyncSigner(this.wallet);
+
+		const ixs: InstructionReturn[] = [];
+		// USDC has 6 decimals which happens to be the same as the QUOTE_PRECISION
+		const usdcAmount = new BN(usdc).mul(QUOTE_PRECISION);
+
+		const usdcAta = getAssociatedTokenAddressSync(
+			mintSigner.publicKey(),
+			this.publicKey,
+			true
+		);
+		const ataExists = await this.conn.getAccountInfo(usdcAta);
+		if (ataExists === null) {
+			const createAtaIx: InstructionReturn = () => {
+				return Promise.resolve({
+					instruction: createAssociatedTokenAccountInstruction(
+						this.publicKey,
+						usdcAta,
+						this.publicKey,
+						mintSigner.publicKey()
+					),
+					signers: [funderSigner],
+				});
+			};
+			ixs.push(createAtaIx);
+		}
+
+		const mintToUserAccountIx: InstructionReturn = () => {
+			return Promise.resolve({
+				instruction: createMintToInstruction(
+					mintSigner.publicKey(),
+					usdcAta,
+					mintAuthSigner.publicKey(),
+					usdcAmount.toNumber()
+				),
+				signers: [mintAuthSigner],
+			});
+		};
+		ixs.push(mintToUserAccountIx);
+
+		try {
+			const sig = await sendTransactionWithResult(ixs, funderSigner, this.conn);
+			if (sig.isErr()) {
+				console.error(sig.error);
+				return {
+					variant: 'error',
+					message: 'Failed to airdrop USDC',
+				};
+			}
+			console.debug(`airdrop usdc: ${formatExplorerLink(sig.value)}`);
+			return {
+				variant: 'success',
+				message: `Airdropped ${usdc} USDC`,
+			};
+		} catch (e: any) {
+			console.error(e);
+			return {
+				variant: 'error',
+				message: e.toString(),
+			};
+		}
 	}
 }

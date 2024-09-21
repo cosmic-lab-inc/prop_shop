@@ -23,7 +23,7 @@
     "@cosmic-lab/data-source": "^0.7.4",
     "@drift-labs/sdk": "2.96.0-beta.0",
     "@drift-labs/vaults-sdk": "0.1.456",
-    "@cosmic-lab/phoenix-vaults-sdk": "0.1.2",
+    "@cosmic-lab/phoenix-vaults-sdk": "0.1.3",
     "@ellipsis-labs/phoenix-sdk": "2.0.3",
     "@flipsidecrypto/sdk": "^2.1.0",
     "@solana/wallet-adapter-base": "0.9.23",

@@ -96,7 +96,7 @@ export const InvestorStats = observer(
 		// ON CLICK
 		async function clickDeposit() {
 			setAction(TransferInputAction.DEPOSIT);
-			const usdc = await client.fetchWalletUSDC();
+			const usdc = await client.fetchWalletUsdc();
 			setInput(usdc ?? 0);
 			setDefaultValue(usdc ?? 0);
 		}
