@@ -406,31 +406,39 @@ export class PhoenixVaultsClient {
 		if (!vault) {
 			return undefined;
 		}
-		const vaultInvestors = new Map<string, Set<string>>();
+		const vaultInvestors = new Map<string, Map<string, number>>();
 		for (const investor of this.investors()) {
 			const vaultKey = investor.data.vault.toString();
-			const investors = vaultInvestors.get(vaultKey) ?? new Set();
-			investors.add(investor.key.toString());
+			const investors = vaultInvestors.get(vaultKey) ?? new Map();
+			const totalProfit =
+				investor.data.cumulativeProfitShareAmount.toNumber() /
+				QUOTE_PRECISION.toNumber();
+			investors.set(investor.key.toString(), totalProfit);
 			vaultInvestors.set(vaultKey, investors);
 		}
 
-		const investors = vaultInvestors.get(vault.pubkey.toString()) ?? new Set();
-		const title = decodeName(vault.name);
+		const investors = vaultInvestors.get(vault.pubkey.toString()) ?? new Map();
+		const investorProfit = (Array.from(investors.values()) as number[]).reduce(
+			(a: number, b: number) => a + b,
+			0
+		);
+		const managerProfit =
+			vault.managerTotalProfitShare.toNumber() / QUOTE_PRECISION.toNumber();
+		const protocolProfit =
+			vault.protocolTotalProfitShare.toNumber() / QUOTE_PRECISION.toNumber();
 
-		const tvl = await this.fetchVaultEquity(vault);
-		const netDeposits =
-			vault.totalDeposits.sub(vault.totalWithdraws).toNumber() /
-			QUOTE_PRECISION.toNumber();
-
-		const birth = new Date(Number(vault.initTs.toNumber() * 1000));
 		const fo: FundOverview = {
 			vault: vault.pubkey,
 			manager: vault.manager,
 			venue: Venue.Phoenix,
-			lifetimePNL: tvl - netDeposits,
-			tvl,
-			birth,
-			title,
+			investorProfit,
+			managerProfit,
+			protocolProfit,
+			profit: investorProfit,
+			profitAfterFees: investorProfit - managerProfit - protocolProfit,
+			tvl: await this.fetchVaultEquity(vault),
+			birth: new Date(Number(vault.initTs.toNumber() * 1000)),
+			title: decodeName(vault.name),
 			investors,
 		};
 		this.setFundOverview(vault.pubkey, fo);
@@ -438,38 +446,46 @@ export class PhoenixVaultsClient {
 	}
 
 	public async fetchFundOverviews(): Promise<FundOverview[]> {
-		const vaultInvestors = new Map<string, Set<string>>();
+		const vaultInvestors = new Map<string, Map<string, number>>();
 		for (const investor of this.investors()) {
 			const vaultKey = investor.data.vault.toString();
-			const investors = vaultInvestors.get(vaultKey) ?? new Set();
-			investors.add(investor.key.toString());
+			const investors = vaultInvestors.get(vaultKey) ?? new Map();
+			const totalProfit =
+				investor.data.cumulativeProfitShareAmount.toNumber() /
+				QUOTE_PRECISION.toNumber();
+			investors.set(investor.key.toString(), totalProfit);
 			vaultInvestors.set(vaultKey, investors);
 		}
 
 		const fundOverviews: FundOverview[] = [];
-		for (const vault of this.vaults()) {
+		for (const _vault of this.vaults()) {
+			const vault = _vault.data;
 			const investors =
-				vaultInvestors.get(vault.data.pubkey.toString()) ?? new Set();
-			const title = decodeName(vault.data.name);
+				vaultInvestors.get(vault.pubkey.toString()) ?? new Map();
+			const investorProfit = (
+				Array.from(investors.values()) as number[]
+			).reduce((a: number, b: number) => a + b, 0);
+			const managerProfit =
+				vault.managerTotalProfitShare.toNumber() / QUOTE_PRECISION.toNumber();
+			const protocolProfit =
+				vault.protocolTotalProfitShare.toNumber() / QUOTE_PRECISION.toNumber();
 
-			const tvl = await this.fetchVaultEquity(vault.data);
-			const netDeposits =
-				vault.data.totalDeposits.sub(vault.data.totalWithdraws).toNumber() /
-				QUOTE_PRECISION.toNumber();
-
-			const birth = new Date(Number(vault.data.initTs.toNumber() * 1000));
 			const fo: FundOverview = {
-				vault: vault.data.pubkey,
-				manager: vault.data.manager,
+				vault: vault.pubkey,
+				manager: vault.manager,
 				venue: Venue.Phoenix,
-				lifetimePNL: tvl - netDeposits,
-				tvl,
-				birth,
-				title,
+				investorProfit,
+				managerProfit,
+				protocolProfit,
+				profit: investorProfit,
+				profitAfterFees: investorProfit - managerProfit - protocolProfit,
+				tvl: await this.fetchVaultEquity(vault),
+				birth: new Date(Number(vault.initTs.toNumber() * 1000)),
+				title: decodeName(vault.name),
 				investors,
 			};
 			fundOverviews.push(fo);
-			this.setFundOverview(vault.key, fo);
+			this.setFundOverview(vault.pubkey, fo);
 		}
 		return fundOverviews;
 	}

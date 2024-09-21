@@ -41,8 +41,14 @@ export interface FundOverview {
 	vault: PublicKey;
 	manager: PublicKey;
 	venue: Venue;
-	investors: Set<string>;
-	lifetimePNL: number;
+	/// Investor address and profit
+	investors: Map<string, number>;
+	investorProfit: number;
+	managerProfit: number;
+	protocolProfit: number;
+	/// Profit before fees
+	profit: number;
+	profitAfterFees: number;
 	tvl: number;
 	birth: Date;
 	title: string;

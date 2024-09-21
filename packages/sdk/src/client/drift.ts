@@ -31,7 +31,6 @@ import {
 	SpotMarketAccount,
 	TEN,
 	unstakeSharesToAmount as depositSharesToVaultAmount,
-	UserStatsAccount,
 } from '@drift-labs/sdk';
 import {
 	DRIFT_VAULTS_PROGRAM_ID,
@@ -609,59 +608,6 @@ export class DriftVaultsClient {
 	// Read only methods to aggregate data
 	//
 
-	public async vaultStats(vault: PublicKey): Promise<
-		| {
-				equity: number;
-				netDeposits: number;
-				lifetimePNL: number;
-				volume30d: number;
-				birth: Date;
-		  }
-		| undefined
-	> {
-		const acct = this.vault(vault)?.data;
-		if (!acct) {
-			return undefined;
-		}
-		const equity =
-			(
-				await this.vaultClient.calculateVaultEquity({
-					vault: acct,
-					factorUnrealizedPNL: false,
-				})
-			).toNumber() / QUOTE_PRECISION.toNumber();
-		const user = await this.vaultClient.getSubscribedVaultUser(acct.user);
-		const userAcct = user.getUserAccount();
-		const netDeposits =
-			userAcct.totalDeposits.sub(userAcct.totalWithdraws).toNumber() /
-			QUOTE_PRECISION.toNumber();
-
-		const userStatsKey = getUserStatsAccountPublicKey(
-			this.driftProgram.programId,
-			vault
-		);
-
-		const driftProgram = this.driftProgram;
-		const _userStats = await driftProgram.account.userStats.fetch(userStatsKey);
-		if (!_userStats) {
-			throw new Error(`UserStats not found for: ${decodeName(acct.name)}`);
-		}
-		const userStats = _userStats as any as UserStatsAccount;
-		// const total30dVolume = getUser30dRollingVolumeEstimate(userStats);
-		const total30dVolume = userStats.takerVolume30D.add(
-			userStats.makerVolume30D
-		);
-		const volume30d = total30dVolume.toNumber() / QUOTE_PRECISION.toNumber();
-		const birth = new Date(Number(acct.initTs.toNumber() * 1000));
-		return {
-			equity,
-			netDeposits,
-			lifetimePNL: equity - netDeposits,
-			volume30d,
-			birth,
-		};
-	}
-
 	private setFundOverview(key: PublicKey, fo: FundOverview) {
 		this._fundOverviews.set(key.toString(), fo);
 	}
@@ -673,28 +619,53 @@ export class DriftVaultsClient {
 		}
 		const vds = this.vaultDepositors();
 		// get count of vds per vault
-		const vaultVds = new Map<string, Set<string>>();
+		const vaultVds = new Map<string, Map<string, number>>();
 		for (const investor of vds) {
 			const vaultKey = investor.data.vault.toString();
-			const investors = vaultVds.get(vaultKey) ?? new Set();
-			investors.add(investor.key.toString());
+			const investors = vaultVds.get(vaultKey) ?? new Map();
+			const totalProfit =
+				investor.data.cumulativeProfitShareAmount.toNumber() /
+				QUOTE_PRECISION.toNumber();
+			investors.set(investor.key.toString(), totalProfit);
 			vaultVds.set(vaultKey, investors);
 		}
 
-		const investors = vaultVds.get(vault.data.pubkey.toString()) ?? new Set();
-		const title = decodeName(vault.data.name);
-		const stats = await this.vaultStats(vault.key);
-		if (!stats) {
-			throw new Error(`Stats not found for vault: ${title}`);
+		const investors = vaultVds.get(vault.data.pubkey.toString()) ?? new Map();
+		const investorProfit = (Array.from(investors.values()) as number[]).reduce(
+			(a: number, b: number) => a + b,
+			0
+		);
+		const managerProfit =
+			vault.data.managerTotalProfitShare.toNumber() /
+			QUOTE_PRECISION.toNumber();
+		let protocolProfit = 0;
+		if (vault.data.vaultProtocol) {
+			const vpKey = this.vaultClient.getVaultProtocolAddress(vault.data.pubkey);
+			const vpAcct = await this.vaultProgram.account.vaultProtocol.fetch(vpKey);
+			protocolProfit =
+				vpAcct.protocolTotalProfitShare.toNumber() / QUOTE_PRECISION.toNumber();
 		}
+
+		const tvl =
+			(
+				await this.vaultClient.calculateVaultEquity({
+					vault: vault.data,
+					factorUnrealizedPNL: false,
+				})
+			).toNumber() / QUOTE_PRECISION.toNumber();
+
 		const fo: FundOverview = {
 			vault: vault.data.pubkey,
 			manager: vault.data.manager,
 			venue: Venue.Drift,
-			lifetimePNL: stats.lifetimePNL,
-			tvl: stats.equity,
-			birth: stats.birth,
-			title,
+			investorProfit,
+			managerProfit,
+			protocolProfit,
+			profit: investorProfit,
+			profitAfterFees: investorProfit - managerProfit - protocolProfit,
+			tvl,
+			birth: new Date(Number(vault.data.initTs.toNumber() * 1000)),
+			title: decodeName(vault.data.name),
 			investors,
 		};
 		this.setFundOverview(vault.key, fo);
@@ -709,29 +680,57 @@ export class DriftVaultsClient {
 		});
 		const vds = this.vaultDepositors();
 		// get count of vds per vault
-		const vaultVds = new Map<string, Set<string>>();
+		const vaultVds = new Map<string, Map<string, number>>();
 		for (const investor of vds) {
 			const vaultKey = investor.data.vault.toString();
-			const investors = vaultVds.get(vaultKey) ?? new Set();
-			investors.add(investor.key.toString());
+			const investors = vaultVds.get(vaultKey) ?? new Map();
+			const totalProfit =
+				investor.data.cumulativeProfitShareAmount.toNumber() /
+				QUOTE_PRECISION.toNumber();
+			investors.set(investor.key.toString(), totalProfit);
 			vaultVds.set(vaultKey, investors);
 		}
 
 		const fundOverviews: FundOverview[] = [];
 		for (const vault of vaults) {
-			const investors = vaultVds.get(vault.data.pubkey.toString()) ?? new Set();
-			const title = decodeName(vault.data.name);
-			const stats = await this.vaultStats(vault.key);
-			if (!stats) {
-				throw new Error(`Stats not found for vault: ${title}`);
+			const investors = vaultVds.get(vault.data.pubkey.toString()) ?? new Map();
+			const investorProfit = (
+				Array.from(investors.values()) as number[]
+			).reduce((a: number, b: number) => a + b, 0);
+			const managerProfit =
+				vault.data.managerTotalProfitShare.toNumber() /
+				QUOTE_PRECISION.toNumber();
+			let protocolProfit = 0;
+			if (vault.data.vaultProtocol) {
+				const vpKey = this.vaultClient.getVaultProtocolAddress(
+					vault.data.pubkey
+				);
+				const vpAcct =
+					await this.vaultProgram.account.vaultProtocol.fetch(vpKey);
+				protocolProfit =
+					vpAcct.protocolTotalProfitShare.toNumber() /
+					QUOTE_PRECISION.toNumber();
 			}
+
+			const tvl =
+				(
+					await this.vaultClient.calculateVaultEquity({
+						vault: vault.data,
+						factorUnrealizedPNL: false,
+					})
+				).toNumber() / QUOTE_PRECISION.toNumber();
+
 			const fo: FundOverview = {
 				vault: vault.data.pubkey,
 				manager: vault.data.manager,
 				venue: Venue.Drift,
-				lifetimePNL: stats.lifetimePNL,
-				tvl: stats.equity,
-				birth: stats.birth,
+				investorProfit,
+				managerProfit,
+				protocolProfit,
+				profit: investorProfit,
+				profitAfterFees: investorProfit - managerProfit - protocolProfit,
+				tvl,
+				birth: new Date(Number(vault.data.initTs.toNumber() * 1000)),
 				title: decodeName(vault.data.name),
 				investors,
 			};
