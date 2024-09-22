@@ -13,11 +13,13 @@ import {
 	CreateVaultConfig,
 	PropShopClient,
 	randomName,
+	Venue,
 } from '@cosmic-lab/prop-shop-sdk';
 import { ActionButton, UsdcIcon } from '../../../components';
 import InputAdornment from '@mui/material/InputAdornment';
 import { PublicKey } from '@solana/web3.js';
 import { useSnackbar } from 'notistack';
+import { VenueInput } from './VenueInput';
 
 const INPUT_WIDTH = '70%';
 const SECONDS_PER_DAY = 60 * 60 * 24;
@@ -38,6 +40,7 @@ export function InputFields({
 		minDepositUSDC: 0,
 		permissioned: false,
 		redeemPeriod: 60 * 60 * 24,
+		venue: Venue.Drift,
 	};
 
 	const [config, setConfig] = React.useState<CreateVaultConfig>(defaultConfig);
@@ -165,6 +168,10 @@ function Fields({
 		}
 	}
 
+	function changeVenue(venue: Venue) {
+		setConfig({ ...config, venue });
+	}
+
 	return (
 		<Box
 			sx={{
@@ -252,12 +259,21 @@ function Fields({
 					onChange={changeRedeemPeriod}
 				/>
 			</TableRow>
+
+			<TableRow hover>
+				<Typography variant="h4">Venue</Typography>
+				<VenueInput
+					defaultValue={defaultConfig.venue}
+					value={config.venue}
+					onChange={changeVenue}
+				/>
+			</TableRow>
 		</Box>
 	);
 }
 
 const TableRow = styled('div')<{ hover?: boolean; header?: boolean }>(
-	({ theme, hover, header }) => ({
+	({ theme: _theme, hover, header }) => ({
 		display: 'flex',
 		flexDirection: 'row',
 		justifyContent: 'space-between',

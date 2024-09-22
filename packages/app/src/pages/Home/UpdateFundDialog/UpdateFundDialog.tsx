@@ -2,9 +2,9 @@ import React from 'react';
 import { Dialog } from '@mui/material';
 import { InputFields } from './InputFields';
 import {
-	CreateVaultConfig,
 	FundOverview,
 	PropShopClient,
+	UpdateVaultConfig,
 } from '@cosmic-lab/prop-shop-sdk';
 import { useSnackbar } from 'notistack';
 import { observer } from 'mobx-react';
@@ -23,8 +23,12 @@ export const UpdateFundDialog = observer(
 	}) => {
 		const { enqueueSnackbar } = useSnackbar();
 
-		async function submit(config: CreateVaultConfig) {
-			const snack = (await client.createVault(config)).snack;
+		async function submit(params: UpdateVaultConfig) {
+			const snack = await client.updateVault({
+				venue: fund.venue,
+				vault: fund.vault,
+				params,
+			});
 			enqueueSnackbar(snack.message, {
 				variant: snack.variant,
 			});

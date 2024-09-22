@@ -20,8 +20,5 @@ export const RPC_URL = "https://your-solana-rpc"
 
 ## TODO
 
-Withdraw timer creation and deletion requires refresh to reflect changes.
-
-Request withdraw of equity to 6 decimal places is one share off.
-Rounding to 4 decimal places for now.
-Why?
+Liquidate Phoenix vault
+Create Phoenix vault

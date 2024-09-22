@@ -346,24 +346,14 @@ export class PropShopClient {
 	/**
 	 * The connected wallet will become the manager of the vault.
 	 */
-	public async createVault(config: {
-		venue: Venue;
-		params: CreateVaultConfig;
-	}): Promise<{
+	public async createVault(config: CreateVaultConfig): Promise<{
 		vault: PublicKey;
 		snack: SnackInfo;
 	}> {
 		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.createVault(config.params);
+			return this.driftVaultsClient.createVault(config);
 		} else {
-			// todo
-			return {
-				vault: PublicKey.default,
-				snack: {
-					variant: 'error',
-					message: `todo`,
-				},
-			};
+			return this.phoenixVaultsClient.createVault(config);
 		}
 	}
 

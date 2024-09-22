@@ -3,8 +3,8 @@ import { QUOTE_PRECISION, SettlePnlRecord } from '@drift-labs/sdk';
 import { PublicKey } from '@solana/web3.js';
 
 export enum Venue {
-	Drift,
-	Phoenix,
+	Drift = 'Drift',
+	Phoenix = 'Phoenix',
 }
 
 export interface CreateVaultConfig {
@@ -24,6 +24,7 @@ export interface CreateVaultConfig {
 	maxCapacityUSDC?: number;
 	// Delegate with permission to trade on behalf of the vault's user
 	delegate?: PublicKey;
+	venue: Venue;
 }
 
 export interface UpdateVaultConfig {
