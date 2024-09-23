@@ -38,7 +38,7 @@ export const UpdateFundDialog = observer(
 		return (
 			<>
 				<Dialog
-					maxWidth="lg"
+					maxWidth="md"
 					fullWidth={true}
 					fullScreen={false}
 					scroll="paper"

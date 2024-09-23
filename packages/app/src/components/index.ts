@@ -6,3 +6,4 @@ export * from './CodeSnippet';
 export * from './HttpDisplay';
 export * from './LoadScreen';
 export * from './WalletDialogProvider';
+export * from './Toggle';

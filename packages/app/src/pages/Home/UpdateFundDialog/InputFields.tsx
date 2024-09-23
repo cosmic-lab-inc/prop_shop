@@ -4,17 +4,16 @@ import {
 	FormControl,
 	OutlinedInput,
 	styled,
-	Switch,
-	SwitchProps,
 	Typography,
 } from '@mui/material';
 import { customTheme } from '../../../styles';
 import {
+	formatNumber,
 	FundOverview,
 	PropShopClient,
 	UpdateVaultConfig,
 } from '@cosmic-lab/prop-shop-sdk';
-import { ActionButton, UsdcIcon } from '../../../components';
+import { ActionButton, Toggle, UsdcIcon } from '../../../components';
 import InputAdornment from '@mui/material/InputAdornment';
 import { PublicKey } from '@solana/web3.js';
 import { useSnackbar } from 'notistack';
@@ -137,7 +136,7 @@ function Fields({
 	function changeMaxFundDeposits(value: number) {
 		if (value >= (defaultConfig.maxCapacityUSDC ?? 0)) {
 			enqueueSnackbar(
-				`Fund capacity must be less than current value $${defaultConfig.maxCapacityUSDC}`,
+				`Fund capacity must be less than current value $${formatNumber(defaultConfig.maxCapacityUSDC ?? 0)}`,
 				{
 					variant: 'error',
 				}
@@ -156,7 +155,7 @@ function Fields({
 	function changeMinDepositPerUser(value: number) {
 		if (value >= (defaultConfig.percentAnnualManagementFee ?? 0)) {
 			enqueueSnackbar(
-				`Minimum deposit per user must be less than current value $${defaultConfig.minDepositUSDC}`,
+				`Minimum deposit per user must be less than current value $${formatNumber(defaultConfig.minDepositUSDC ?? 0)}`,
 				{
 					variant: 'error',
 				}
@@ -180,8 +179,9 @@ function Fields({
 		const seconds = days * SECONDS_PER_DAY;
 		const currentDays = (defaultConfig.redeemPeriod ?? 0) / SECONDS_PER_DAY;
 		if (seconds >= (defaultConfig.redeemPeriod ?? 0)) {
+			const dayPlural = currentDays === 1 ? 'day' : 'days';
 			enqueueSnackbar(
-				`Redeem period must be less than current value ${defaultConfig.redeemPeriod} seconds (${currentDays} days)`,
+				`Redeem period must be less than current value: ${currentDays} ${dayPlural}`,
 				{
 					variant: 'error',
 				}
@@ -211,8 +211,8 @@ function Fields({
 			<TableRow hover>
 				<Typography variant="h4">Delegate (Trader)</Typography>
 				<TextInput
-					defaultValue={defaultConfig.delegate!.toString()}
-					value={config.delegate!.toString()}
+					defaultValue={defaultConfig.delegate?.toString() ?? ''}
+					value={config.delegate?.toString() ?? ''}
 					onChange={changeDelegate}
 				/>
 			</TableRow>
@@ -548,63 +548,3 @@ function PriceInput({
 		</FormControl>
 	);
 }
-
-type ToggleProps = {
-	changeInviteOnly: (value: boolean) => void;
-} & SwitchProps;
-
-const Toggle = styled((props: ToggleProps) => {
-	const { changeInviteOnly, ...rest } = props;
-	return (
-		<Switch
-			focusVisibleClassName=".Mui-focusVisible"
-			disableRipple
-			onChange={(_: React.ChangeEvent<HTMLInputElement>, checked: boolean) => {
-				changeInviteOnly(checked);
-			}}
-			{...rest}
-		/>
-	);
-})(({ theme }) => ({
-	width: '82px',
-	height: 34,
-	padding: 0,
-	'& .MuiSwitch-switchBase': {
-		padding: 2,
-		transitionDuration: '300ms',
-		'&.Mui-checked': {
-			transform: 'translateX(48px)',
-			color: customTheme.dark,
-			'& + .MuiSwitch-track': {
-				backgroundColor: customTheme.secondary,
-				opacity: 1,
-				border: 0,
-			},
-			'&.Mui-disabled + .MuiSwitch-track': {
-				opacity: 0.5,
-			},
-		},
-		'&.Mui-disabled .MuiSwitch-thumb': {
-			color:
-				theme.palette.mode === 'light'
-					? theme.palette.grey[100]
-					: theme.palette.grey[600],
-		},
-		'&.Mui-disabled + .MuiSwitch-track': {
-			opacity: theme.palette.mode === 'light' ? 0.7 : 0.3,
-		},
-	},
-	'& .MuiSwitch-thumb': {
-		boxSizing: 'border-box',
-		borderRadius: 9,
-		width: 40,
-		height: 30,
-	},
-	'& .MuiSwitch-track': {
-		borderRadius: 10,
-		opacity: 1,
-		transition: theme.transitions.create(['background-color'], {
-			duration: 500,
-		}),
-	},
-}));
