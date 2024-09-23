@@ -1,34 +1,36 @@
 import {
-	AccountMeta,
-	ComputeBudgetProgram,
-	ConfirmOptions,
-	Connection,
-	PublicKey,
-	TransactionInstruction,
+  AccountMeta,
+  BaseTransactionConfirmationStrategy,
+  ComputeBudgetProgram,
+  ConfirmOptions,
+  Connection,
+  PublicKey,
+  TransactionConfirmationStrategy,
+  TransactionInstruction,
 } from '@solana/web3.js';
 import {makeAutoObservable} from 'mobx';
 import * as anchor from '@coral-xyz/anchor';
 import {AnchorProvider, BN, Program} from '@coral-xyz/anchor';
 import {
-	calculateRealizedInvestorEquity,
-	createPhoenixMarketTokenAccountIxs,
-	fundDollarPnl,
-	getTokenBalance,
-	getTraderEquity,
-	percentPrecisionToPercent,
-	percentToPercentPrecision,
-	walletAdapterToAnchorWallet,
+  calculateRealizedInvestorEquity,
+  createPhoenixMarketTokenAccountIxs,
+  fundDollarPnl,
+  getTokenBalance,
+  getTraderEquity,
+  percentPrecisionToPercent,
+  percentToPercentPrecision,
+  walletAdapterToAnchorWallet,
 } from '../utils';
 import {
-	CreateVaultConfig,
-	Data,
-	FundOverview,
-	PhoenixSubscriber,
-	PhoenixVaultsAccountEvents,
-	SnackInfo,
-	UpdateVaultConfig,
-	Venue,
-	WithdrawRequestTimer,
+  CreateVaultConfig,
+  Data,
+  FundOverview,
+  PhoenixSubscriber,
+  PhoenixVaultsAccountEvents,
+  SnackInfo,
+  UpdateVaultConfig,
+  Venue,
+  WithdrawRequestTimer,
 } from '../types';
 import {EventEmitter} from 'events';
 import StrictEventEmitter from 'strict-event-emitter-types';
@@ -36,28 +38,28 @@ import {WalletContextState} from '@solana/wallet-adapter-react';
 import {PhoenixWebsocketSubscriber} from '../phoenixWebsocketSubscriber';
 import {Client as PhoenixClient, getLogAuthority, getSeatAddress,} from '@ellipsis-labs/phoenix-sdk';
 import {
-	encodeName,
-	getInvestorAddressSync,
-	getMarketRegistryAddressSync,
-	getVaultAddressSync,
-	IDL as PHOENIX_VAULTS_IDL,
-	Investor,
-	LOCALNET_MARKET_CONFIG,
-	PHOENIX_PROGRAM_ID,
-	PHOENIX_VAULTS_PROGRAM_ID,
-	PhoenixVaults,
-	UpdateVaultParams,
-	Vault,
-	VaultParams,
-	WithdrawUnit,
+  encodeName,
+  getInvestorAddressSync,
+  getMarketRegistryAddressSync,
+  getVaultAddressSync,
+  IDL as PHOENIX_VAULTS_IDL,
+  Investor,
+  LOCALNET_MARKET_CONFIG,
+  PHOENIX_PROGRAM_ID,
+  PHOENIX_VAULTS_PROGRAM_ID,
+  PhoenixVaults,
+  UpdateVaultParams,
+  Vault,
+  VaultParams,
+  WithdrawUnit,
 } from '@cosmic-lab/phoenix-vaults-sdk';
 import {decodeName, QUOTE_PRECISION} from '@drift-labs/sdk';
 import {err, ok, Result} from 'neverthrow';
 import {CreatePropShopClientConfig, UpdateWalletConfig} from './types';
 import {
-	createAssociatedTokenAccountInstruction,
-	getAssociatedTokenAddressSync,
-	TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
 import {walletAdapterToAsyncSigner} from '@cosmic-lab/data-source';
 import {signatureLink} from '../rpc';
@@ -366,11 +368,14 @@ export class PhoenixVaultsClient {
     }
 
     try {
-      const sig = await this.conn.sendTransaction(tx, {
+      const signature = await this.conn.sendTransaction(tx, {
         skipPreflight: true,
       });
-      console.debug(`${successMessage}: ${signatureLink(sig)}`);
-      const confirm = await this.conn.confirmTransaction(sig);
+      console.debug(`${successMessage}: ${signatureLink(signature)}`);
+      const confirmStrategy: Readonly<BaseTransactionConfirmationStrategy> = {
+        signature
+      };
+      const confirm = await this.conn.confirmTransaction(confirmStrategy as TransactionConfirmationStrategy);
       if (confirm.value.err) {
         console.error(`${errorMessage}: ${JSON.stringify(confirm.value.err)}`);
         return {
@@ -1107,7 +1112,7 @@ export class PhoenixVaultsClient {
         })
         .instruction()
     );
-    if (params.delegate && !params.delegate.equals(this.publicKey)) {
+    if (params.delegate) {
       const updateParams: UpdateVaultParams = {
         redeemPeriod: null,
         maxTokens: null,
