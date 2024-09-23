@@ -20,10 +20,11 @@ import { customTheme } from '../../../styles';
 import Box from '@mui/material/Box';
 import { darken } from '@mui/system/colorManipulator';
 import { useOutsideClick } from '../../../lib';
-import { AirdropIcon, WalletIcon } from '../../Icons';
+import { SolIcon, UsdcIcon, WalletIcon } from '../../Icons';
 import { PropShopClient } from '@cosmic-lab/prop-shop-sdk';
+import { observer } from 'mobx-react';
 
-const List = styled('ul')(({ theme }) => ({
+const List = styled('ul')(({ theme: _theme }) => ({
 	marginTop: 85,
 	padding: 0,
 	backgroundColor: customTheme.grey,
@@ -40,7 +41,7 @@ function ListEntry({
 	icon,
 	text,
 }: {
-	onClick: () => void;
+	onClick?: () => void;
 	icon: React.ReactNode;
 	text: string | React.ReactNode;
 }) {
@@ -96,154 +97,150 @@ type Props = ButtonProps & {
 	};
 };
 
-export function BaseWalletMultiButton({
-	children,
-	labels,
-	airdropSol,
-	airdropUsdc,
-	client,
-}: Props) {
-	const { setOpen: setModalVisible } = useWalletDialog();
-	const anchorRef = React.createRef<HTMLButtonElement>();
-	const [menuOpen, setMenuOpen] = useState(false);
-	const {
-		buttonState,
-		onConnect,
-		onDisconnect,
-		publicKey,
-		walletIcon,
-		walletName,
-	} = useWalletMultiButton({
-		onSelectWallet() {
-			setModalVisible(true);
-		},
-	});
-	const content = useMemo(() => {
-		if (children) {
-			return children;
-		} else if (publicKey) {
-			const base58 = publicKey.toBase58();
-			return base58.slice(0, 4) + '..' + base58.slice(-4);
-		} else if (buttonState === 'connecting' || buttonState === 'has-wallet') {
-			return labels[buttonState];
-		} else {
-			return labels['no-wallet'];
-		}
-	}, [buttonState, children, labels, publicKey]);
+export const BaseWalletMultiButton = observer(
+	({ children, labels, airdropSol, airdropUsdc, client }: Props) => {
+		const { setOpen: setModalVisible } = useWalletDialog();
+		const anchorRef = React.createRef<HTMLButtonElement>();
+		const [menuOpen, setMenuOpen] = useState(false);
+		const { buttonState, onConnect, onDisconnect, publicKey } =
+			useWalletMultiButton({
+				onSelectWallet() {
+					setModalVisible(true);
+				},
+			});
+		const content = useMemo(() => {
+			if (children) {
+				return children;
+			} else if (publicKey) {
+				const base58 = publicKey.toBase58();
+				return base58.slice(0, 4) + '..' + base58.slice(-4);
+			} else if (buttonState === 'connecting' || buttonState === 'has-wallet') {
+				return labels[buttonState];
+			} else {
+				return labels['no-wallet'];
+			}
+		}, [buttonState, children, labels, publicKey]);
 
-	const ref = useOutsideClick(() => {
-		setMenuOpen(false);
-		setModalVisible(false);
-	});
+		const ref = useOutsideClick(() => {
+			setMenuOpen(false);
+			setModalVisible(false);
+		});
 
-	return (
-		<Box
-			ref={ref}
-			sx={{
-				position: 'relative',
-				display: 'flex',
-				width: '100%',
-			}}
-		>
-			<BaseWalletConnectionButton
-				fullWidth
-				aria-controls="wallet-menu"
-				aria-haspopup="true"
-				onClick={() => {
-					switch (buttonState) {
-						case 'no-wallet':
-							setModalVisible(true);
-							break;
-						case 'has-wallet':
-							if (onConnect) {
-								onConnect();
-							}
-							break;
-						case 'connected':
-							setMenuOpen(true);
-							break;
-					}
-				}}
-				ref={anchorRef}
-				walletIcon={<WalletIcon size={30} color={customTheme.light} />}
+		return (
+			<Box
+				ref={ref}
 				sx={{
-					bgcolor: customTheme.secondary,
-					borderRadius: '10px',
-					'&:hover': {
-						bgcolor: darken(customTheme.secondary, 0.2),
-					},
+					position: 'relative',
+					display: 'flex',
+					width: '100%',
 				}}
 			>
-				{content}
-			</BaseWalletConnectionButton>
-			{menuOpen && (
-				<List>
-					{publicKey && (
-						<ListEntry
-							onClick={async () => {
-								setMenuOpen(false);
-								await navigator.clipboard.writeText(publicKey.toBase58());
-							}}
-							icon={<CopyIcon fontSize="small" />}
-							text={
-								<Typography variant="body1">
-									{labels['copy-address']}
-								</Typography>
-							}
-						/>
-					)}
-
-					<ListEntry
-						onClick={() => {
-							setMenuOpen(false);
-							setModalVisible(true);
-						}}
-						icon={<SwitchIcon />}
-						text={
-							<Typography variant="body1">{labels['change-wallet']}</Typography>
+				<BaseWalletConnectionButton
+					fullWidth
+					aria-controls="wallet-menu"
+					aria-haspopup="true"
+					onClick={() => {
+						switch (buttonState) {
+							case 'no-wallet':
+								setModalVisible(true);
+								break;
+							case 'has-wallet':
+								if (onConnect) {
+									onConnect();
+								}
+								break;
+							case 'connected':
+								setMenuOpen(true);
+								break;
 						}
-					/>
+					}}
+					ref={anchorRef}
+					walletIcon={<WalletIcon size={30} color={customTheme.light} />}
+					sx={{
+						bgcolor: customTheme.secondary,
+						borderRadius: '10px',
+						'&:hover': {
+							bgcolor: darken(customTheme.secondary, 0.2),
+						},
+					}}
+				>
+					{content}
+				</BaseWalletConnectionButton>
+				{menuOpen && (
+					<List>
+						{publicKey && (
+							<ListEntry
+								onClick={async () => {
+									setMenuOpen(false);
+									await navigator.clipboard.writeText(publicKey.toBase58());
+								}}
+								icon={<CopyIcon fontSize="small" />}
+								text={
+									<Typography variant="body1">
+										{labels['copy-address']}
+									</Typography>
+								}
+							/>
+						)}
 
-					{onDisconnect && (
 						<ListEntry
 							onClick={() => {
 								setMenuOpen(false);
-								onDisconnect();
+								setModalVisible(true);
 							}}
-							icon={<DisconnectIcon />}
+							icon={<SwitchIcon />}
 							text={
-								<Typography variant="body1">{labels['disconnect']}</Typography>
+								<Typography variant="body1">
+									{labels['change-wallet']}
+								</Typography>
 							}
 						/>
-					)}
 
-					{airdropSol && (
+						{onDisconnect && (
+							<ListEntry
+								onClick={() => {
+									setMenuOpen(false);
+									onDisconnect();
+								}}
+								icon={<DisconnectIcon />}
+								text={
+									<Typography variant="body1">
+										{labels['disconnect']}
+									</Typography>
+								}
+							/>
+						)}
+
 						<ListEntry
-							onClick={airdropSol}
-							icon={<AirdropIcon color={customTheme.dark} size={30} />}
-							text={<Typography variant="body1">Airdrop SOL</Typography>}
+							icon={<SolIcon size={30} />}
+							text={<Typography variant="body1">{client?.sol ?? 0}</Typography>}
 						/>
-					)}
 
-					{airdropUsdc && (
 						<ListEntry
-							onClick={airdropUsdc}
-							icon={<AirdropIcon color={customTheme.dark} size={30} />}
-							text={<Typography variant="body1">Airdrop USDC</Typography>}
-						/>
-					)}
-
-					<ListEntry
-						onClick={() => {
-							if (client) {
-								client.loading = !client.loading;
+							icon={<UsdcIcon size={30} />}
+							text={
+								<Typography variant="body1">${client?.usdc ?? 0}</Typography>
 							}
-						}}
-						icon={<AirdropIcon color={customTheme.dark} size={30} />}
-						text={<Typography variant="body1">Toggle Loading</Typography>}
-					/>
-				</List>
-			)}
-		</Box>
-	);
-}
+						/>
+
+						{airdropSol && (
+							<ListEntry
+								onClick={airdropSol}
+								icon={<SolIcon size={30} />}
+								text={<Typography variant="body1">Airdrop SOL</Typography>}
+							/>
+						)}
+
+						{airdropUsdc && (
+							<ListEntry
+								onClick={airdropUsdc}
+								icon={<UsdcIcon size={30} />}
+								text={<Typography variant="body1">Airdrop USDC</Typography>}
+							/>
+						)}
+					</List>
+				)}
+			</Box>
+		);
+	}
+);

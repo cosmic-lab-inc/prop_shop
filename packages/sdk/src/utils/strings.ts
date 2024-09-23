@@ -9,6 +9,8 @@ import {
 	uniqueNamesGenerator,
 } from 'unique-names-generator';
 
+export const MAX_NAME_LENGTH = 32;
+
 // shorten the input address to have 4 characters at start and end
 export function shortenAddress(address: string, chars = 4): string {
 	return `${address.slice(0, chars)}...${address.slice(-chars)}`;
@@ -19,9 +21,9 @@ export function copyToClipboard(text: string): void {
 }
 
 export function randomName(
-	words: number = 2,
-	charLimit: number = 32,
-	separator: string = ' '
+	words = 2,
+	charLimit = MAX_NAME_LENGTH,
+	separator = ' '
 ): string {
 	const dictionaries = [
 		languages,
@@ -56,10 +58,27 @@ export function randomName(
 	return _name;
 }
 
-export function truncateString(str: string, length: number = 10): string {
+export function truncateString(str: string, length = 10): string {
 	return str.length > length ? `${str.slice(0, length)}...` : str;
 }
 
 export function capitalize(value: string): string {
 	return value[0].toUpperCase() + value.slice(1);
+}
+
+export function encodeName(name: string): number[] {
+	if (name.length > MAX_NAME_LENGTH) {
+		throw Error(`Name (${name}) longer than 32 characters`);
+	}
+
+	const buffer = Buffer.alloc(32);
+	buffer.fill(name);
+	buffer.fill(' ', name.length);
+
+	return Array(...buffer);
+}
+
+export function decodeName(bytes: number[]): string {
+	const buffer = Buffer.from(bytes);
+	return buffer.toString('utf8').trim();
 }

@@ -11,3 +11,4 @@ export * from './IconPulse';
 export * from './DriftIcon';
 export * from './PhoenixIcon';
 export * from './StackIcon';
+export * from './SolIcon';

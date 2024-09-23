@@ -144,7 +144,7 @@ function Fields({
 
 	function changeMinDepositPerUser(value: number) {
 		if (value < 0) {
-			enqueueSnackbar(`Min deposit per user must be positive`, {
+			enqueueSnackbar(`Minimum investment must be positive`, {
 				variant: 'error',
 			});
 		} else {
@@ -227,7 +227,7 @@ function Fields({
 			</TableRow>
 
 			<TableRow hover>
-				<Typography variant="h4">Min Deposit per User</Typography>
+				<Typography variant="h4">Minimum Investment</Typography>
 				<PriceInput
 					defaultValue={defaultConfig.minDepositUSDC ?? 0}
 					value={config.minDepositUSDC ?? 0}

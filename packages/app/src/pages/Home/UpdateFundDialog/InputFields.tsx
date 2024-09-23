@@ -245,7 +245,7 @@ function Fields({
 			</TableRow>
 
 			<TableRow hover>
-				<Typography variant="h4">Min Deposit per User</Typography>
+				<Typography variant="h4">Minimum Investment</Typography>
 				<PriceInput
 					defaultValue={defaultConfig.minDepositUSDC ?? 0}
 					value={config.minDepositUSDC ?? 0}

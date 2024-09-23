@@ -19,8 +19,6 @@ CXX=/opt/homebrew/bin/c++-14 cargo build || exit 1
 
 cargo fmt || exit 1
 
-#anchor build || exit 1
-
 yarn && yarn build || exit 1
 
 yarn dep:all || exit 1

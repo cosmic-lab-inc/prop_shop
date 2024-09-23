@@ -7,436 +7,463 @@ import {
 	TransactionConfirmationStrategy,
 	TransactionInstruction,
 } from '@solana/web3.js';
-import { makeAutoObservable } from 'mobx';
-import { CreatePropShopClientConfig, UpdateWalletConfig } from './types';
-import { Vault } from '@drift-labs/vaults-sdk';
-import { WalletContextState } from '@solana/wallet-adapter-react';
-import { DriftVaultsClient } from './drift';
-import { PhoenixVaultsClient } from './phoenix';
-import {
-	CreateVaultConfig,
-	Data,
-	FundOverview,
-	SnackInfo,
-	UpdateVaultConfig,
-	Venue,
-	WithdrawRequestTimer,
-} from '../types';
-import { fundDollarPnl } from '../utils';
-import { signatureLink } from '../rpc';
-import { walletAdapterToAsyncSigner } from '@cosmic-lab/data-source';
-import { TEST_USDC_MINT, TEST_USDC_MINT_AUTHORITY } from '../constants';
+import {makeAutoObservable} from 'mobx';
+import {CreatePropShopClientConfig, UpdateWalletConfig} from './types';
+import {WalletContextState} from '@solana/wallet-adapter-react';
+import {DriftVaultsClient} from './drift';
+import {PhoenixVaultsClient} from './phoenix';
+import {CreateVaultConfig, FundOverview, SnackInfo, UpdateVaultConfig, Venue, WithdrawRequestTimer,} from '../types';
+import {fundDollarPnl} from '../utils';
+import {signatureLink} from '../rpc';
+import {walletAdapterToAsyncSigner} from '@cosmic-lab/data-source';
+import {TEST_USDC_MINT, TEST_USDC_MINT_AUTHORITY} from '../constants';
 import * as anchor from '@coral-xyz/anchor';
-import { BN } from '@coral-xyz/anchor';
-import { QUOTE_PRECISION } from '@drift-labs/sdk';
+import {BN} from '@coral-xyz/anchor';
+import {QUOTE_PRECISION} from '@drift-labs/sdk';
 import {
 	createAssociatedTokenAccountInstruction,
 	createMintToInstruction,
 	getAssociatedTokenAddressSync,
+	unpackAccount,
 } from '@solana/spl-token';
 
 export class PropShopClient {
-	private readonly conn: Connection;
-	private wallet: WalletContextState;
-	private driftVaultsClient: DriftVaultsClient;
-	private phoenixVaultsClient: PhoenixVaultsClient;
+  private readonly conn: Connection;
+  private wallet: WalletContextState;
+  private driftVaultsClient: DriftVaultsClient;
+  private phoenixVaultsClient: PhoenixVaultsClient;
 
-	loading = false;
-	dummyWallet = false;
+  loading = false;
+  dummyWallet = false;
+  private _sol = 0;
+  private _solSubId: number | undefined;
+  private _usdc = 0;
+  private _usdcSubId: number | undefined;
 
-	constructor(config: CreatePropShopClientConfig) {
-		makeAutoObservable(this);
-		this.conn = config.connection;
-		this.wallet = config.wallet;
-		this.dummyWallet = config.dummyWallet ?? false;
-		this.driftVaultsClient = new DriftVaultsClient(config);
-		this.phoenixVaultsClient = new PhoenixVaultsClient(config);
-	}
+  constructor(config: CreatePropShopClientConfig) {
+    makeAutoObservable(this);
+    this.conn = config.connection;
+    this.wallet = config.wallet;
+    this.dummyWallet = config.dummyWallet ?? false;
+    this.driftVaultsClient = new DriftVaultsClient(config);
+    this.phoenixVaultsClient = new PhoenixVaultsClient(config);
+  }
 
-	/**
-	 * Initialize the VaultClient.
-	 * Call this upon connecting a wallet.
-	 */
-	public async initialize(): Promise<void> {
-		if (!this.wallet) {
-			throw new Error('Wallet not connected during initialization');
-		}
-		const now = Date.now();
-		this.loading = true;
-		await this.driftVaultsClient.initialize();
-		await this.phoenixVaultsClient.initialize();
-		console.log(`initialized PropShopClient in ${Date.now() - now}ms`);
-		this.loading = false;
-	}
+  /**
+   * Initialize the VaultClient.
+   * Call this upon connecting a wallet.
+   */
+  public async initialize(): Promise<void> {
+    if (!this.wallet) {
+      throw new Error('Wallet not connected during initialization');
+    }
+    const now = Date.now();
+    this.loading = true;
+    await this.driftVaultsClient.initialize();
+    await this.phoenixVaultsClient.initialize();
+    await this.updateTokenBalanceListeners();
+    await this.fetchWalletSol();
+    await this.fetchWalletUsdc();
+    console.log(`initialized PropShopClient in ${Date.now() - now}ms`);
+    this.loading = false;
+  }
 
-	public async updateWallet(config: UpdateWalletConfig): Promise<void> {
-		const now = Date.now();
-		this.wallet = config.wallet;
-		await this.driftVaultsClient.updateWallet(config);
-		await this.phoenixVaultsClient.updateWallet(config);
-		console.log(
-			`updated wallet ${this.publicKey.toString()} in ${Date.now() - now}ms`
-		);
-	}
+  private async updateTokenBalanceListeners() {
+    // websocket RPC subscribe to SOL balance update
+    this._solSubId = this.conn.onAccountChange(
+      this.publicKey,
+      (accountInfo) => {
+        this._sol = accountInfo.lamports / LAMPORTS_PER_SOL;
+      }
+    );
+    // websocket RPC subscribe to SOL balance update
+    const usdcAta = getAssociatedTokenAddressSync(
+      this.phoenixVaultsClient.solUsdcMarket.usdcMint,
+      this.publicKey
+    );
+    this._usdcSubId = this.conn.onAccountChange(usdcAta, (accountInfo) => {
+      const unpackedTokenAccount = unpackAccount(usdcAta, accountInfo);
+      const usdcAmount = Number(unpackedTokenAccount.amount);
+      // USDC has 6 decimals on all networks
+      const decimals = 6;
+      this._usdc = usdcAmount / 10 ** decimals;
+    });
+  }
 
-	async shutdown(): Promise<void> {
-		await this.driftVaultsClient.shutdown();
-		await this.phoenixVaultsClient.shutdown();
-	}
+  public async updateWallet(config: UpdateWalletConfig): Promise<void> {
+    const now = Date.now();
+    this.wallet = config.wallet;
+    await this.driftVaultsClient.updateWallet(config);
+    await this.phoenixVaultsClient.updateWallet(config);
+    await this.updateTokenBalanceListeners();
+    await this.fetchWalletSol();
+    await this.fetchWalletUsdc();
+    console.log(
+      `updated wallet ${this.publicKey.toString()} in ${Date.now() - now}ms`
+    );
+  }
 
-	get publicKey(): PublicKey {
-		if (!this.wallet.publicKey) {
-			throw new Error('Wallet not connected');
-		}
-		return this.wallet.publicKey;
-	}
+  async shutdown(): Promise<void> {
+    await this.driftVaultsClient.shutdown();
+    await this.phoenixVaultsClient.shutdown();
+    if (this._solSubId) {
+      await this.conn.removeAccountChangeListener(this._solSubId);
+    }
+    if (this._usdcSubId) {
+      await this.conn.removeAccountChangeListener(this._usdcSubId);
+    }
+  }
 
-	public isManager(fund: FundOverview): boolean {
-		return this.publicKey.equals(fund.manager);
-	}
+  get publicKey(): PublicKey {
+    if (!this.wallet.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+    return this.wallet.publicKey;
+  }
 
-	public isInvested(fund: FundOverview): boolean {
-		return fund.investors.has(this.publicKey.toString());
-	}
+  public isManager(fund: FundOverview): boolean {
+    return this.publicKey.equals(fund.manager);
+  }
 
-	public getInvestorAddress(config: {
-		vault: PublicKey;
-		venue: Venue;
-	}): PublicKey {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.getVaultDepositorAddress(config.vault);
-		} else {
-			return this.phoenixVaultsClient.getInvestorAddress(config.vault);
-		}
-	}
+  public isInvested(fund: FundOverview): boolean {
+    return fund.investors.has(this.publicKey.toString());
+  }
 
-	public vaults(config: {
-		venue: Venue;
-		hasProtocol?: boolean;
-		managed?: boolean;
-		invested?: boolean;
-	}): Data<PublicKey, Vault>[] {
-		const { venue, ...rest } = config;
-		if (venue === Venue.Drift) {
-			return this.driftVaultsClient.vaults(rest);
-		} else {
-			// todo
-			return [];
-		}
-	}
+  public getInvestorAddress(config: {
+    vault: PublicKey;
+    venue: Venue;
+  }): PublicKey {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.getVaultDepositorAddress(config.vault);
+    } else {
+      return this.phoenixVaultsClient.getInvestorAddress(config.vault);
+    }
+  }
 
-	public get fundOverviews(): FundOverview[] {
-		const driftFunds = this.driftVaultsClient.fundOverviews;
-		const phoenixFunds = this.phoenixVaultsClient.fundOverviews;
-		const funds = [...driftFunds, ...phoenixFunds];
-		funds.sort((a, b) => {
-			const _a = fundDollarPnl(a);
-			const _b = fundDollarPnl(b);
-			return _b - _a;
-		});
-		return funds;
-	}
+  public get fundOverviews(): FundOverview[] {
+    const driftFunds = this.driftVaultsClient.fundOverviews;
+    const phoenixFunds = this.phoenixVaultsClient.fundOverviews;
+    const funds = [...driftFunds, ...phoenixFunds];
+    funds.sort((a, b) => {
+      const _a = fundDollarPnl(a);
+      const _b = fundDollarPnl(b);
+      return _b - _a;
+    });
+    return funds;
+  }
 
-	//
-	// Tokens and timers
-	//
+  //
+  // Tokens and timers
+  //
 
-	public withdrawTimer(config: {
-		venue: Venue;
-		vault: PublicKey;
-	}): WithdrawRequestTimer | undefined {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.withdrawTimer(config.vault);
-		} else {
-			return this.phoenixVaultsClient.withdrawTimer(config.vault);
-		}
-	}
+  public withdrawTimer(config: {
+    venue: Venue;
+    vault: PublicKey;
+  }): WithdrawRequestTimer | undefined {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.withdrawTimer(config.vault);
+    } else {
+      return this.phoenixVaultsClient.withdrawTimer(config.vault);
+    }
+  }
 
-	public hasWithdrawRequest(config: {
-		vault: PublicKey;
-		venue: Venue;
-	}): boolean {
-		return !!this.withdrawTimer(config);
-	}
+  public hasWithdrawRequest(config: {
+    vault: PublicKey;
+    venue: Venue;
+  }): boolean {
+    return !!this.withdrawTimer(config);
+  }
 
-	public async createWithdrawTimer(config: {
-		venue: Venue;
-		vault: PublicKey;
-	}): Promise<void> {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.createWithdrawTimer(config.vault);
-		} else {
-			return this.phoenixVaultsClient.createWithdrawTimer(config.vault);
-		}
-	}
+  public async createWithdrawTimer(config: {
+    venue: Venue;
+    vault: PublicKey;
+  }): Promise<void> {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.createWithdrawTimer(config.vault);
+    } else {
+      return this.phoenixVaultsClient.createWithdrawTimer(config.vault);
+    }
+  }
 
-	public async fetchEquityInVault(config: {
-		venue: Venue;
-		vault: PublicKey;
-	}): Promise<number | undefined> {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.fetchEquityInVault(config.vault);
-		} else {
-			return this.phoenixVaultsClient.fetchInvestorEquity(config.vault);
-		}
-	}
+  public async fetchEquityInVault(config: {
+    venue: Venue;
+    vault: PublicKey;
+  }): Promise<number | undefined> {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.fetchEquityInVault(config.vault);
+    } else {
+      return this.phoenixVaultsClient.fetchInvestorEquity(config.vault);
+    }
+  }
 
-	public equityInVault(config: {
-		vault: PublicKey;
-		venue: Venue;
-	}): number | undefined {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.equityInVault(config.vault);
-		} else {
-			return this.phoenixVaultsClient.equityInVault(config.vault);
-		}
-	}
+  public equityInVault(config: {
+    vault: PublicKey;
+    venue: Venue;
+  }): number | undefined {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.equityInVault(config.vault);
+    } else {
+      return this.phoenixVaultsClient.equityInVault(config.vault);
+    }
+  }
 
-	public async fetchWalletUsdc(): Promise<number | undefined> {
-		return this.driftVaultsClient.fetchWalletUsdc();
-	}
+  public get sol(): number {
+    return this._sol;
+  }
 
-	public async airdropSol(): Promise<SnackInfo> {
-		try {
-			const signature = await this.conn.requestAirdrop(
-				this.publicKey,
-				LAMPORTS_PER_SOL
-			);
-			await this.conn.confirmTransaction({
-				signature,
-			} as TransactionConfirmationStrategy);
-			console.debug(`airdrop sol: ${signatureLink(signature)}`);
-			return {
-				variant: 'success',
-				message: 'Airdropped 1 SOL',
-			};
-		} catch (e: any) {
-			console.error(e);
-			return {
-				variant: 'error',
-				message: e.toString(),
-			};
-		}
-	}
+  public get usdc(): number {
+    return this._usdc;
+  }
 
-	public async airdropUsdc(usdc = 1000): Promise<SnackInfo> {
-		const mint = TEST_USDC_MINT.publicKey;
-		const mintAuthSigner = TEST_USDC_MINT_AUTHORITY;
+  public async fetchWalletSol(): Promise<number> {
+    const sol = (await this.conn.getBalance(this.publicKey)) / LAMPORTS_PER_SOL;
+    this._sol = sol;
+    return sol;
+  }
 
-		const ixs: TransactionInstruction[] = [];
-		// USDC has 6 decimals which happens to be the same as the QUOTE_PRECISION
-		const usdcAmount = new BN(usdc).mul(QUOTE_PRECISION);
+  public async fetchWalletUsdc(): Promise<number> {
+    const usdc = (await this.driftVaultsClient.fetchWalletUsdc()) ?? 0;
+    this._usdc = usdc;
+    return usdc;
+  }
 
-		const usdcAta = getAssociatedTokenAddressSync(mint, this.publicKey, true);
-		const ataExists = await this.conn.getAccountInfo(usdcAta);
-		if (ataExists === null) {
-			ixs.push(
-				createAssociatedTokenAccountInstruction(
-					this.publicKey,
-					usdcAta,
-					this.publicKey,
-					mint
-				)
-			);
-		}
+  public async airdropSol(): Promise<SnackInfo> {
+    try {
+      const signature = await this.conn.requestAirdrop(
+        this.publicKey,
+        LAMPORTS_PER_SOL
+      );
+      await this.conn.confirmTransaction({
+        signature,
+      } as TransactionConfirmationStrategy);
+      console.debug(`airdrop sol: ${signatureLink(signature)}`);
+      return {
+        variant: 'success',
+        message: 'Airdropped 1 SOL',
+      };
+    } catch (e: any) {
+      console.error(e);
+      return {
+        variant: 'error',
+        message: e.toString(),
+      };
+    }
+  }
 
-		ixs.push(
-			createMintToInstruction(
-				mint,
-				usdcAta,
-				mintAuthSigner.publicKey,
-				usdcAmount.toNumber()
-			)
-		);
+  public async airdropUsdc(usdc = 1000): Promise<SnackInfo> {
+    const mint = TEST_USDC_MINT.publicKey;
+    const mintAuthSigner = TEST_USDC_MINT_AUTHORITY;
 
-		try {
-			return await this.sendTx(
-				ixs,
-				`Airdropped ${usdc} USDC`,
-				`Failed to airdrop ${usdc} USDC`,
-				[mintAuthSigner]
-			);
-		} catch (e: any) {
-			console.error(e);
-			return {
-				variant: 'error',
-				message: e.toString(),
-			};
-		}
-	}
+    const ixs: TransactionInstruction[] = [];
+    // USDC has 6 decimals which happens to be the same as the QUOTE_PRECISION
+    const usdcAmount = new BN(usdc).mul(QUOTE_PRECISION);
 
-	private async sendTx(
-		ixs: TransactionInstruction[],
-		successMessage: string,
-		errorMessage: string,
-		signers: Signer[] = []
-	): Promise<SnackInfo> {
-		const instructions = [
-			ComputeBudgetProgram.setComputeUnitLimit({
-				units: 400_000,
-			}),
-			ComputeBudgetProgram.setComputeUnitPrice({
-				microLamports: 10_000,
-			}),
-			...ixs,
-		];
+    const usdcAta = getAssociatedTokenAddressSync(mint, this.publicKey, true);
+    const ataExists = await this.conn.getAccountInfo(usdcAta);
+    if (ataExists === null) {
+      ixs.push(
+        createAssociatedTokenAccountInstruction(
+          this.publicKey,
+          usdcAta,
+          this.publicKey,
+          mint
+        )
+      );
+    }
 
-		const recentBlockhash = await this.conn
-			.getLatestBlockhash()
-			.then((res) => res.blockhash);
-		const msg = new anchor.web3.TransactionMessage({
-			payerKey: this.publicKey,
-			recentBlockhash,
-			instructions,
-		}).compileToV0Message();
-		let tx = new anchor.web3.VersionedTransaction(msg);
-		const funder = walletAdapterToAsyncSigner(this.wallet);
-		tx = await funder.sign(tx);
-		tx.sign(signers);
+    ixs.push(
+      createMintToInstruction(
+        mint,
+        usdcAta,
+        mintAuthSigner.publicKey,
+        usdcAmount.toNumber()
+      )
+    );
 
-		const sim = (
-			await this.conn.simulateTransaction(tx, {
-				sigVerify: false,
-			})
-		).value;
-		if (sim.err) {
-			const msg = `${errorMessage}: ${JSON.stringify(sim.err)}}`;
-			console.error(msg);
-			return {
-				variant: 'error',
-				message: errorMessage,
-			};
-		}
+    try {
+      return await this.sendTx(
+        ixs,
+        `Airdropped ${usdc} USDC`,
+        `Failed to airdrop ${usdc} USDC`,
+        [mintAuthSigner]
+      );
+    } catch (e: any) {
+      console.error(e);
+      return {
+        variant: 'error',
+        message: e.toString(),
+      };
+    }
+  }
 
-		try {
-			const sig = await this.conn.sendTransaction(tx, {
-				skipPreflight: true,
-			});
-			console.debug(`${successMessage}: ${signatureLink(sig)}`);
-			const confirm = await this.conn.confirmTransaction(sig);
-			if (confirm.value.err) {
-				console.error(`${errorMessage}: ${JSON.stringify(confirm.value.err)}`);
-				return {
-					variant: 'error',
-					message: errorMessage,
-				};
-			} else {
-				return {
-					variant: 'success',
-					message: successMessage,
-				};
-			}
-		} catch (e: any) {
-			return {
-				variant: 'error',
-				message: errorMessage,
-			};
-		}
-	}
+  private async sendTx(
+    ixs: TransactionInstruction[],
+    successMessage: string,
+    errorMessage: string,
+    signers: Signer[] = []
+  ): Promise<SnackInfo> {
+    const instructions = [
+      ComputeBudgetProgram.setComputeUnitLimit({
+        units: 400_000,
+      }),
+      ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: 10_000,
+      }),
+      ...ixs,
+    ];
 
-	//
-	// Investor actions
-	//
+    const recentBlockhash = await this.conn
+      .getLatestBlockhash()
+      .then((res) => res.blockhash);
+    const msg = new anchor.web3.TransactionMessage({
+      payerKey: this.publicKey,
+      recentBlockhash,
+      instructions,
+    }).compileToV0Message();
+    let tx = new anchor.web3.VersionedTransaction(msg);
+    const funder = walletAdapterToAsyncSigner(this.wallet);
+    tx = await funder.sign(tx);
+    tx.sign(signers);
 
-	public async deposit(config: {
-		venue: Venue;
-		vault: PublicKey;
-		usdc: number;
-	}): Promise<SnackInfo> {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.deposit(config.vault, config.usdc);
-		} else {
-			return this.phoenixVaultsClient.deposit(config.vault, config.usdc);
-		}
-	}
+    const sim = (
+      await this.conn.simulateTransaction(tx, {
+        sigVerify: false,
+      })
+    ).value;
+    if (sim.err) {
+      const msg = `${errorMessage}: ${JSON.stringify(sim.err)}}`;
+      console.error(msg);
+      return {
+        variant: 'error',
+        message: errorMessage,
+      };
+    }
 
-	public async requestWithdraw(config: {
-		venue: Venue;
-		vault: PublicKey;
-		usdc: number;
-	}): Promise<SnackInfo> {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.requestWithdraw(config.vault, config.usdc);
-		} else {
-			return this.phoenixVaultsClient.requestWithdraw(
-				config.vault,
-				config.usdc
-			);
-		}
-	}
+    try {
+      const sig = await this.conn.sendTransaction(tx, {
+        skipPreflight: true,
+      });
+      console.debug(`${successMessage}: ${signatureLink(sig)}`);
+      const confirm = await this.conn.confirmTransaction(sig);
+      if (confirm.value.err) {
+        console.error(`${errorMessage}: ${JSON.stringify(confirm.value.err)}`);
+        return {
+          variant: 'error',
+          message: errorMessage,
+        };
+      } else {
+        return {
+          variant: 'success',
+          message: successMessage,
+        };
+      }
+    } catch (e: any) {
+      return {
+        variant: 'error',
+        message: errorMessage,
+      };
+    }
+  }
 
-	public async cancelWithdrawRequest(config: {
-		venue: Venue;
-		vault: PublicKey;
-	}): Promise<SnackInfo> {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.cancelWithdrawRequest(config.vault);
-		} else {
-			// todo
-			return {
-				variant: 'error',
-				message: `todo`,
-			};
-		}
-	}
+  //
+  // Investor actions
+  //
 
-	public async withdraw(config: {
-		venue: Venue;
-		vault: PublicKey;
-	}): Promise<SnackInfo> {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.withdraw(config.vault);
-		} else {
-			return this.phoenixVaultsClient.withdraw(config.vault);
-		}
-	}
+  public async deposit(config: {
+    venue: Venue;
+    vault: PublicKey;
+    usdc: number;
+  }): Promise<SnackInfo> {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.deposit(config.vault, config.usdc);
+    } else {
+      return this.phoenixVaultsClient.deposit(config.vault, config.usdc);
+    }
+  }
 
-	//
-	// Manager actions
-	//
+  public async requestWithdraw(config: {
+    venue: Venue;
+    vault: PublicKey;
+    usdc: number;
+  }): Promise<SnackInfo> {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.requestWithdraw(config.vault, config.usdc);
+    } else {
+      return this.phoenixVaultsClient.requestWithdraw(
+        config.vault,
+        config.usdc
+      );
+    }
+  }
 
-	/**
-	 * The connected wallet will become the manager of the vault.
-	 */
-	public async createVault(config: CreateVaultConfig): Promise<{
-		vault: PublicKey;
-		snack: SnackInfo;
-	}> {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.createVault(config);
-		} else {
-			return this.phoenixVaultsClient.createVault(config);
-		}
-	}
+  public async cancelWithdrawRequest(config: {
+    venue: Venue;
+    vault: PublicKey;
+  }): Promise<SnackInfo> {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.cancelWithdrawRequest(config.vault);
+    } else {
+      // todo
+      return {
+        variant: 'error',
+        message: `todo`,
+      };
+    }
+  }
 
-	public defaultUpdateVaultConfig(config: {
-		venue: Venue;
-		vault: PublicKey;
-	}): UpdateVaultConfig {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.defaultUpdateVaultConfig(config.vault);
-		} else {
-			return this.phoenixVaultsClient.defaultUpdateVaultConfig(config.vault);
-		}
-	}
+  public async withdraw(config: {
+    venue: Venue;
+    vault: PublicKey;
+  }): Promise<SnackInfo> {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.withdraw(config.vault);
+    } else {
+      return this.phoenixVaultsClient.withdraw(config.vault);
+    }
+  }
 
-	/**
-	 * Can only reduce the profit share, management fee, or redeem period.
-	 * Unable to modify protocol fees.
-	 */
-	public async updateVault(config: {
-		venue: Venue;
-		vault: PublicKey;
-		params: UpdateVaultConfig;
-	}): Promise<SnackInfo> {
-		if (config.venue === Venue.Drift) {
-			return this.driftVaultsClient.updateVault(config.vault, config.params);
-		} else {
-			// todo
-			return {
-				variant: 'error',
-				message: `todo`,
-			};
-		}
-	}
+  //
+  // Manager actions
+  //
+
+  /**
+   * The connected wallet will become the manager of the vault.
+   */
+  public async createVault(config: CreateVaultConfig): Promise<{
+    vault: PublicKey;
+    snack: SnackInfo;
+  }> {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.createVault(config);
+    } else {
+      return this.phoenixVaultsClient.createVault(config);
+    }
+  }
+
+  public defaultUpdateVaultConfig(config: {
+    venue: Venue;
+    vault: PublicKey;
+  }): UpdateVaultConfig {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.defaultUpdateVaultConfig(config.vault);
+    } else {
+      return this.phoenixVaultsClient.defaultUpdateVaultConfig(config.vault);
+    }
+  }
+
+  /**
+   * Can only reduce the profit share, management fee, or redeem period.
+   * Unable to modify protocol fees.
+   */
+  public async updateVault(config: {
+    venue: Venue;
+    vault: PublicKey;
+    params: UpdateVaultConfig;
+  }): Promise<SnackInfo> {
+    if (config.venue === Venue.Drift) {
+      return this.driftVaultsClient.updateVault(config.vault, config.params);
+    } else {
+      return this.phoenixVaultsClient.updateVault(config.vault, config.params);
+    }
+  }
 }
