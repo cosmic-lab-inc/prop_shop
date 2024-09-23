@@ -15,6 +15,7 @@ import {
 	fundDollarPnl,
 	getTokenBalance,
 	getTraderEquity,
+	percentPrecisionToPercent,
 	percentToPercentPrecision,
 	walletAdapterToAnchorWallet,
 } from '../utils';
@@ -25,6 +26,7 @@ import {
 	PhoenixSubscriber,
 	PhoenixVaultsAccountEvents,
 	SnackInfo,
+	UpdateVaultConfig,
 	Venue,
 	WithdrawRequestTimer,
 } from '../types';
@@ -1156,5 +1158,30 @@ export class PhoenixVaultsClient {
 			vault: vaultKey,
 			snack,
 		};
+	}
+
+	public defaultUpdateVaultConfig(vault: PublicKey): UpdateVaultConfig {
+		const vaultAcct = this.vault(vault)?.data;
+		if (!vaultAcct) {
+			throw new Error(`Vault ${vault.toString()} not found`);
+		}
+		const percentProfitShare = percentPrecisionToPercent(vaultAcct.profitShare);
+		const percentAnnualManagementFee = percentPrecisionToPercent(
+			vaultAcct.managementFee.toNumber()
+		);
+		const minDepositUSDC =
+			vaultAcct.minDepositAmount.toNumber() / QUOTE_PRECISION.toNumber();
+		const maxCapacityUSDC =
+			vaultAcct.maxTokens.toNumber() / QUOTE_PRECISION.toNumber();
+		const config: UpdateVaultConfig = {
+			redeemPeriod: vaultAcct.redeemPeriod.toNumber(),
+			maxCapacityUSDC,
+			percentAnnualManagementFee,
+			minDepositUSDC,
+			percentProfitShare,
+			permissioned: vaultAcct.permissioned,
+			delegate: vaultAcct.delegate,
+		};
+		return config;
 	}
 }

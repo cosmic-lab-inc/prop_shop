@@ -13,7 +13,7 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 import {assert} from 'chai';
-import {Investor, PERCENTAGE_PRECISION, PhoenixVaults, Vault, ZERO,} from '@cosmic-lab/phoenix-vaults-sdk';
+import {Investor, PERCENTAGE_PRECISION, PhoenixVaults, Vault, ZERO} from '@cosmic-lab/phoenix-vaults-sdk';
 import {
   deserializeMarketData,
   getExpectedOutAmountRouter,

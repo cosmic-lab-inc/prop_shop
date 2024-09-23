@@ -12,10 +12,8 @@
   },
   "scripts": {
     "clean": "yes | rm -rf dist && rm -rf node_modules",
-    "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint",
+    "lint": "prettier --check './src/**/*.ts' && eslint",
     "build": "tsc",
-    "watch": "tsc-watch -p tsconfig.json --onSuccess 'echo Compiled successfully!'",
-    "test": "jest",
     "prettify:fix": "prettier --write './src/**/*.ts'"
   },
   "dependencies": {

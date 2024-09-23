@@ -364,16 +364,7 @@ export class PropShopClient {
 		if (config.venue === Venue.Drift) {
 			return this.driftVaultsClient.defaultUpdateVaultConfig(config.vault);
 		} else {
-			// todo
-			return {
-				redeemPeriod: 0,
-				maxCapacityUSDC: 0,
-				percentAnnualManagementFee: 0,
-				minDepositUSDC: 0,
-				percentProfitShare: 0,
-				permissioned: false,
-				delegate: PublicKey.default,
-			} as UpdateVaultConfig;
+			return this.phoenixVaultsClient.defaultUpdateVaultConfig(config.vault);
 		}
 	}
 

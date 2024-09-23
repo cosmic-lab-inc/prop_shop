@@ -1,6 +1,9 @@
 import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { MarketState } from '@ellipsis-labs/phoenix-sdk';
-import { createAtaIdempotent } from '../../../../tests/phoenixHelpers';
+import {
+	createAssociatedTokenAccountInstruction,
+	getAssociatedTokenAddress,
+} from '@solana/spl-token';
 
 export async function getTokenBalance(
 	conn: Connection,
@@ -16,6 +19,36 @@ export async function getTokenBalance(
 	} else {
 		return 0;
 	}
+}
+
+export async function createAtaIdempotent(
+	connection: Connection,
+	owner: PublicKey,
+	payer: PublicKey,
+	tokenMintAddress: PublicKey
+): Promise<TransactionInstruction[]> {
+	const associatedTokenAccountAddress = await getAssociatedTokenAddress(
+		tokenMintAddress,
+		owner,
+		true
+	);
+
+	const ata = await connection.getAccountInfo(
+		associatedTokenAccountAddress,
+		'confirmed'
+	);
+	const ixs: TransactionInstruction[] = [];
+	if (ata === null || ata.data.length === 0) {
+		ixs.push(
+			createAssociatedTokenAccountInstruction(
+				payer,
+				associatedTokenAccountAddress,
+				owner,
+				tokenMintAddress
+			)
+		);
+	}
+	return ixs;
 }
 
 export async function createPhoenixMarketTokenAccountIxs(

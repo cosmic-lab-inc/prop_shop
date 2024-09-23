@@ -54,8 +54,6 @@ export default defineConfig(({mode}) => {
       "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
       "process.env.ENV": JSON.stringify(env.ENV),
       "process.env.PORT": JSON.stringify(env.PORT),
-      "process.env.REDIS_ENDPOINT": JSON.stringify(env.REDIS_ENDPOINT),
-      "process.env.REDIS_PASSWORD": JSON.stringify(env.REDIS_PASSWORD),
     },
     plugins: [react(), nodePolyfills()],
     optimizeDeps: {

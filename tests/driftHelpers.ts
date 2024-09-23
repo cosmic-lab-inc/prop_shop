@@ -4,13 +4,10 @@ import {
   AccountLayout,
   createAssociatedTokenAccountInstruction,
   createInitializeAccountInstruction,
-  createInitializeMintInstruction,
   createMintToInstruction,
   createWrappedNativeAccount,
   getAssociatedTokenAddressSync,
   getMinimumBalanceForRentExemptAccount,
-  getMinimumBalanceForRentExemptMint,
-  MintLayout,
   NATIVE_MINT,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
@@ -46,8 +43,8 @@ import {
   Wallet,
 } from "@drift-labs/sdk";
 import {IDL, VaultClient} from "@drift-labs/vaults-sdk";
-import {sendTransactionWithResult, signatureLink,} from "@cosmic-lab/prop-shop-sdk";
-import {AsyncSigner, InstructionReturn, keypairToAsyncSigner, walletToAsyncSigner,} from "@cosmic-lab/data-source";
+import {sendTransactionWithResult, signatureLink} from "../packages/sdk";
+import {InstructionReturn, keypairToAsyncSigner, walletToAsyncSigner,} from "@cosmic-lab/data-source";
 
 export async function mockOracle(
   price: number = 50 * 10e7,
@@ -80,74 +77,6 @@ export async function mockOracle(
   assert.ok(Math.abs(feedData.price - price) < 1e-10);
 
   return priceFeedAddress;
-}
-
-export async function mockUSDCMint(
-  provider: Provider,
-  mint?: Keypair,
-  mintAuth?: Keypair,
-): Promise<Keypair> {
-  let fakeUSDCMint: Keypair;
-  if (mint) {
-    fakeUSDCMint = mint;
-  } else {
-    fakeUSDCMint = anchor.web3.Keypair.generate();
-  }
-
-  // @ts-ignore
-  const wallet = provider.wallet;
-
-  console.log(`wallet: ${wallet.publicKey.toString()}`);
-  console.log(`mintAuth: ${mintAuth?.publicKey.toString()}`);
-  console.log(`mint: ${fakeUSDCMint.publicKey.toString()}`);
-
-  const funderSigner = walletToAsyncSigner(wallet);
-  const mintSigner = keypairToAsyncSigner(fakeUSDCMint);
-
-  let mintAuthSigner: AsyncSigner;
-  if (mintAuth) {
-    mintAuthSigner = keypairToAsyncSigner(mintAuth);
-  } else {
-    mintAuthSigner = walletToAsyncSigner(wallet);
-  }
-
-  const instruction = SystemProgram.createAccount({
-    // @ts-ignore
-    fromPubkey: provider.wallet.publicKey,
-    newAccountPubkey: fakeUSDCMint.publicKey,
-    lamports: await getMinimumBalanceForRentExemptMint(provider.connection),
-    space: MintLayout.span,
-    programId: TOKEN_PROGRAM_ID,
-  });
-  const createUSDCMintAccountIx: InstructionReturn = () => {
-    return Promise.resolve({
-      instruction,
-      signers: [funderSigner, mintSigner],
-    });
-  };
-
-  const initCollateralMintIx: InstructionReturn = () => {
-    return Promise.resolve({
-      instruction: createInitializeMintInstruction(
-        fakeUSDCMint.publicKey,
-        6,
-        mintAuthSigner.publicKey(),
-        mintAuthSigner.publicKey(),
-      ),
-      signers: [mintSigner],
-    });
-  };
-
-  const res = await sendTransactionWithResult(
-    [createUSDCMintAccountIx, initCollateralMintIx],
-    funderSigner,
-    provider.connection,
-  );
-  if (res.isErr()) {
-    throw new Error(`Error creating USDC mint: ${res.error}`);
-  }
-  console.debug("USDC mint created:", signatureLink(res.value));
-  return fakeUSDCMint;
 }
 
 export async function mockUserUSDCAssociatedTokenAccount(

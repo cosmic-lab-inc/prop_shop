@@ -1835,7 +1835,7 @@ export class DriftVaultsClient {
 		return ix;
 	}
 
-	public defaultUpdateVaultConfig(vault: PublicKey) {
+	public defaultUpdateVaultConfig(vault: PublicKey): UpdateVaultConfig {
 		const vaultAcct = this.vault(vault)?.data;
 		if (!vaultAcct) {
 			throw new Error(`Vault ${vault.toString()} not found`);
