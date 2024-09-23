@@ -5,21 +5,21 @@ const PulseAnimation = keyframes`
     0% {
         transform: scale(1);
     }
-    20% {
+    10% {
         transform: scale(1.1);
     }
-    25% {
+    15% {
         transform: scale(1);
     }
-    95% {
-        transform: scale(1.1);
+    90% {
+        transform: scale(1);
     }
     100% {
-        transform: scale(1);
+        transform: scale(1.1);
     }
 `;
 
-const Animation = styled('div')(({ theme }) => ({
+const Animation = styled('div')(({ theme: _theme }) => ({
 	width: '100px',
 	height: '100px',
 	borderRadius: '50%',
