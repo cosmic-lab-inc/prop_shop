@@ -85,7 +85,7 @@ import {
 	InstructionReturn,
 	walletAdapterToAsyncSigner,
 } from '@cosmic-lab/data-source';
-import { DriftWebsocketSubscriber } from '../driftWebsocketSubscriber';
+import { DriftWebsocketSubscriber } from '../subscriber';
 import { CreatePropShopClientConfig, UpdateWalletConfig } from './types';
 
 export class DriftVaultsClient {

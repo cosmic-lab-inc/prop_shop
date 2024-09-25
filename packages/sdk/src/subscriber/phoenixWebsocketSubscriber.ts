@@ -15,35 +15,35 @@ import {
 	GetProgramAccountsResponse,
 	PublicKey,
 } from '@solana/web3.js';
-import { capitalize } from './utils';
+import { capitalize } from '../utils';
 import {
-	DriftSubscriber,
-	DriftVaultsAccountEvents,
-	DriftVaultsAccountEventsMap,
-	DriftVaultsAccountSubscription,
-	DriftVaultsSubscriptionConfig,
-} from './types';
+	PhoenixSubscriber,
+	PhoenixVaultsAccountEvents,
+	PhoenixVaultsAccountEventsMap,
+	PhoenixVaultsAccountSubscription,
+	PhoenixVaultsSubscriptionConfig,
+} from '../types';
 import { Buffer } from 'buffer';
-import { DriftVaults } from '@drift-labs/vaults-sdk';
+import { PhoenixVaults } from '@cosmic-lab/phoenix-vaults-sdk';
 import bs58 from 'bs58';
 import StrictEventEmitter from 'strict-event-emitter-types';
 import { EventEmitter } from 'events';
 
-export class DriftWebsocketSubscriber implements DriftSubscriber {
-	_subscriptionConfig: DriftVaultsSubscriptionConfig;
-	subscriptions: Map<string, DriftVaultsAccountSubscription>;
-	program: Program<DriftVaults>;
+export class PhoenixWebsocketSubscriber implements PhoenixSubscriber {
+	_subscriptionConfig: PhoenixVaultsSubscriptionConfig;
+	subscriptions: Map<string, PhoenixVaultsAccountSubscription>;
+	program: Program<PhoenixVaults>;
 	resubOpts?: ResubOpts;
 	commitment?: Commitment;
 	isUnsubscribing = false;
 	timeoutId?: NodeJS.Timeout;
 	receivingData: boolean;
-	eventEmitter: StrictEventEmitter<EventEmitter, DriftVaultsAccountEvents>;
+	eventEmitter: StrictEventEmitter<EventEmitter, PhoenixVaultsAccountEvents>;
 
 	public constructor(
-		program: Program<DriftVaults>,
-		subscriptionConfig: DriftVaultsSubscriptionConfig,
-		eventEmitter: StrictEventEmitter<EventEmitter, DriftVaultsAccountEvents>,
+		program: Program<PhoenixVaults>,
+		subscriptionConfig: PhoenixVaultsSubscriptionConfig,
+		eventEmitter: StrictEventEmitter<EventEmitter, PhoenixVaultsAccountEvents>,
 		resubOpts?: ResubOpts,
 		commitment?: Commitment
 	) {
@@ -110,7 +110,7 @@ export class DriftWebsocketSubscriber implements DriftSubscriber {
 				);
 				accountInfos.forEach((accountInfo, index) => {
 					if (accountInfo) {
-						const value: DriftVaultsAccountSubscription =
+						const value: PhoenixVaultsAccountSubscription =
 							this._subscriptionConfig.accounts![index];
 
 						accounts.push({
@@ -163,7 +163,7 @@ export class DriftWebsocketSubscriber implements DriftSubscriber {
 						},
 					];
 
-					const id = this.program.provider.connection.onProgramAccountChange(
+					const _id = this.program.provider.connection.onProgramAccountChange(
 						this.program.programId,
 						({ accountId, accountInfo }, context) => {
 							if (this.resubOpts?.resubTimeoutMs) {
@@ -207,7 +207,7 @@ export class DriftWebsocketSubscriber implements DriftSubscriber {
 			return;
 		}
 
-		const subs: DriftVaultsAccountSubscription[] = [];
+		const subs: PhoenixVaultsAccountSubscription[] = [];
 
 		if (this._subscriptionConfig.accounts) {
 			const slot = await this.program.provider.connection.getSlot();
@@ -251,7 +251,7 @@ export class DriftWebsocketSubscriber implements DriftSubscriber {
 				);
 				accountInfos.forEach((accountInfo, index) => {
 					if (accountInfo) {
-						const value: DriftVaultsAccountSubscription =
+						const value: PhoenixVaultsAccountSubscription =
 							this._subscriptionConfig.accounts![index];
 
 						const id = this.program.provider.connection.onAccountChange(
@@ -295,7 +295,7 @@ export class DriftWebsocketSubscriber implements DriftSubscriber {
 							value.accountName
 						].coder.accounts.decodeUnchecked(_accountName, accountInfo.data);
 
-						const sub: DriftVaultsAccountSubscription = {
+						const sub: PhoenixVaultsAccountSubscription = {
 							...value,
 							dataAndSlot,
 							id: id.toString(),
@@ -404,7 +404,7 @@ export class DriftWebsocketSubscriber implements DriftSubscriber {
 							data: value.account.data,
 							slot,
 						};
-						const sub: DriftVaultsAccountSubscription = {
+						const sub: PhoenixVaultsAccountSubscription = {
 							accountName: filter.accountName,
 							eventType: filter.eventType,
 							publicKey: value.pubkey,
@@ -501,7 +501,7 @@ export class DriftWebsocketSubscriber implements DriftSubscriber {
 				for (const accountType in this.program.account) {
 					const namespace =
 						this.program.account[
-							accountType as any as keyof AccountNamespace<DriftVaults>
+							accountType as any as keyof AccountNamespace<PhoenixVaults>
 						];
 					const accountName = namespace.idlAccount.name;
 					const expected = BorshAccountsCoder.accountDiscriminator(accountName);
@@ -510,9 +510,9 @@ export class DriftWebsocketSubscriber implements DriftSubscriber {
 							accountName,
 							account.account.data
 						);
-						const sub: DriftVaultsAccountSubscription = {
+						const sub: PhoenixVaultsAccountSubscription = {
 							accountName,
-							eventType: DriftVaultsAccountEventsMap[accountType],
+							eventType: PhoenixVaultsAccountEventsMap[accountType],
 							publicKey: account.publicKey,
 							dataAndSlot: {
 								data: account.account.data,
@@ -534,7 +534,7 @@ export class DriftWebsocketSubscriber implements DriftSubscriber {
 	}
 
 	getAccount(
-		accountName: keyof AccountNamespace<DriftVaults>,
+		_accountName: keyof AccountNamespace<PhoenixVaults>,
 		key: PublicKey
 	): DataAndSlot<any> | undefined {
 		const entry = this.subscriptions.get(key.toString());
@@ -549,10 +549,10 @@ export class DriftWebsocketSubscriber implements DriftSubscriber {
 	}
 
 	getAccounts(
-		accountName: keyof AccountNamespace<DriftVaults>
+		accountName: keyof AccountNamespace<PhoenixVaults>
 	): ProgramAccount<DataAndSlot<any>>[] {
 		const decoded: ProgramAccount<DataAndSlot<any>>[] = [];
-		for (const [key, account] of Array.from(this.subscriptions.entries())) {
+		for (const [key, _] of Array.from(this.subscriptions.entries())) {
 			const entry = this.subscriptions.get(key.toString());
 			if (
 				entry &&

@@ -17,6 +17,7 @@ import {
 	fundDollarPnl,
 	getTokenBalance,
 	getTraderEquity,
+	isAvailable,
 	percentPrecisionToPercent,
 	percentToPercentPrecision,
 	walletAdapterToAnchorWallet,
@@ -35,7 +36,7 @@ import {
 import { EventEmitter } from 'events';
 import StrictEventEmitter from 'strict-event-emitter-types';
 import { WalletContextState } from '@solana/wallet-adapter-react';
-import { PhoenixWebsocketSubscriber } from '../phoenixWebsocketSubscriber';
+import { PhoenixWebsocketSubscriber } from '../subscriber';
 import {
 	Client as PhoenixClient,
 	getLogAuthority,
@@ -49,6 +50,7 @@ import {
 	IDL as PHOENIX_VAULTS_IDL,
 	Investor,
 	LOCALNET_MARKET_CONFIG,
+	MarketPosition,
 	PHOENIX_PROGRAM_ID,
 	PHOENIX_VAULTS_PROGRAM_ID,
 	PhoenixVaults,
@@ -535,12 +537,29 @@ export class PhoenixVaultsClient {
 
 	public async fetchVaultEquity(vault: Vault): Promise<number> {
 		await this.phoenixClient.refreshAllMarkets(false);
+
+		// let equity = 0;
+		// const vaultUsdc = await getTokenBalance(this.conn, vault.usdcTokenAccount);
+		// equity += vaultUsdc;
+		// for (const marketState of Array.from(
+		// 	this.phoenixClient.marketStates.values()
+		// )) {
+		// 	equity += getTraderEquity(marketState, vault.pubkey);
+		// }
+		// return equity;
+
 		let equity = 0;
-		const vaultUsdc = await getTokenBalance(this.conn, vault.usdcTokenAccount);
-		equity += vaultUsdc;
-		for (const marketState of Array.from(
-			this.phoenixClient.marketStates.values()
-		)) {
+		equity += await getTokenBalance(this.conn, vault.usdcTokenAccount);
+		for (const position of vault.positions) {
+			if (isAvailable(position as MarketPosition)) {
+				continue;
+			}
+			const marketState = this.phoenixClient.marketStates.get(
+				position.market.toString()
+			);
+			if (!marketState) {
+				throw new Error(`Market ${position.market.toString()} not found`);
+			}
 			equity += getTraderEquity(marketState, vault.pubkey);
 		}
 		return equity;
@@ -868,8 +887,6 @@ export class PhoenixVaultsClient {
 		);
 		const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
 		const marketRegistry = getMarketRegistryAddressSync();
-		const registryAcct =
-			await this.program.account.marketRegistry.fetch(marketRegistry);
 		const investorQuoteTokenAccount = getAssociatedTokenAddressSync(
 			solUsdcMarket.usdcMint,
 			this.publicKey

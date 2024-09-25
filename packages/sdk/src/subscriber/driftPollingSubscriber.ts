@@ -7,7 +7,7 @@ import {
 } from '@coral-xyz/anchor';
 import StrictEventEmitter from 'strict-event-emitter-types';
 import { EventEmitter } from 'events';
-import { capitalize } from './utils';
+import { capitalize } from '../utils';
 import {
 	AccountInfo,
 	GetProgramAccountsConfig,
@@ -21,10 +21,10 @@ import {
 	DriftVaultsAccountGpaFilter,
 	DriftVaultsAccountSubscription,
 	DriftVaultsSubscriptionConfig,
-} from './types';
+} from '../types';
 import { Buffer } from 'buffer';
 import bs58 from 'bs58';
-import { AccountLoader } from './accountLoader';
+import { AccountLoader } from '../accountLoader';
 
 export class DriftPollingSubscriber implements DriftSubscriber {
 	isSubscribed: boolean;
