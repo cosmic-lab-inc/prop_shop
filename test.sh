@@ -80,14 +80,16 @@ fi
 # start anchor localnet in background
 bkg anchor localnet
 # sleep for 1 second to warmup validator
-sleep 1
+sleep 2
 
 # run bootstrap.sh
 chmod +x ./bootstrap.sh
 ./bootstrap.sh
 
 if [[ $no_test == false ]]; then
-  export ANCHOR_WALLET=~/.config/solana/id.json
+  export ANCHOR_WALLET=~/.config/solana/cosmic_lab_inc.json
+  rpc_url=$(solana config get | grep "RPC URL" | cut -d " " -f 3)
+  export ANCHOR_PROVIDER_URL=$rpc_url
   yarn anchor-tests
 fi
 

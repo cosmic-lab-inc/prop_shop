@@ -2,7 +2,6 @@ import * as anchor from '@coral-xyz/anchor';
 import {BN} from '@coral-xyz/anchor';
 import {createAssociatedTokenAccountInstruction, getAssociatedTokenAddress,} from '@solana/spl-token';
 import {
-  AddressLookupTableAccount,
   ComputeBudgetProgram,
   Connection,
   MessageV0,
@@ -12,8 +11,14 @@ import {
   TransactionInstruction,
   VersionedTransaction,
 } from '@solana/web3.js';
-import {assert} from 'chai';
-import {Investor, PERCENTAGE_PRECISION, PhoenixVaults, Vault, ZERO} from '@cosmic-lab/phoenix-vaults-sdk';
+import {
+  Investor,
+  MarketPosition,
+  PERCENTAGE_PRECISION,
+  PhoenixVaults,
+  Vault,
+  ZERO
+} from '@cosmic-lab/phoenix-vaults-sdk';
 import {
   deserializeMarketData,
   getExpectedOutAmountRouter,
@@ -395,19 +400,28 @@ export async function marketPrice(
   return marketState.getUiLadder(1, 0, 0).asks[0].price;
 }
 
+function isAvailable(position: MarketPosition) {
+  return (
+    position.baseLotsFree.eq(ZERO) &&
+    position.baseLotsLocked.eq(ZERO) &&
+    position.quoteLotsFree.eq(ZERO) &&
+    position.quoteLotsLocked.eq(ZERO)
+  );
+}
+
 export async function fetchVaultEquity(
   program: anchor.Program<PhoenixVaults>,
   conn: Connection,
-  vault: PublicKey,
-  registry: PublicKey
+  vault: PublicKey
 ): Promise<number> {
-  const registryAcct = await program.account.marketRegistry.fetch(registry);
-  const lutAcctInfo = await conn.getAccountInfo(registryAcct.lut);
-  assert(lutAcctInfo !== null);
-  const lutAcct = AddressLookupTableAccount.deserialize(lutAcctInfo.data);
+  const vaultAcct = await program.account.vault.fetch(vault);
   let equity = 0;
-  for (const market of lutAcct.addresses) {
-    const marketState = await fetchMarketState(conn, market);
+  equity += await tokenBalance(conn, vaultAcct.usdcTokenAccount);
+  for (const position of vaultAcct.positions) {
+    if (isAvailable(position as MarketPosition)) {
+      continue;
+    }
+    const marketState = await fetchMarketState(conn, position.market);
     const price = marketState.getUiLadder(1, 0, 0).asks[0].price;
     const vaultState = parseTraderState(marketState, vault);
     const baseQuoteUnits =
@@ -440,11 +454,10 @@ export async function fetchInvestorEquity(
   conn: Connection,
   investor: PublicKey,
   vault: PublicKey,
-  registry: PublicKey
 ): Promise<number> {
   const investorShares = await fetchInvestorShares(program, investor);
   const vaultShares = await fetchVaultShares(program, vault);
-  const vaultEquity = await fetchVaultEquity(program, conn, vault, registry);
+  const vaultEquity = await fetchVaultEquity(program, conn, vault);
   return (investorShares / vaultShares) * vaultEquity;
 }
 
@@ -453,14 +466,12 @@ export async function fetchInvestorEquityRoundedDown(
   conn: Connection,
   investor: PublicKey,
   vault: PublicKey,
-  registry: PublicKey
 ): Promise<number> {
   const equity = await fetchInvestorEquity(
     program,
     conn,
     investor,
     vault,
-    registry
   );
   return Math.floor(equity);
 }

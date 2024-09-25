@@ -314,8 +314,7 @@ describe("driftVaults", () => {
       bulkAccountLoader.startPolling();
       await bulkAccountLoader.load();
     } catch (e: any) {
-      console.error(e);
-      assert(false);
+      throw new Error(e);
     }
   });
 
