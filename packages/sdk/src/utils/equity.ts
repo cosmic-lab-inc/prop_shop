@@ -88,13 +88,17 @@ export function calculateRealizedInvestorEquity(
 	vaultEquity: BN,
 	vault: Vault
 ): BN {
-	const vdAmount = sharesToAmount(
+	const investorAmount = sharesToAmount(
 		investor.vaultShares,
 		vault.totalShares,
 		vaultEquity
 	);
-	const profitShareAmount = calculateProfitShare(investor, vdAmount, vault);
-	return vdAmount.sub(profitShareAmount);
+	const profitShareAmount = calculateProfitShare(
+		investor,
+		investorAmount,
+		vault
+	);
+	return investorAmount.sub(profitShareAmount);
 }
 
 export function getTraderState(
@@ -164,16 +168,23 @@ export function getMarketPrice(marketState: MarketState): number {
 	return bestAsk.price;
 }
 
+export function traderStateEquity(
+	traderState: UiTraderState,
+	price: number
+): number {
+	const baseEquity =
+		(traderState.baseUnitsFree + traderState.baseUnitsLocked) * price;
+	const quoteEquity = traderState.quoteUnitsFree + traderState.quoteUnitsLocked;
+	return baseEquity + quoteEquity;
+}
+
 export function getTraderEquity(
 	marketState: MarketState,
 	trader: PublicKey
 ): number {
 	const traderState = getTraderState(marketState, trader);
 	const price = getMarketPrice(marketState);
-	const baseEquity =
-		(traderState.baseUnitsFree + traderState.baseUnitsLocked) * price;
-	const quoteEquity = traderState.quoteUnitsFree + traderState.quoteUnitsLocked;
-	return baseEquity + quoteEquity;
+	return traderStateEquity(traderState, price);
 }
 
 export function isAvailable(position: MarketPosition) {
@@ -183,4 +194,17 @@ export function isAvailable(position: MarketPosition) {
 		position.quoteLotsFree.eq(ZERO) &&
 		position.quoteLotsLocked.eq(ZERO)
 	);
+}
+
+export function marketsByEquity(
+	marketStates: Map<string, MarketState>,
+	trader: PublicKey
+): MarketState[] {
+	const markets = Array.from(marketStates.values());
+	markets.sort((a, b) => {
+		const equityA = getTraderEquity(a, trader);
+		const equityB = getTraderEquity(b, trader);
+		return equityB - equityA;
+	});
+	return markets;
 }

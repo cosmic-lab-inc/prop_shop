@@ -34,7 +34,7 @@ export function formatNumber(num: number): string {
 	return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-export function prettyNumber(num: number) {
+export function prettyNumber(num: number): string {
 	// 519,245,978.83 to 519.24M
 	if (Math.abs(num) >= 1_000_000_000) {
 		return `${(num / 1_000_000_000).toFixed(2)}B`;
@@ -46,25 +46,6 @@ export function prettyNumber(num: number) {
 		return `${(num / 1_000).toFixed(2)}K`;
 	}
 	return num.toFixed(2).toString();
-}
-
-// random set of numbers that go from 0 to end_value, in N steps
-export function mockData(startingBalance: number, N: number): number[] {
-	let balance = startingBalance;
-	const data = [];
-	for (let i = 0; i < N; i++) {
-		const newBalance =
-			balance +
-			Math.floor(
-				Math.random() *
-					(Math.random() * 300) *
-					(Math.random() < 0.5 ? -1 : 1) *
-					-1
-			);
-		data.push(newBalance);
-		balance = newBalance;
-	}
-	return data;
 }
 
 // truncate number to N decimals

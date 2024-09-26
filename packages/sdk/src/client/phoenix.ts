@@ -18,6 +18,7 @@ import {
 	getTokenBalance,
 	getTraderEquity,
 	isAvailable,
+	marketsByEquity,
 	percentPrecisionToPercent,
 	percentToPercentPrecision,
 	walletAdapterToAnchorWallet,
@@ -339,7 +340,8 @@ export class PhoenixVaultsClient {
 	private async sendTx(
 		ixs: TransactionInstruction[],
 		successMessage: string,
-		errorMessage: string
+		errorMessage: string,
+		successCallback?: (...args: any[]) => Promise<void>
 	): Promise<SnackInfo> {
 		const instructions = [
 			ComputeBudgetProgram.setComputeUnitLimit({
@@ -396,6 +398,9 @@ export class PhoenixVaultsClient {
 					message: errorMessage,
 				};
 			} else {
+				if (successCallback) {
+					await successCallback();
+				}
 				return {
 					variant: 'success',
 					message: successMessage,
@@ -537,17 +542,6 @@ export class PhoenixVaultsClient {
 
 	public async fetchVaultEquity(vault: Vault): Promise<number> {
 		await this.phoenixClient.refreshAllMarkets(false);
-
-		// let equity = 0;
-		// const vaultUsdc = await getTokenBalance(this.conn, vault.usdcTokenAccount);
-		// equity += vaultUsdc;
-		// for (const marketState of Array.from(
-		// 	this.phoenixClient.marketStates.values()
-		// )) {
-		// 	equity += getTraderEquity(marketState, vault.pubkey);
-		// }
-		// return equity;
-
 		let equity = 0;
 		equity += await getTokenBalance(this.conn, vault.usdcTokenAccount);
 		for (const position of vault.positions) {
@@ -573,10 +567,10 @@ export class PhoenixVaultsClient {
 			throw new Error(`Vault ${vaultKey.toString()} not found`);
 		}
 
-		const investor = this.investor(
-			getInvestorAddressSync(vaultKey, this.publicKey)
-		)?.data;
+		const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
+		const investor = this.investor(investorKey)?.data;
 		if (!investor) {
+			console.debug(`Investor ${investorKey.toString()} not found for vault`);
 			return undefined;
 		}
 		const vaultEquity = await this.fetchVaultEquity(vault);
@@ -586,8 +580,7 @@ export class PhoenixVaultsClient {
 			vaultEquityBN,
 			vault
 		);
-		// const usdc = investorEquityBN.toNumber() / QUOTE_PRECISION.toNumber();
-		const usdc = investorEquityBN.div(QUOTE_PRECISION).toNumber();
+		const usdc = investorEquityBN.toNumber() / QUOTE_PRECISION.toNumber();
 		this._equities.set(vault.pubkey.toString(), usdc);
 		return usdc;
 	}
@@ -869,24 +862,12 @@ export class PhoenixVaultsClient {
 			};
 		}
 		const solUsdcMarket = this.solUsdcMarket;
-		const vaultBaseTokenAccount = getAssociatedTokenAddressSync(
-			solUsdcMarket.solMint,
-			vaultKey,
-			true
-		);
 		const vaultQuoteTokenAccount = getAssociatedTokenAddressSync(
 			solUsdcMarket.usdcMint,
 			vaultKey,
 			true
 		);
-		const marketBaseTokenAccount = this.phoenixClient.getBaseVaultKey(
-			solUsdcMarket.market.toString()
-		);
-		const marketQuoteTokenAccount = this.phoenixClient.getQuoteVaultKey(
-			solUsdcMarket.market.toString()
-		);
 		const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
-		const marketRegistry = getMarketRegistryAddressSync();
 		const investorQuoteTokenAccount = getAssociatedTokenAddressSync(
 			solUsdcMarket.usdcMint,
 			this.publicKey
@@ -921,7 +902,8 @@ export class PhoenixVaultsClient {
 			);
 		}
 
-		const usdcAmount = new BN(usdc).mul(QUOTE_PRECISION);
+		const usdcAmount = new BN(usdc * QUOTE_PRECISION.toNumber());
+		console.log('deposit BN:', usdcAmount.toNumber());
 		ixs.push(
 			await this.program.methods
 				.investorDeposit(usdcAmount)
@@ -929,30 +911,22 @@ export class PhoenixVaultsClient {
 					vault: vaultKey,
 					investor: investorKey,
 					authority: this.publicKey,
-					marketRegistry,
+					marketRegistry: getMarketRegistryAddressSync(),
 					investorQuoteTokenAccount,
-					phoenix: PHOENIX_PROGRAM_ID,
-					logAuthority: getLogAuthority(),
-					market: solUsdcMarket.market,
-					seat: getSeatAddress(solUsdcMarket.market, vaultKey),
-					baseMint: solUsdcMarket.solMint,
-					quoteMint: solUsdcMarket.usdcMint,
-					vaultBaseTokenAccount,
 					vaultQuoteTokenAccount,
-					marketBaseTokenAccount,
-					marketQuoteTokenAccount,
 				})
 				.remainingAccounts(this.marketAccountMetas)
 				.instruction()
 		);
-		const snack = await this.sendTx(
+		return this.sendTx(
 			ixs,
 			`Deposited to ${decodeName(vault.name)}`,
-			`Failed to deposit to ${decodeName(vault.name)}`
+			`Failed to deposit to ${decodeName(vault.name)}`,
+			async () => {
+				await this.fetchInvestorEquity(vaultKey);
+				await this.fetchFundOverview(vaultKey);
+			}
 		);
-		await this.fetchInvestorEquity(vaultKey);
-		await this.fetchFundOverview(vaultKey);
-		return snack;
 	}
 
 	public async requestWithdraw(
@@ -961,7 +935,6 @@ export class PhoenixVaultsClient {
 	): Promise<SnackInfo> {
 		const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
 		const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
-		const marketRegistry = getMarketRegistryAddressSync();
 		const vault = this.vault(vaultKey)?.data;
 		if (!vault) {
 			return {
@@ -976,21 +949,53 @@ export class PhoenixVaultsClient {
 				vault: vaultKey,
 				investor: investorKey,
 				authority: this.publicKey,
-				marketRegistry,
+				marketRegistry: getMarketRegistryAddressSync(),
 				vaultUsdcTokenAccount,
 			})
 			.remainingAccounts(this.marketAccountMetas)
 			.instruction();
-		const snack = await this.sendTx(
+		return this.sendTx(
 			[ix],
 			`Requested withdrawal of $${usdc} from ${decodeName(vault.name)}`,
-			`Failed to request withdrawal of $${usdc} from ${decodeName(vault.name)}`
+			`Failed to request withdrawal of $${usdc} from ${decodeName(vault.name)}`,
+			async () => {
+				await this.fetchInvestorEquity(vaultKey);
+				await this.fetchFundOverviews();
+				await this.createWithdrawTimer(vaultKey);
+			}
 		);
-		await this.fetchInvestorEquity(vaultKey);
-		await this.fetchFundOverviews();
-		// cache timer so frontend can track withdraw request
-		await this.createWithdrawTimer(vaultKey);
-		return snack;
+	}
+
+	public async cancelWithdrawRequest(vaultKey: PublicKey): Promise<SnackInfo> {
+		const vault = this.vault(vaultKey)?.data;
+		if (!vault) {
+			return {
+				variant: 'error',
+				message: `Vault ${vaultKey.toString()} not found`,
+			};
+		}
+
+		const ix = await this.program.methods
+			.cancelWithdrawRequest()
+			.accounts({
+				vault: vaultKey,
+				investor: getInvestorAddressSync(vaultKey, this.publicKey),
+				marketRegistry: getMarketRegistryAddressSync(),
+				authority: this.publicKey,
+				vaultUsdcTokenAccount: vault.usdcTokenAccount,
+			})
+			.remainingAccounts(this.marketAccountMetas)
+			.instruction();
+		return this.sendTx(
+			[ix],
+			`Cancelled withdraw from ${decodeName(vault.name)}`,
+			`Failed to cancel withdraw from ${decodeName(vault.name)}`,
+			async () => {
+				this.removeWithdrawTimer(vaultKey);
+				await this.fetchInvestorEquity(vaultKey);
+				await this.fetchFundOverview(vaultKey);
+			}
+		);
 	}
 
 	public async withdraw(vaultKey: PublicKey): Promise<SnackInfo> {
@@ -1018,7 +1023,75 @@ export class PhoenixVaultsClient {
 			true
 		);
 
-		const ix = await this.program.methods
+		const ixs: TransactionInstruction[] = [];
+
+		// check if liquidation required
+		const investorAcct = this.investor(investorKey)?.data;
+		if (!investorAcct) {
+			throw new Error(`Investor ${investorKey.toString()} not found`);
+		}
+		const withdrawRequest =
+			investorAcct.lastWithdrawRequest.value.toNumber() /
+			QUOTE_PRECISION.toNumber();
+		const vaultUsdc = await getTokenBalance(this.conn, vaultQuoteTokenAccount);
+		if (vaultUsdc < withdrawRequest) {
+			// appoint investor as liquidator
+			const appointLiquidatorIx = await this.program.methods
+				.appointLiquidator()
+				.accounts({
+					vault: vaultKey,
+					investor: investorKey,
+					authority: this.publicKey,
+					marketRegistry,
+					vaultQuoteTokenAccount,
+				})
+				.remainingAccounts(this.marketAccountMetas)
+				.instruction();
+			ixs.push(appointLiquidatorIx);
+
+			let equityToLiquidate = withdrawRequest - vaultUsdc;
+			for (const state of marketsByEquity(
+				this.phoenixClient.marketStates,
+				vaultKey
+			)) {
+				const marketEquity = getTraderEquity(state, vaultKey);
+
+				const liquidateIx = await this.program.methods
+					.liquidateUsdcMarket()
+					.accounts({
+						vault: vaultKey,
+						investor: investorKey,
+						authority: this.publicKey,
+						marketRegistry,
+						investorUsdcTokenAccount: investorQuoteTokenAccount,
+						phoenix: PHOENIX_PROGRAM_ID,
+						logAuthority: getLogAuthority(),
+						market: state.address,
+						seat: getSeatAddress(this.solUsdcMarket.market, vaultKey),
+						baseMint: state.data.header.baseParams.mintKey,
+						usdcMint: this.solUsdcMarket.usdcMint,
+						vaultBaseTokenAccount,
+						vaultUsdcTokenAccount: vaultQuoteTokenAccount,
+						marketBaseTokenAccount: this.phoenixClient.getBaseVaultKey(
+							state.address.toString()
+						),
+						marketUsdcTokenAccount: this.phoenixClient.getQuoteVaultKey(
+							state.address.toString()
+						),
+						tokenProgram: TOKEN_PROGRAM_ID,
+					})
+					.remainingAccounts(this.marketAccountMetas)
+					.instruction();
+				ixs.push(liquidateIx);
+
+				equityToLiquidate -= marketEquity;
+				if (equityToLiquidate <= 0) {
+					break;
+				}
+			}
+		}
+
+		const withdrawIx = await this.program.methods
 			.investorWithdraw()
 			.accounts({
 				vault: vaultKey,
@@ -1044,15 +1117,18 @@ export class PhoenixVaultsClient {
 			})
 			.remainingAccounts(this.marketAccountMetas)
 			.instruction();
-		const snack = await this.sendTx(
-			[ix],
+		ixs.push(withdrawIx);
+
+		return await this.sendTx(
+			ixs,
 			`Withdrew from ${decodeName(vault.name)}`,
-			`Failed to withdraw from ${decodeName(vault.name)}`
+			`Failed to withdraw from ${decodeName(vault.name)}`,
+			async () => {
+				this.removeWithdrawTimer(vaultKey);
+				await this.fetchInvestorEquity(vaultKey);
+				await this.fetchFundOverview(vaultKey);
+			}
 		);
-		this.removeWithdrawTimer(vaultKey);
-		await this.fetchInvestorEquity(vaultKey);
-		await this.fetchFundOverview(vaultKey);
-		return snack;
 	}
 
 	public async createVault(params: CreateVaultConfig): Promise<{
@@ -1155,22 +1231,16 @@ export class PhoenixVaultsClient {
 		const snack = await this.sendTx(
 			ixs,
 			`Created vault: ${params.name}`,
-			`Failed to create vault: ${params.name}`
-		);
-		if (snack.variant === 'success') {
-			const vault = await this.fetchVault(vaultKey);
-			if (!vault) {
-				return {
-					vault: vaultKey,
-					snack: {
-						variant: 'error',
-						message: `Vault ${vaultKey.toString()} not found`,
-					},
-				};
+			`Failed to create vault: ${params.name}`,
+			async (): Promise<void> => {
+				const vault = await this.fetchVault(vaultKey);
+				if (!vault) {
+					throw new Error(`Vault ${vaultKey.toString()} not found`);
+				}
+				await this.fetchInvestorEquity(vaultKey);
+				await this.fetchFundOverview(vaultKey);
 			}
-			await this.fetchInvestorEquity(vaultKey);
-			await this.fetchFundOverview(vaultKey);
-		}
+		);
 		return {
 			vault: vaultKey,
 			snack,

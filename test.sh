@@ -3,6 +3,7 @@
 detach=false
 no_test=false
 no_build=false
+dev=false
 
 usage() {
   if [[ -n $1 ]]; then
@@ -20,6 +21,7 @@ OPTIONS:
   --detach             - Once bootstrap and tests are complete, keep the validator running
   --no-test            - Skip running tests and only bootstrap the validator
   --no-build           - Skip building the rust and typescript code
+  --dev                - Symlink to local dependencies
 
 EOF
   exit 1
@@ -36,6 +38,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --no-build ]]; then
       no_build=true
+      shift 1
+    elif [[ $1 = --dev ]]; then
+      dev=true
       shift 1
     elif [[ $1 = -h ]]; then
       usage "$@"
@@ -67,7 +72,12 @@ bkg() { "$@" >/dev/null & }
 
 if [[ $no_build == false ]]; then
   chmod +x ./build.sh
-  ./build.sh
+
+  if [[ $dev == true ]]; then
+    ./build.sh --dev
+  else
+    ./build.sh
+  fi
 fi
 
 # Killing local validator if currently running
