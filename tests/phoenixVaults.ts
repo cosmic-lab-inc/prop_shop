@@ -52,6 +52,7 @@ import {
   getSeatManagerAddress,
   Side,
 } from '@ellipsis-labs/phoenix-sdk';
+import {TEST_PHOENIX_INVESTOR} from "@cosmic-lab/prop-shop-sdk";
 
 describe('phoenixVaults', () => {
   const opts: ConfirmOptions = {
@@ -93,10 +94,11 @@ describe('phoenixVaults', () => {
   const vaultKey = getVaultAddressSync(encodeName(name));
   const vaultUsdcAta = getAssociatedTokenAddressSync(usdcMint, vaultKey, true);
   const vaultSolAta = getAssociatedTokenAddressSync(solMint, vaultKey, true);
-  const investor = getInvestorAddressSync(vaultKey, provider.publicKey);
+  const investorAuth = TEST_PHOENIX_INVESTOR;
+  const investor = getInvestorAddressSync(vaultKey, investorAuth.publicKey);
   const investorUsdcAta = getAssociatedTokenAddressSync(
     usdcMint,
-    provider.publicKey
+    investorAuth.publicKey
   );
 
   const marketKeys: PublicKey[] = LOCALNET_MARKET_CONFIG[
@@ -117,7 +119,21 @@ describe('phoenixVaults', () => {
       false
     );
 
-    await conn.requestAirdrop(maker.publicKey, LAMPORTS_PER_SOL * 10);
+    console.log('provider:', provider.publicKey.toString());
+
+    const makerAirdropSig = await conn.requestAirdrop(maker.publicKey, LAMPORTS_PER_SOL * 10);
+    const makerAirdropConfirm = (await conn.confirmTransaction(makerAirdropSig)).value;
+    if (makerAirdropConfirm.err) {
+      throw new Error(`maker airdrop confirm: ${makerAirdropConfirm.err}`);
+    }
+    const investorAirdropSig = await conn.requestAirdrop(investorAuth.publicKey, LAMPORTS_PER_SOL * 10);
+    const investorAirdropConfirm = (await conn.confirmTransaction(investorAirdropSig)).value;
+    if (investorAirdropConfirm.err) {
+      throw new Error(`investor airdrop confirm: ${investorAirdropConfirm.err}`);
+    }
+
+    const investorSol = await conn.getBalance(investorAuth.publicKey);
+    assert(investorSol > 0);
   });
 
   it('Initialize Market Registry', async () => {
@@ -227,21 +243,25 @@ describe('phoenixVaults', () => {
   });
 
   it('Initialize Investor', async () => {
-    const accounts = {
-      vault: vaultKey,
-      investor,
-      authority: provider.publicKey,
-    };
-    await program.methods.initializeInvestor().accounts(accounts).rpc();
+    const ix = await program.methods
+      .initializeInvestor()
+      .accounts({
+        vault: vaultKey,
+        investor,
+        authority: investorAuth.publicKey,
+        payer: investorAuth.publicKey
+      })
+      .instruction();
+    await sendAndConfirm(conn, investorAuth, [ix]);
     const acct = await program.account.investor.fetch(investor);
     assert(!!acct);
   });
 
   it('Deposit', async () => {
     const createAtaIx = createAssociatedTokenAccountInstruction(
-      provider.publicKey,
+      investorAuth.publicKey,
       investorUsdcAta,
-      provider.publicKey,
+      investorAuth.publicKey,
       usdcMint
     );
     const mintToIx = createMintToInstruction(
@@ -250,7 +270,7 @@ describe('phoenixVaults', () => {
       mintAuth.publicKey,
       usdcAmount.toNumber()
     );
-    await sendAndConfirm(conn, payer, [createAtaIx, mintToIx], [mintAuth]);
+    await sendAndConfirm(conn, investorAuth, [createAtaIx, mintToIx], [mintAuth]);
 
     const markets: AccountMeta[] = marketKeys.map((pubkey) => {
       return {
@@ -264,7 +284,7 @@ describe('phoenixVaults', () => {
       .accounts({
         vault: vaultKey,
         investor,
-        authority: provider.publicKey,
+        authority: investorAuth.publicKey,
         marketRegistry,
         investorQuoteTokenAccount: investorUsdcAta,
         vaultQuoteTokenAccount: vaultUsdcAta,
@@ -272,7 +292,7 @@ describe('phoenixVaults', () => {
       .remainingAccounts(markets)
       .instruction();
     try {
-      await sendAndConfirm(conn, payer, [ix]);
+      await sendAndConfirm(conn, investorAuth, [ix]);
     } catch (e: any) {
       throw new Error(e);
     }
@@ -787,14 +807,14 @@ describe('phoenixVaults', () => {
         .accounts({
           vault: vaultKey,
           investor,
-          authority: provider.publicKey,
+          authority: investorAuth.publicKey,
           marketRegistry,
           vaultUsdcTokenAccount: vaultUsdcAta,
         })
         .remainingAccounts(markets)
         .instruction();
 
-      await sendAndConfirm(conn, payer, [ix]);
+      await sendAndConfirm(conn, investorAuth, [ix]);
     } catch (e: any) {
       throw new Error(e);
     }
@@ -941,7 +961,7 @@ describe('phoenixVaults', () => {
   // 		.accounts({
   // 			vault: vaultKey,
   // 			investor,
-  // 			authority: provider.publicKey,
+  // 			authority: investorAuth.publicKey,
   // 			marketRegistry,
   // 			investorQuoteTokenAccount: investorUsdcAta,
   // 			phoenix: PHOENIX_PROGRAM_ID,
@@ -963,7 +983,7 @@ describe('phoenixVaults', () => {
   // 		.remainingAccounts(markets)
   // 		.instruction();
   // 	try {
-  // 		await sendAndConfirm(conn, payer, [ix]);
+  // 		await sendAndConfirm(conn, investorAuth, [ix]);
   // 	} catch (e: any) {
   // 		throw new Error(e);
   // 	}
@@ -983,13 +1003,13 @@ describe('phoenixVaults', () => {
         .accounts({
           vault: vaultKey,
           investor,
-          authority: provider.publicKey,
+          authority: investorAuth.publicKey,
           marketRegistry,
           vaultQuoteTokenAccount: vaultUsdcAta,
         })
         .remainingAccounts(markets)
         .instruction();
-      await sendAndConfirm(conn, payer, [ix]);
+      await sendAndConfirm(conn, investorAuth, [ix]);
     } catch (e: any) {
       throw new Error(e);
     }
@@ -1058,7 +1078,7 @@ describe('phoenixVaults', () => {
         .accounts({
           vault: vaultKey,
           investor,
-          authority: provider.publicKey,
+          authority: investorAuth.publicKey,
           marketRegistry,
           investorUsdcTokenAccount: investorUsdcAta,
           phoenix: PHOENIX_PROGRAM_ID,
@@ -1075,7 +1095,7 @@ describe('phoenixVaults', () => {
         })
         .remainingAccounts(markets)
         .instruction();
-      await sendAndConfirm(conn, payer, [ix]);
+      await sendAndConfirm(conn, investorAuth, [ix]);
     } catch (e: any) {
       throw new Error(e);
     }

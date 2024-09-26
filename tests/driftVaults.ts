@@ -47,10 +47,10 @@ import {assert} from "chai";
 import {CompetitionsClient, getCompetitionAddressSync, getCompetitorAddressSync,} from "@drift-labs/competitions-sdk";
 import {
   DRIFT_VAULTS_PROGRAM_ID,
+  TEST_DRIFT_INVESTOR,
   TEST_MANAGER,
   TEST_USDC_MINT,
   TEST_USDC_MINT_AUTHORITY,
-  TEST_VAULT_DEPOSITOR,
 } from "@cosmic-lab/prop-shop-sdk";
 
 describe("driftVaults", () => {
@@ -81,7 +81,7 @@ describe("driftVaults", () => {
   let fillerClient: VaultClient;
   let fillerUser: User;
 
-  const vd = TEST_VAULT_DEPOSITOR;
+  const vd = TEST_DRIFT_INVESTOR;
   let vdClient: VaultClient;
   let vdUser: User;
   let vdUserUSDCAccount: PublicKey;
