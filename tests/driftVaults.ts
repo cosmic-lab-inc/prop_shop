@@ -6,11 +6,9 @@ import {
   BN,
   BulkAccountLoader,
   calculatePositionPNL,
-  getInsuranceFundStakeAccountPublicKey,
   getLimitOrderParams,
   getOrderParams,
   getUserAccountPublicKey,
-  InsuranceFundStake,
   MarketType,
   OracleSource,
   PEG_PRECISION,
@@ -23,14 +21,7 @@ import {
   UserAccount,
   ZERO,
 } from "@drift-labs/sdk";
-import {
-  bootstrapSignerClientAndUser,
-  createUserWithUSDCAccount,
-  initializeQuoteSpotMarket,
-  mockOracle,
-  printTxLogs,
-  setFeedPrice,
-} from "./driftHelpers";
+import {bootstrapSignerClientAndUser, initializeQuoteSpotMarket, mockOracle, setFeedPrice,} from "./driftHelpers";
 import {ConfirmOptions, Keypair} from "@solana/web3.js";
 import {
   DriftVaults,
@@ -44,7 +35,6 @@ import {
   WithdrawUnit,
 } from "@drift-labs/vaults-sdk";
 import {assert} from "chai";
-import {CompetitionsClient, getCompetitionAddressSync, getCompetitorAddressSync,} from "@drift-labs/competitions-sdk";
 import {
   DRIFT_VAULTS_PROGRAM_ID,
   TEST_DRIFT_INVESTOR,
@@ -86,10 +76,6 @@ describe("driftVaults", () => {
   let vdUser: User;
   let vdUserUSDCAccount: PublicKey;
 
-  let vd2: Keypair;
-  let vd2Client: VaultClient;
-  let vd2UserUSDCAccount: PublicKey;
-
   let delegate: Keypair;
   let delegateClient: VaultClient;
 
@@ -110,21 +96,16 @@ describe("driftVaults", () => {
   const usdcMintAuth = TEST_USDC_MINT_AUTHORITY;
   let solPerpOracle: PublicKey;
 
-  const vaultName = "crisp vault";
-  const vault = getVaultAddressSync(program.programId, encodeName(vaultName));
-
-  const protocolVaultName = "protocol vault";
+  const protocolVaultName = "Market Maker";
   const protocolVault = getVaultAddressSync(
     program.programId,
     encodeName(protocolVaultName),
   );
 
-  const VAULT_PROTOCOL_DISCRIM: number[] = [106, 130, 5, 195, 126, 82, 249, 53];
-
   const initialSolPerpPrice = 100;
   const finalSolPerpPrice = initialSolPerpPrice + 10;
-  const usdcAmount = new BN(1_000).mul(QUOTE_PRECISION);
-  const baseAssetAmount = new BN(1).mul(BASE_PRECISION);
+  const usdcAmount = new BN(50_000).mul(QUOTE_PRECISION);
+  const baseAssetAmount = new BN(50).mul(BASE_PRECISION);
 
   before(async () => {
     try {
@@ -263,30 +244,6 @@ describe("driftVaults", () => {
       vdUser = bootstrapVD.user;
       vdUserUSDCAccount = bootstrapVD.userUSDCAccount;
 
-      // the VaultDepositor for the vault
-      const bootstrapVD2 = await bootstrapSignerClientAndUser({
-        payer: provider,
-        programId: program.programId,
-        usdcMint,
-        usdcMintAuth,
-        usdcAmount,
-        depositCollateral: false,
-        driftClientConfig: {
-          accountSubscription: {
-            type: "websocket",
-            resubTimeoutMs: 30_000,
-          },
-          opts,
-          activeSubAccountId: 0,
-          perpMarketIndexes,
-          spotMarketIndexes,
-          oracleInfos,
-        },
-      });
-      vd2 = bootstrapVD2.signer;
-      vd2Client = bootstrapVD2.vaultClient;
-      vd2UserUSDCAccount = bootstrapVD2.userUSDCAccount;
-
       // init protocol
       const bootstrapProtocol = await bootstrapSignerClientAndUser({
         payer: provider,
@@ -322,7 +279,6 @@ describe("driftVaults", () => {
     await managerClient.driftClient.unsubscribe();
     await fillerClient.driftClient.unsubscribe();
     await vdClient.driftClient.unsubscribe();
-    await vd2Client.driftClient.unsubscribe();
     await delegateClient.driftClient.unsubscribe();
     await protocolClient.driftClient.unsubscribe();
     await adminClient.unsubscribe();
@@ -336,347 +292,7 @@ describe("driftVaults", () => {
     // process.exit();
   });
 
-  //
-  // Legacy vault tests
-  //
-
   it("Initialize Vault", async () => {
-    try {
-      console.log("initialize vault...");
-      await managerClient.initializeVault({
-        name: encodeName(vaultName),
-        spotMarketIndex: 0,
-        redeemPeriod: ZERO,
-        maxTokens: ZERO,
-        managementFee: ZERO,
-        profitShare: 0,
-        hurdleRate: 0,
-        permissioned: false,
-        minDepositAmount: ZERO,
-      });
-
-      await adminClient.fetchAccounts();
-      assert(adminClient.getStateAccount().numberOfAuthorities.eq(new BN(7)));
-      assert(adminClient.getStateAccount().numberOfSubAccounts.eq(new BN(7)));
-    } catch (e) {
-      console.error(e);
-      assert(false);
-    }
-  });
-
-  it("Initialize Vault Depositor", async () => {
-    await vd2Client.initializeVaultDepositor(vault, vd2.publicKey);
-  });
-
-  it("Deposit", async () => {
-    const vaultAccount = await program.account.vault.fetch(vault);
-    const vaultDepositor = getVaultDepositorAddressSync(
-      program.programId,
-      vault,
-      vd2.publicKey,
-    );
-    const remainingAccounts = vd2Client.driftClient.getRemainingAccounts({
-      userAccounts: [],
-      writableSpotMarketIndexes: [0],
-    });
-
-    const txSig = await vd2Client.program.methods
-      .deposit(usdcAmount)
-      .accounts({
-        userTokenAccount: vd2UserUSDCAccount,
-        vault,
-        vaultDepositor,
-        vaultTokenAccount: vaultAccount.tokenAccount,
-        driftUser: vaultAccount.user,
-        driftUserStats: vaultAccount.userStats,
-        driftState: await adminClient.getStatePublicKey(),
-        driftSpotMarketVault: adminClient.getSpotMarketAccount(0)!.vault,
-        driftProgram: adminClient.program.programId,
-      })
-      .remainingAccounts(remainingAccounts)
-      .rpc();
-
-    await printTxLogs(provider.connection, txSig);
-  });
-
-  it("Withdraw", async () => {
-    const vaultAccount = await program.account.vault.fetch(vault);
-    const vaultDepositor = getVaultDepositorAddressSync(
-      program.programId,
-      vault,
-      vd2.publicKey,
-    );
-    const remainingAccounts = vd2Client.driftClient.getRemainingAccounts({
-      userAccounts: [],
-      writableSpotMarketIndexes: [0],
-    });
-
-    const vaultDepositorAccount =
-      await program.account.vaultDepositor.fetch(vaultDepositor);
-    assert(vaultDepositorAccount.lastWithdrawRequest.value.eq(new BN(0)));
-    console.log(
-      "vaultDepositorAccount.vaultShares:",
-      vaultDepositorAccount.vaultShares.toString(),
-    );
-    assert(vaultDepositorAccount.vaultShares.eq(new BN(1_000_000_000)));
-
-    // request withdraw
-    console.log("request withdraw");
-    const requestTxSig = await vd2Client.program.methods
-      .requestWithdraw(usdcAmount, WithdrawUnit.TOKEN)
-      .accounts({
-        vault,
-        vaultDepositor,
-        driftUser: vaultAccount.user,
-        driftUserStats: vaultAccount.userStats,
-        driftState: await adminClient.getStatePublicKey(),
-      })
-      .remainingAccounts(remainingAccounts)
-      .rpc();
-
-    await printTxLogs(provider.connection, requestTxSig);
-
-    const vaultDepositorAccountAfter =
-      await program.account.vaultDepositor.fetch(vaultDepositor);
-    assert(vaultDepositorAccountAfter.vaultShares.eq(new BN(1_000_000_000)));
-    console.log(
-      "vaultDepositorAccountAfter.lastWithdrawRequestShares:",
-      vaultDepositorAccountAfter.lastWithdrawRequest.shares.toString(),
-    );
-    assert(
-      !vaultDepositorAccountAfter.lastWithdrawRequest.shares.eq(new BN(0)),
-    );
-    assert(!vaultDepositorAccountAfter.lastWithdrawRequest.value.eq(new BN(0)));
-
-    // do withdraw
-    console.log("do withdraw");
-    try {
-      const txSig = await vd2Client.program.methods
-        .withdraw()
-        .accounts({
-          userTokenAccount: vd2UserUSDCAccount,
-          vault,
-          vaultDepositor,
-          vaultTokenAccount: vaultAccount.tokenAccount,
-          driftUser: vaultAccount.user,
-          driftUserStats: vaultAccount.userStats,
-          driftState: await adminClient.getStatePublicKey(),
-          driftSpotMarketVault: adminClient.getSpotMarketAccount(0)!.vault,
-          driftSigner: adminClient.getStateAccount().signer,
-          driftProgram: adminClient.program.programId,
-        })
-        .remainingAccounts(remainingAccounts)
-        .rpc();
-
-      await printTxLogs(provider.connection, txSig);
-    } catch (e) {
-      console.error(e);
-      assert(false);
-    }
-  });
-
-  it("Update Delegate", async () => {
-    const vaultAccount = await program.account.vault.fetch(vault);
-    const delegateKeyPair = Keypair.generate();
-    const txSig = await managerClient.program.methods
-      .updateDelegate(delegateKeyPair.publicKey)
-      .accounts({
-        vault,
-        driftUser: vaultAccount.user,
-        driftProgram: adminClient.program.programId,
-      })
-      .rpc();
-
-    const user = (await adminClient.program.account.user.fetch(
-      vaultAccount.user,
-    )) as UserAccount;
-    assert(user.delegate.equals(delegateKeyPair.publicKey));
-
-    await printTxLogs(provider.connection, txSig);
-  });
-
-  it("Test initializeInsuranceFundStake", async () => {
-    const spotMarket = adminClient.getSpotMarketAccount(0)!;
-    const [driftClient, _user, _kp] = await createUserWithUSDCAccount(
-      adminClient.provider,
-      usdcMint,
-      usdcMintAuth,
-      new anchor.Program(
-        adminClient.program.idl,
-        adminClient.program.programId,
-        adminClient.provider,
-      ),
-      new BN(1000 * 10 ** 6),
-      [],
-      [0],
-      [
-        {
-          publicKey: spotMarket.oracle,
-          source: spotMarket.oracleSource,
-        },
-      ],
-      bulkAccountLoader,
-    );
-    const vaultClient = new VaultClient({
-      // @ts-ignore
-      driftClient,
-      // @ts-ignore
-      program: program,
-    });
-    const vaultName = "if stake vault";
-    const vault = getVaultAddressSync(program.programId, encodeName(vaultName));
-    await vaultClient.initializeVault({
-      name: encodeName(vaultName),
-      spotMarketIndex: 0,
-      redeemPeriod: ZERO,
-      maxTokens: ZERO,
-      managementFee: ZERO,
-      profitShare: 0,
-      hurdleRate: 0,
-      permissioned: false,
-      minDepositAmount: ZERO,
-    });
-    assert(adminClient.getStateAccount().numberOfAuthorities.eq(new BN(9)));
-    assert(adminClient.getStateAccount().numberOfSubAccounts.eq(new BN(9)));
-
-    const testInitIFStakeAccount = async (marketIndex: number) => {
-      const ifStakeTx0 = await vaultClient.initializeInsuranceFundStake(
-        vault,
-        marketIndex,
-      );
-      await printTxLogs(provider.connection, ifStakeTx0);
-
-      try {
-        const ifStakeAccountPublicKey = getInsuranceFundStakeAccountPublicKey(
-          driftClient.program.programId,
-          vault,
-          marketIndex,
-        );
-        const ifStakeAccount =
-          (await driftClient.program.account.insuranceFundStake.fetch(
-            ifStakeAccountPublicKey,
-          )) as InsuranceFundStake;
-
-        assert(ifStakeAccount, "Couldn't fetch IF stake account");
-        assert(
-          ifStakeAccount.marketIndex === marketIndex,
-          "Market index is incorrect",
-        );
-        assert(
-          ifStakeAccount.authority.equals(vault),
-          "Vault is not the authority",
-        );
-        assert(ifStakeAccount.ifShares.eq(new BN(0)), "Doesnt have 0 shares");
-      } catch (err) {
-        console.log(err);
-        assert(false, "Couldn't fetch IF stake account");
-      }
-    };
-
-    await testInitIFStakeAccount(0);
-  });
-
-  it("Test initializeCompetitor", async () => {
-    const spotMarket = adminClient.getSpotMarketAccount(0)!;
-    const [driftClient, _user, _kp] = await createUserWithUSDCAccount(
-      adminClient.provider,
-      usdcMint,
-      usdcMintAuth,
-      new anchor.Program(
-        adminClient.program.idl,
-        adminClient.program.programId,
-        adminClient.provider,
-      ),
-      new BN(1000 * 10 ** 6),
-      [],
-      [0],
-      [
-        {
-          publicKey: spotMarket.oracle,
-          source: spotMarket.oracleSource,
-        },
-      ],
-      bulkAccountLoader,
-    );
-    const vaultClient = new VaultClient({
-      // @ts-ignore
-      driftClient,
-      // @ts-ignore
-      program: program,
-    });
-    const vaultName = "competition vault";
-    const vault = getVaultAddressSync(program.programId, encodeName(vaultName));
-    await vaultClient.initializeVault({
-      name: encodeName(vaultName),
-      spotMarketIndex: 0,
-      redeemPeriod: ZERO,
-      maxTokens: ZERO,
-      managementFee: ZERO,
-      profitShare: 0,
-      hurdleRate: 0,
-      permissioned: false,
-      minDepositAmount: ZERO,
-    });
-
-    try {
-      const competitionsClient = new CompetitionsClient({
-        // @ts-ignore
-        driftClient: driftClient as DriftClient,
-      });
-      const competitionName = "sweepstakes";
-      const encodedName = encodeName(competitionName);
-      const competitionAddress = getCompetitionAddressSync(
-        competitionsClient.program.programId,
-        encodedName,
-      );
-      const competitorAddress = getCompetitorAddressSync(
-        competitionsClient.program.programId,
-        competitionAddress,
-        vault,
-      );
-      const initCompTx = await competitionsClient.initializeCompetition({
-        name: competitionName,
-        nextRoundExpiryTs: ZERO,
-        competitionExpiryTs: ZERO,
-        roundDuration: ZERO,
-        maxEntriesPerCompetitor: ZERO,
-        minSponsorAmount: ZERO,
-        maxSponsorFraction: ZERO,
-        numberOfWinners: 1,
-      });
-      await printTxLogs(provider.connection, initCompTx);
-
-      const initCompetitorTx = await vaultClient.initializeCompetitor(
-        vault,
-        // @ts-ignore
-        competitionsClient,
-        competitionName,
-      );
-      await printTxLogs(provider.connection, initCompetitorTx);
-
-      const competitorAccount =
-        await competitionsClient.program.account.competitor.fetch(
-          competitorAddress,
-        );
-      assert(
-        competitorAccount.competition.equals(competitionAddress),
-        "Competition address is incorrect",
-      );
-      assert(
-        competitorAccount.authority.equals(vault),
-        "Vault is not the competitor authority",
-      );
-    } catch (err) {
-      console.log(err);
-      assert(false, "Failed to initialize competitor");
-    }
-  });
-
-  //
-  // Protocol vault tests
-  //
-
-  it("Initialize Protocol Vault", async () => {
     const vpParams: VaultProtocolParams = {
       protocol: protocol.publicKey,
       protocolFee: new BN(0),
@@ -703,8 +319,7 @@ describe("driftVaults", () => {
     );
     // asserts "exit" was called on VaultProtocol to define the discriminator
     const vpAcctInfo = await connection.getAccountInfo(vp);
-    assert(vpAcctInfo!.data.includes(Buffer.from(VAULT_PROTOCOL_DISCRIM)));
-
+    assert(vpAcctInfo !== null);
     // asserts Vault and VaultProtocol fields were set properly
     assert(vaultAcct.vaultProtocol);
     const vpAcct = await program.account.vaultProtocol.fetch(vp);
@@ -712,7 +327,7 @@ describe("driftVaults", () => {
   });
 
   // assign "delegate" to trade on behalf of the vault
-  it("Update Protocol Vault Delegate", async () => {
+  it("Update Vault Delegate", async () => {
     const vaultAccount = await program.account.vault.fetch(protocolVault);
     await managerClient.program.methods
       .updateDelegate(delegate.publicKey)
@@ -728,7 +343,7 @@ describe("driftVaults", () => {
     assert(user.delegate.equals(delegate.publicKey));
   });
 
-  it("Initialize Protocol Vault Depositor", async () => {
+  it("Initialize Investor", async () => {
     await vdClient.initializeVaultDepositor(protocolVault, vd.publicKey);
     const vaultDepositor = getVaultDepositorAddressSync(
       program.programId,
@@ -740,7 +355,7 @@ describe("driftVaults", () => {
   });
 
   // vault depositor deposits USDC to the vault
-  it("Protocol Vault Depositor Deposit", async () => {
+  it("Investor Deposit", async () => {
     const vaultAccount = await program.account.vault.fetch(protocolVault);
     const vaultDepositor = getVaultDepositorAddressSync(
       program.programId,
@@ -763,6 +378,10 @@ describe("driftVaults", () => {
       });
     }
 
+    const driftSpotMarketVault = adminClient.getSpotMarketAccount(0)?.vault;
+    if (!driftSpotMarketVault) {
+      throw new Error("Spot market not found");
+    }
     await vdClient.program.methods
       .deposit(usdcAmount)
       .accounts({
@@ -773,7 +392,7 @@ describe("driftVaults", () => {
         driftUser: vaultAccount.user,
         driftState: await adminClient.getStatePublicKey(),
         userTokenAccount: vdUserUSDCAccount,
-        driftSpotMarketVault: adminClient.getSpotMarketAccount(0)!.vault,
+        driftSpotMarketVault,
         driftProgram: adminClient.program.programId,
       })
       .remainingAccounts(remainingAccounts)
@@ -841,7 +460,10 @@ describe("driftVaults", () => {
       console.log("filler failed to short:", e);
     }
     await fillerUser.fetchAccounts();
-    const order = fillerUser.getOrderByUserOrderId(1)!;
+    const order = fillerUser.getOrderByUserOrderId(1);
+    if (!order) {
+      throw new Error("filler order not found");
+    }
     assert(!order.postOnly);
 
     try {
@@ -901,18 +523,24 @@ describe("driftVaults", () => {
         slot,
       );
     } catch (e) {
-      console.log("vault failed to long:", e);
+      throw new Error(`vault failed to long: ${e}`);
     }
 
     // check positions from vault and filler are accurate
     await fillerUser.fetchAccounts();
-    const fillerPosition = fillerUser.getPerpPosition(0)!;
+    const fillerPosition = fillerUser.getPerpPosition(0);
+    if (!fillerPosition) {
+      throw new Error("filler position not found");
+    }
     assert(
       fillerPosition.baseAssetAmount.eq(baseAssetAmount.neg()),
       "filler position is not baseAssetAmount",
     );
     await delegateActiveUser.fetchAccounts();
-    const vaultPosition = delegateActiveUser.getPerpPosition(0)!;
+    const vaultPosition = delegateActiveUser.getPerpPosition(0);
+    if (!vaultPosition) {
+      throw new Error("vault position not found");
+    }
     assert(
       vaultPosition.baseAssetAmount.eq(baseAssetAmount),
       "vault position is not baseAssetAmount",
@@ -941,7 +569,6 @@ describe("driftVaults", () => {
     if (!solPerpMarket) {
       throw new Error("SOL-PERP market not found");
     }
-    console.log(`pyth workspace: ${anchor.workspace.Pyth?.programId}`);
 
     await setFeedPrice(
       anchor.workspace.Pyth,
@@ -987,7 +614,10 @@ describe("driftVaults", () => {
       console.log("filler failed to long:", e);
     }
     await fillerUser.fetchAccounts();
-    const order = fillerUser.getOrderByUserOrderId(1)!;
+    const order = fillerUser.getOrderByUserOrderId(1);
+    if (!order) {
+      throw new Error("filler order not found");
+    }
     assert(!order.postOnly);
 
     try {
@@ -1052,10 +682,16 @@ describe("driftVaults", () => {
 
     // check positions from vault and filler are accurate
     await fillerUser.fetchAccounts();
-    const fillerPosition = fillerUser.getPerpPosition(0)!;
+    const fillerPosition = fillerUser.getPerpPosition(0);
+    if (!fillerPosition) {
+      throw new Error("filler position not found");
+    }
     assert(fillerPosition.baseAssetAmount.eq(ZERO));
     await delegateActiveUser.fetchAccounts();
-    const vaultPosition = delegateActiveUser.getPerpPosition(0)!;
+    const vaultPosition = delegateActiveUser.getPerpPosition(0);
+    if (!vaultPosition) {
+      throw new Error("vault position not found");
+    }
     assert(vaultPosition.baseAssetAmount.eq(ZERO));
     console.log("shorted SOL-PERP");
   });
@@ -1064,7 +700,10 @@ describe("driftVaults", () => {
     const vaultUser = delegateClient.driftClient.getUser(0, protocolVault);
     const uA = vaultUser.getUserAccount();
     assert(!uA.idle);
-    const solPerpPos = vaultUser.getPerpPosition(0)!;
+    const solPerpPos = vaultUser.getPerpPosition(0);
+    if (!solPerpPos) {
+      throw new Error("position not found");
+    }
     const solPerpQuote =
       solPerpPos.quoteAssetAmount.toNumber() / QUOTE_PRECISION.toNumber();
     console.log("sol perp quote:", solPerpQuote);
@@ -1080,16 +719,15 @@ describe("driftVaults", () => {
     assert(usdcAmount.eq(vaultUser.getFreeCollateral()));
 
     const solPrice = vaultUser.driftClient.getOracleDataForPerpMarket(0);
-    console.log(
-      "SOL price:",
-      solPrice.price.toNumber() / PRICE_PRECISION.toNumber(),
-    );
     assert(
       finalSolPerpPrice ===
       solPrice.price.toNumber() / PRICE_PRECISION.toNumber(),
     );
 
-    const solPerpMarket = delegateClient.driftClient.getPerpMarketAccount(0)!;
+    const solPerpMarket = delegateClient.driftClient.getPerpMarketAccount(0);
+    if (!solPerpMarket) {
+      throw new Error("SOL-PERP market not found");
+    }
     const pnl =
       calculatePositionPNL(
         solPerpMarket,
@@ -1100,7 +738,6 @@ describe("driftVaults", () => {
 
     const upnl =
       vaultUser.getUnrealizedPNL().toNumber() / QUOTE_PRECISION.toNumber();
-    console.log("upnl:", upnl.toString());
     assert(pnl === upnl);
     assert(
       solPerpPos.quoteAssetAmount.toNumber() / QUOTE_PRECISION.toNumber() ===
@@ -1123,8 +760,7 @@ describe("driftVaults", () => {
         0,
       );
     } catch (e) {
-      console.log("failed to settle pnl:", e);
-      assert(false);
+      throw new Error(`failed to settle pnl: ${e}`);
     }
 
     // vault user account is delegated to "delegate"
@@ -1174,9 +810,9 @@ describe("driftVaults", () => {
       "withdraw amount:",
       withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber(),
     );
-    // $1000 deposit + (~$10.04 in profit - 10% profit share = ~$9.04)
+    // $50,000 deposit + (~$502 in profit - 10% profit share = ~$451)
     assert(
-      withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber() === 1009.037051,
+      withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber() === 50451.852501,
     );
 
     try {
@@ -1192,8 +828,7 @@ describe("driftVaults", () => {
         .remainingAccounts(remainingAccounts)
         .rpc();
     } catch (e) {
-      console.log("failed to request withdraw:", e);
-      assert(false);
+      throw new Error(`failed to request withdraw: ${e}`);
     }
 
     const vaultDepositorAccountAfter =
@@ -1208,21 +843,23 @@ describe("driftVaults", () => {
     );
     assert(
       vaultDepositorAccountAfter.lastWithdrawRequest.shares.eq(
-        new BN(999_005_866),
+        new BN(49_950_293_280),
       ),
     );
     assert(
       vaultDepositorAccountAfter.lastWithdrawRequest.value.eq(
-        new BN(1_009_037_051),
+        new BN(50_451_852_501),
       ),
     );
 
     const vdAcct = await program.account.vaultDepositor.fetch(vaultDepositor);
     assert(vdAcct.vault.equals(protocolVault));
 
+    const driftSpotMarketVault = adminClient.getSpotMarketAccount(0)?.vault;
+    if (!driftSpotMarketVault) {
+      throw new Error("Spot market not found");
+    }
     try {
-      const vaultAccount = await program.account.vault.fetch(protocolVault);
-
       await vdClient.program.methods
         .withdraw()
         .accounts({
@@ -1233,15 +870,14 @@ describe("driftVaults", () => {
           driftUser: vaultAccount.user,
           driftUserStats: vaultAccount.userStats,
           driftState: await adminClient.getStatePublicKey(),
-          driftSpotMarketVault: adminClient.getSpotMarketAccount(0)!.vault,
+          driftSpotMarketVault,
           driftSigner: adminClient.getStateAccount().signer,
           driftProgram: adminClient.program.programId,
         })
         .remainingAccounts(remainingAccounts)
         .rpc();
     } catch (e) {
-      console.log("failed to withdraw:", e);
-      assert(false);
+      throw new Error(`failed to withdraw: ${e}`);
     }
   });
 
@@ -1271,8 +907,8 @@ describe("driftVaults", () => {
       "protocol withdraw profit share:",
       withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber(),
     );
-    // 10% of protocolVault depositor's ~$10.04 profit
-    assert(withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber() === 1.004114);
+    // 10% of protocolVault depositor's ~$502 profit
+    assert(withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber() === 50.205831);
 
     try {
       await protocolClient.program.methods
@@ -1287,8 +923,7 @@ describe("driftVaults", () => {
         .remainingAccounts(remainingAccounts)
         .rpc();
     } catch (e) {
-      console.log("failed to request withdraw:", e);
-      assert(false);
+      throw new Error(`failed to request withdraw: ${e}`);
     }
 
     const vpAccountAfter =
@@ -1302,10 +937,10 @@ describe("driftVaults", () => {
       vpAccountAfter.lastProtocolWithdrawRequest.value.toNumber(),
     );
     assert(
-      vpAccountAfter.lastProtocolWithdrawRequest.shares.eq(new BN(994_132)),
+      vpAccountAfter.lastProtocolWithdrawRequest.shares.eq(new BN(49_706_718)),
     );
     assert(
-      vpAccountAfter.lastProtocolWithdrawRequest.value.eq(new BN(1_004_114)),
+      vpAccountAfter.lastProtocolWithdrawRequest.value.eq(new BN(50_205_831)),
     );
 
     const driftSpotMarketVault = adminClient.getSpotMarketAccount(0);

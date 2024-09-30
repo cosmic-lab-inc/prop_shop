@@ -43,7 +43,7 @@ import {
   Wallet,
 } from "@drift-labs/sdk";
 import {IDL, VaultClient} from "@drift-labs/vaults-sdk";
-import {sendTransactionWithResult, signatureLink} from "../packages/sdk";
+import {sendTransactionWithResult} from "../packages/sdk";
 import {InstructionReturn, keypairToAsyncSigner, walletToAsyncSigner,} from "@cosmic-lab/data-source";
 
 export async function mockOracle(
@@ -570,7 +570,6 @@ export const setFeedPrice = async (
         price: priceFeed
       })
       .rpc();
-    console.log('set feed price:', signatureLink(sig));
     const strategy = {
       signature: sig,
     } as TransactionConfirmationStrategy;
