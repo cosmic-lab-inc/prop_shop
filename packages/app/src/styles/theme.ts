@@ -79,7 +79,7 @@ export const theme: Theme = createTheme({
     h3: {
       fontSize: 34,
       letterSpacing: LETTER_SPACING,
-      lineHeight: LINE_HEIGHT,
+      lineHeight: '3rem',
       fontWeight: FONT_WEIGHT,
       textTransform: 'none',
       color: customTheme.dark,

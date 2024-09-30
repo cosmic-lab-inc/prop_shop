@@ -4,6 +4,7 @@ detach=false
 no_test=false
 no_build=false
 dev=false
+custom_test=false
 test=
 
 usage() {
@@ -23,7 +24,7 @@ OPTIONS:
   --no-test            - Skip running tests and only bootstrap the validator
   --no-build           - Skip building the rust and typescript code
   --dev                - Symlink to local dependencies
-  --test               - If provided, only test "phoenix" or "drift", otherwise run "anchor-tests"
+  --test               - If provided, run tests specified as a comma-separated list (e.g., "phoenix,drift,demo")
 
 EOF
   exit 1
@@ -45,8 +46,9 @@ while [[ -n $1 ]]; do
       dev=true
       shift 1
     elif [[ $1 = --test ]]; then
-      test="$2"
-      shift 1
+      custom_test=true
+      test=$2
+      shift 2
     elif [[ $1 = -h ]]; then
       usage "$@"
     else
@@ -105,15 +107,21 @@ if [[ $no_test == false ]]; then
   rpc_url=$(solana config get | grep "RPC URL" | cut -d " " -f 3)
   export ANCHOR_PROVIDER_URL=$rpc_url
 
-  # if test == "phoenix" run yarn test:phoenix
-  # if test == "drift" run yarn test:drift
-  # else run yarn anchor-tests
-  if [[ $test == "phoenix" ]]; then
-    yarn test:phoenix || kill_process
-  elif [[ $test == "drift" ]]; then
-    yarn test:drift || kill_process
-  else
+  if [[ $custom_test == false ]]; then
     yarn anchor-tests || kill_process
+  else
+    echo "Running test: $test"
+    if [[ $test == "phoenix" ]]; then
+      yarn test:phoenix || kill_process
+    elif [[ $test == "drift" ]]; then
+      yarn test:drift || kill_process
+    elif [[ $test == "demo" ]]; then
+      yarn test:drift || kill_process
+      yarn test:demo || kill_process
+    else
+      echo "Unknown test: $test"
+      kill_process
+    fi
   fi
 fi
 

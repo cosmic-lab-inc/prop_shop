@@ -87,7 +87,7 @@ describe("driftVaults", () => {
   const usdcMintAuth = TEST_USDC_MINT_AUTHORITY;
   let solPerpOracle: PublicKey;
 
-  const protocolVaultName = "Market Maker";
+  const protocolVaultName = "Top 50 Momentum";
   const protocolVault = getVaultAddressSync(
     program.programId,
     encodeName(protocolVaultName),
@@ -966,8 +966,9 @@ describe("driftVaults", () => {
   });
 
   it('Hoard of Investors', async () => {
-    console.log('generating hoard of investors...');
-    for (let i = 0; i < 50; i++) {
+    const hoardSize = 13;
+    console.log(`generating hoard of ${hoardSize} investors for Drift vault: ${protocolVaultName}`);
+    for (let i = 0; i < hoardSize; i++) {
       // the VaultDepositor for the protocol vault
       const bootstrapInvestor = await bootstrapSignerClientAndUser({
         payer: provider,

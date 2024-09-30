@@ -68,7 +68,7 @@ function Header() {
         height: '100%',
         display: 'flex',
         pt: 12,
-        pb: 12,
+        pb: 6,
         gap: 6,
         borderRadius: '10px',
         flexDirection: 'column',
@@ -157,7 +157,7 @@ const ButtonControls = styled('div')(({theme: _theme}) => ({
   gridTemplateColumns: 'auto 1fr',
   justifyContent: 'space-between',
   gap: 10,
-  marginTop: 10,
+  marginTop: 0,
 }));
 
 function PrevButton(props: ButtonProps) {

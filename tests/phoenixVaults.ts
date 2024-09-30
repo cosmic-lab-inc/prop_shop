@@ -22,6 +22,7 @@ import {
   PhoenixVaults,
   QUOTE_PRECISION,
   VaultParams,
+  WithdrawUnit
 } from '@cosmic-lab/phoenix-vaults-sdk';
 import {
   createAssociatedTokenAccountInstruction,
@@ -52,7 +53,6 @@ import {
   Side,
 } from '@ellipsis-labs/phoenix-sdk';
 import {TEST_PHOENIX_INVESTOR} from "@cosmic-lab/prop-shop-sdk";
-import {WithdrawUnit} from "../../drift-vaults/ts/sdk";
 
 describe('phoenixVaults', () => {
   const opts: ConfirmOptions = {
@@ -90,7 +90,7 @@ describe('phoenixVaults', () => {
   const protocol = Keypair.generate();
   const maker = Keypair.generate();
 
-  const name = 'Test Vault';
+  const name = 'Market Maker';
   const vaultKey = getVaultAddressSync(encodeName(name));
   const vaultUsdcAta = getAssociatedTokenAddressSync(usdcMint, vaultKey, true);
   const vaultSolAta = getAssociatedTokenAddressSync(solMint, vaultKey, true);
@@ -1023,8 +1023,9 @@ describe('phoenixVaults', () => {
   });
 
   it('Hoard of Investors', async () => {
-    console.log('generating hoard of investors...');
-    for (let i = 0; i < 50; i++) {
+    const hoardSize = 19;
+    console.log(`generating hoard of ${hoardSize} investors for Phoenix vault: ${name}`);
+    for (let i = 0; i < hoardSize; i++) {
       const investorAuth = Keypair.generate();
       const investorAirdropSig = await conn.requestAirdrop(investorAuth.publicKey, LAMPORTS_PER_SOL * 1);
       const investorAirdropConfirm = (await conn.confirmTransaction(investorAirdropSig)).value;

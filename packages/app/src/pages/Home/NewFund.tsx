@@ -18,31 +18,29 @@ export function NewFund({client}: { client: PropShopClient }) {
       />
       <Box
         sx={{
-          width: '50%',
+          width: '60%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexDirection: 'row',
-          gap: 5
+          gap: 0
         }}
       >
         <Box
           sx={{
+            width: '80%',
             display: 'flex',
             alignItems: 'left',
             justifyContent: 'center',
             flexDirection: 'column',
-            gap: 1
+            gap: 2
           }}
         >
           <Typography variant="h2">
-            Beat the market.
+            Crowdsourced capital for rapid growth.
           </Typography>
           <Typography variant="h2">
-            Rapidly scale your capital.
-          </Typography>
-          <Typography variant="h2">
-            Profit share with investors.
+            Earn up to 40% of investor profits
           </Typography>
         </Box>
         <Box

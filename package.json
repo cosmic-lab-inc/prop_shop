@@ -39,7 +39,8 @@
     "dep:all": "yarn dep:competitions && yarn dep:drift-vaults && yarn dep:drift && yarn dep:pyth && yarn dep:phoenix && yarn dep:phoenix-seat-manager && yarn dep:phoenix-vaults",
     "anchor-tests": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 --exit -b -j 1 tests/**/*.ts",
     "test:drift": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 --exit -b tests/driftVaults.ts",
-    "test:phoenix": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 --exit -b tests/phoenixVaults.ts"
+    "test:phoenix": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 --exit -b tests/phoenixVaults.ts",
+    "test:demo": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 --exit -b tests/demo.ts"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
