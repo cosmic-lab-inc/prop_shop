@@ -3,6 +3,7 @@ import {Box, Typography} from '@mui/material';
 import {PropShopClient} from '@cosmic-lab/prop-shop-sdk';
 import {ActionButton} from '../../components';
 import {NewFundDialog} from './NewFundDialog';
+import {customTheme} from "../../styles";
 
 // todo: fetch vaults and sort by criteria using PropShopClient
 export function NewFund({client}: { client: PropShopClient }) {
@@ -46,12 +47,14 @@ export function NewFund({client}: { client: PropShopClient }) {
         </Box>
         <Box
           sx={{
-            width: '30%',
-            height: '90px',
+            width: '35%',
+            height: '130px',
           }}
         >
           <ActionButton onClick={() => setOpen(true)}>
-            Create a Fund
+            <Typography variant="h3" sx={{color: customTheme.light}}>
+              Create a Fund
+            </Typography>
           </ActionButton>
         </Box>
       </Box>

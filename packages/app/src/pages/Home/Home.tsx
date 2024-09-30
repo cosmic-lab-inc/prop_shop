@@ -13,7 +13,7 @@ export const Home = observer(({client}: { client: PropShopClient }) => {
         display: 'flex',
         alignItems: 'center',
         flexDirection: 'column',
-        gap: 5,
+        gap: 10,
       }}
     >
       <Funds client={client}/>
