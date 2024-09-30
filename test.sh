@@ -23,7 +23,7 @@ OPTIONS:
   --no-test            - Skip running tests and only bootstrap the validator
   --no-build           - Skip building the rust and typescript code
   --dev                - Symlink to local dependencies
-  --test               - Only test "phoenix" or "drift"
+  --test               - If provided, only test "phoenix" or "drift", otherwise run "anchor-tests"
 
 EOF
   exit 1

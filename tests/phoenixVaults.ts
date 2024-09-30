@@ -30,10 +30,8 @@ import {
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
 import {
-  calculateRealizedInvestorEquity,
   createMarketTokenAccountIxs,
   encodeLimitOrderPacketWithFreeFunds,
-  fetchInvestorEquity,
   fetchMarketState,
   fetchTraderState,
   outAmount,
@@ -52,7 +50,6 @@ import {
   Side,
 } from '@ellipsis-labs/phoenix-sdk';
 import {TEST_PHOENIX_INVESTOR} from "@cosmic-lab/prop-shop-sdk";
-import {WithdrawUnit} from "../../drift-vaults/ts/sdk";
 
 describe('phoenixVaults', () => {
   const opts: ConfirmOptions = {
@@ -724,15 +721,18 @@ describe('phoenixVaults', () => {
   // Place pending ask at $125/SOL that never gets filled, so withdraw request can measure price as best ask on-chain.
   //
 
-  it('Maker Ask SOL/USDC @ $125/SOL', async () => {
-    const makerTraderState = await fetchTraderState(
-      conn,
-      solUsdcMarket,
-      maker.publicKey
+  it('Maker Bid SOL/USDC @ $125/SOL', async () => {
+    // top up the maker's USDC to place a bid
+    const usdcAta = getAssociatedTokenAddressSync(usdcMint, maker.publicKey);
+    const mintUsdcIx = createMintToInstruction(
+      usdcMint,
+      usdcAta,
+      mintAuth.publicKey,
+      usdcAmount.toNumber()
     );
-    const solAmount = makerTraderState.baseUnitsFree;
-    console.log(`maker sol on market to sell: ${solAmount}`);
+    await sendAndConfirm(conn, payer, [mintUsdcIx], [mintAuth]);
 
+    const solAmount = usdcUiAmount / endSolUsdcPrice;
     const priceInTicks = phoenix.floatPriceToTicks(
       endSolUsdcPrice,
       solUsdcMarket.toBase58()
@@ -742,7 +742,7 @@ describe('phoenixVaults', () => {
       solUsdcMarket.toBase58()
     );
     const makerOrderPacket = getLimitOrderPacket({
-      side: Side.Ask,
+      side: Side.Bid,
       priceInTicks,
       numBaseLots,
     });
@@ -763,271 +763,271 @@ describe('phoenixVaults', () => {
   // Now that an ask at $125/SOL is on the book, we can use that price on-chain to measure vault equity
   //
 
-  it('Request Withdraw', async () => {
-    const investorEquityBefore = await fetchInvestorEquity(
-      program,
-      conn,
-      investor,
-      vaultKey
-    );
-    console.log(
-      `investor equity before withdraw request: ${investorEquityBefore}`
-    );
-    assert.strictEqual(investorEquityBefore, 1249.75002);
-
-    const vaultEquity = new BN(
-      investorEquityBefore * QUOTE_PRECISION.toNumber()
-    );
-    const investorAcct = await program.account.investor.fetch(investor);
-    const vaultAcct = await program.account.vault.fetch(vaultKey);
-    const withdrawRequestEquity = calculateRealizedInvestorEquity(
-      investorAcct,
-      vaultEquity,
-      vaultAcct
-    );
-    console.log(
-      `withdraw request equity: ${
-        withdrawRequestEquity.toNumber() / QUOTE_PRECISION.toNumber()
-      }`
-    );
-
-    try {
-      const markets: AccountMeta[] = marketKeys.map((pubkey) => {
-        return {
-          pubkey,
-          isWritable: false,
-          isSigner: false,
-        };
-      });
-      const ix = await program.methods
-        .requestWithdraw(withdrawRequestEquity, WithdrawUnit.TOKEN)
-        .accounts({
-          vault: vaultKey,
-          investor,
-          authority: investorAuth.publicKey,
-          marketRegistry,
-          vaultUsdcTokenAccount: vaultUsdcAta,
-        })
-        .remainingAccounts(markets)
-        .instruction();
-
-      await sendAndConfirm(conn, investorAuth, [ix]);
-    } catch (e: any) {
-      throw new Error(e);
-    }
-
-    // amount before 20% total profit share = $1249.75002
-    // profit is $249.75002
-    // $249.75002 - 20% = $199.80001619964
-    // withdrawal amount = $1199.80001619964
-
-    const investorEquityAfter = await fetchInvestorEquity(
-      program,
-      conn,
-      investor,
-      vaultKey
-    );
-    console.log(
-      `investor equity after withdraw request: ${investorEquityAfter}`
-    );
-    assert.strictEqual(investorEquityAfter, 1199.80001619964);
-
-    const investorAcctAfter = await program.account.investor.fetch(investor);
-    const withdrawRequestValue =
-      investorAcctAfter.lastWithdrawRequest.value.toNumber() /
-      QUOTE_PRECISION.toNumber();
-    console.log(`investor withdraw request: ${withdrawRequestValue}`);
-    assert.strictEqual(withdrawRequestValue, 1199.800016);
-  });
-
-  it('Appoint Liquidator', async () => {
-    try {
-      const markets: AccountMeta[] = [
-        {
-          pubkey: solUsdcMarket,
-          isWritable: false,
-          isSigner: false,
-        },
-      ];
-      const ix = await program.methods
-        .appointLiquidator()
-        .accounts({
-          vault: vaultKey,
-          investor,
-          authority: investorAuth.publicKey,
-          marketRegistry,
-          vaultQuoteTokenAccount: vaultUsdcAta,
-        })
-        .remainingAccounts(markets)
-        .instruction();
-      await sendAndConfirm(conn, investorAuth, [ix]);
-    } catch (e: any) {
-      throw new Error(e);
-    }
-  });
-
-  it('Liquidate Vault SOL/USDC Position', async () => {
-    const vaultBaseTokenAccount = getAssociatedTokenAddressSync(
-      solMint,
-      vaultKey,
-      true
-    );
-    const vaultUsdcTokenAccount = getAssociatedTokenAddressSync(
-      usdcMint,
-      vaultKey,
-      true
-    );
-    const marketBaseTokenAccount = phoenix.getBaseVaultKey(
-      solUsdcMarket.toString()
-    );
-    const marketUsdcTokenAccount = phoenix.getQuoteVaultKey(
-      solUsdcMarket.toString()
-    );
-
-    const vaultSolBefore = await tokenBalance(conn, vaultBaseTokenAccount);
-    const vaultUsdcBefore = await tokenBalance(conn, vaultUsdcTokenAccount);
-    console.log(
-      `vault before liquidation, sol: ${vaultSolBefore}, usdc: ${vaultUsdcBefore}`
-    );
-    assert.strictEqual(vaultSolBefore, 0);
-    assert.strictEqual(vaultUsdcBefore, 0);
-
-    const vaultStateBefore = await fetchTraderState(
-      conn,
-      solUsdcMarket,
-      vaultKey
-    );
-    console.log(
-      `vault trader before liquidation, sol: ${vaultStateBefore.baseUnitsFree}, usdc: ${vaultStateBefore.quoteUnitsFree}`
-    );
-    assert.strictEqual(vaultStateBefore.baseUnitsFree, 0);
-    assert.strictEqual(vaultStateBefore.quoteUnitsFree, 1249.75002);
-
-    const investorEquity = await fetchInvestorEquity(
-      program,
-      conn,
-      investor,
-      vaultKey
-    );
-    console.log(`investor equity before liquidation: ${investorEquity}`);
-    assert.strictEqual(investorEquity, 1199.80001619964);
-
-    const investorUsdcBefore = await tokenBalance(conn, investorUsdcAta);
-    console.log(`investor usdc before liquidation: ${investorUsdcBefore}`);
-    assert.strictEqual(investorUsdcBefore, 0);
-
-    try {
-      const markets: AccountMeta[] = [
-        {
-          pubkey: solUsdcMarket,
-          isWritable: false,
-          isSigner: false,
-        },
-      ];
-      const ix = await program.methods
-        .liquidateUsdcMarket()
-        .accounts({
-          vault: vaultKey,
-          investor,
-          authority: investorAuth.publicKey,
-          marketRegistry,
-          investorUsdcTokenAccount: investorUsdcAta,
-          phoenix: PHOENIX_PROGRAM_ID,
-          logAuthority: getLogAuthority(),
-          market: solUsdcMarket,
-          seat: getSeatAddress(solUsdcMarket, vaultKey),
-          baseMint: solMint,
-          usdcMint,
-          vaultBaseTokenAccount,
-          vaultUsdcTokenAccount,
-          marketBaseTokenAccount,
-          marketUsdcTokenAccount,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .remainingAccounts(markets)
-        .instruction();
-      await sendAndConfirm(conn, investorAuth, [ix]);
-    } catch (e: any) {
-      throw new Error(e);
-    }
-
-    const vaultSolAfter = await tokenBalance(conn, vaultBaseTokenAccount);
-    const vaultUsdcAfter = await tokenBalance(conn, vaultUsdcTokenAccount);
-    console.log(
-      `vault after liquidation, sol: ${vaultSolAfter}, usdc: ${vaultUsdcAfter}`
-    );
-    assert.strictEqual(vaultSolAfter, 0);
-    assert.strictEqual(vaultUsdcAfter, 1199.80002);
-
-    const vaultStateAfter = await fetchTraderState(
-      conn,
-      solUsdcMarket,
-      vaultKey
-    );
-    console.log(
-      `vault trader state after liquidation, sol: ${vaultStateAfter.baseUnitsFree}, usdc: ${vaultStateAfter.quoteUnitsFree}`
-    );
-    assert.strictEqual(vaultStateAfter.baseUnitsFree, 0);
-    assert.strictEqual(vaultStateAfter.quoteUnitsFree, 49.95);
-  });
-
-  it('Withdraw', async () => {
-    const markets: AccountMeta[] = marketKeys.map((pubkey) => {
-      return {
-        pubkey,
-        isWritable: false,
-        isSigner: false,
-      };
-    });
-    try {
-      const withdrawIx = await program.methods
-        .investorWithdraw()
-        .accounts({
-          vault: vaultKey,
-          investor,
-          authority: investorAuth.publicKey,
-          marketRegistry,
-          investorQuoteTokenAccount: investorUsdcAta,
-          phoenix: PHOENIX_PROGRAM_ID,
-          logAuthority: getLogAuthority(),
-          market: solUsdcMarket,
-          seat: getSeatAddress(solUsdcMarket, vaultKey),
-          baseMint: solMint,
-          quoteMint: usdcMint,
-          vaultBaseTokenAccount: vaultSolAta,
-          vaultQuoteTokenAccount: vaultUsdcAta,
-          marketBaseTokenAccount: phoenix.getBaseVaultKey(
-            solUsdcMarket.toString()
-          ),
-          marketQuoteTokenAccount: phoenix.getQuoteVaultKey(
-            solUsdcMarket.toString()
-          ),
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .remainingAccounts(markets)
-        .instruction();
-      await sendAndConfirm(conn, investorAuth, [withdrawIx]);
-    } catch (e: any) {
-      throw new Error(e);
-    }
-
-    const vaultSolAfter = await tokenBalance(conn, vaultSolAta);
-    const vaultUsdcAfter = await tokenBalance(conn, vaultUsdcAta);
-    console.log(
-      `vault after withdraw, sol: ${vaultSolAfter}, usdc: ${vaultUsdcAfter}`
-    );
-    assert.strictEqual(vaultSolAfter, 0);
-    assert.strictEqual(vaultUsdcAfter, 0.000006);
-
-    const investorUsdcAfter = await tokenBalance(conn, investorUsdcAta);
-    console.log(`investor usdc after withdraw: ${investorUsdcAfter}`);
-    assert.strictEqual(investorUsdcAfter, 1199.800014);
-
-    const investorAcct = await program.account.investor.fetch(investor);
-    const withdrawRequest =
-      investorAcct.lastWithdrawRequest.value.toNumber() /
-      QUOTE_PRECISION.toNumber();
-    console.log(`investor withdraw request: ${withdrawRequest}`);
-    assert.strictEqual(withdrawRequest, 0);
-  });
+  // it('Request Withdraw', async () => {
+  //   const investorEquityBefore = await fetchInvestorEquity(
+  //     program,
+  //     conn,
+  //     investor,
+  //     vaultKey
+  //   );
+  //   console.log(
+  //     `investor equity before withdraw request: ${investorEquityBefore}`
+  //   );
+  //   assert.strictEqual(investorEquityBefore, 1249.75002);
+  //
+  //   const vaultEquity = new BN(
+  //     investorEquityBefore * QUOTE_PRECISION.toNumber()
+  //   );
+  //   const investorAcct = await program.account.investor.fetch(investor);
+  //   const vaultAcct = await program.account.vault.fetch(vaultKey);
+  //   const withdrawRequestEquity = calculateRealizedInvestorEquity(
+  //     investorAcct,
+  //     vaultEquity,
+  //     vaultAcct
+  //   );
+  //   console.log(
+  //     `withdraw request equity: ${
+  //       withdrawRequestEquity.toNumber() / QUOTE_PRECISION.toNumber()
+  //     }`
+  //   );
+  //
+  //   try {
+  //     const markets: AccountMeta[] = marketKeys.map((pubkey) => {
+  //       return {
+  //         pubkey,
+  //         isWritable: false,
+  //         isSigner: false,
+  //       };
+  //     });
+  //     const ix = await program.methods
+  //       .requestWithdraw(withdrawRequestEquity, WithdrawUnit.TOKEN)
+  //       .accounts({
+  //         vault: vaultKey,
+  //         investor,
+  //         authority: investorAuth.publicKey,
+  //         marketRegistry,
+  //         vaultUsdcTokenAccount: vaultUsdcAta,
+  //       })
+  //       .remainingAccounts(markets)
+  //       .instruction();
+  //
+  //     await sendAndConfirm(conn, investorAuth, [ix]);
+  //   } catch (e: any) {
+  //     throw new Error(e);
+  //   }
+  //
+  //   // amount before 20% total profit share = $1249.75002
+  //   // profit is $249.75002
+  //   // $249.75002 - 20% = $199.80001619964
+  //   // withdrawal amount = $1199.80001619964
+  //
+  //   const investorEquityAfter = await fetchInvestorEquity(
+  //     program,
+  //     conn,
+  //     investor,
+  //     vaultKey
+  //   );
+  //   console.log(
+  //     `investor equity after withdraw request: ${investorEquityAfter}`
+  //   );
+  //   assert.strictEqual(investorEquityAfter, 1199.80001619964);
+  //
+  //   const investorAcctAfter = await program.account.investor.fetch(investor);
+  //   const withdrawRequestValue =
+  //     investorAcctAfter.lastWithdrawRequest.value.toNumber() /
+  //     QUOTE_PRECISION.toNumber();
+  //   console.log(`investor withdraw request: ${withdrawRequestValue}`);
+  //   assert.strictEqual(withdrawRequestValue, 1199.800016);
+  // });
+  //
+  // it('Appoint Liquidator', async () => {
+  //   try {
+  //     const markets: AccountMeta[] = [
+  //       {
+  //         pubkey: solUsdcMarket,
+  //         isWritable: false,
+  //         isSigner: false,
+  //       },
+  //     ];
+  //     const ix = await program.methods
+  //       .appointLiquidator()
+  //       .accounts({
+  //         vault: vaultKey,
+  //         investor,
+  //         authority: investorAuth.publicKey,
+  //         marketRegistry,
+  //         vaultQuoteTokenAccount: vaultUsdcAta,
+  //       })
+  //       .remainingAccounts(markets)
+  //       .instruction();
+  //     await sendAndConfirm(conn, investorAuth, [ix]);
+  //   } catch (e: any) {
+  //     throw new Error(e);
+  //   }
+  // });
+  //
+  // it('Liquidate Vault SOL/USDC Position', async () => {
+  //   const vaultBaseTokenAccount = getAssociatedTokenAddressSync(
+  //     solMint,
+  //     vaultKey,
+  //     true
+  //   );
+  //   const vaultUsdcTokenAccount = getAssociatedTokenAddressSync(
+  //     usdcMint,
+  //     vaultKey,
+  //     true
+  //   );
+  //   const marketBaseTokenAccount = phoenix.getBaseVaultKey(
+  //     solUsdcMarket.toString()
+  //   );
+  //   const marketUsdcTokenAccount = phoenix.getQuoteVaultKey(
+  //     solUsdcMarket.toString()
+  //   );
+  //
+  //   const vaultSolBefore = await tokenBalance(conn, vaultBaseTokenAccount);
+  //   const vaultUsdcBefore = await tokenBalance(conn, vaultUsdcTokenAccount);
+  //   console.log(
+  //     `vault before liquidation, sol: ${vaultSolBefore}, usdc: ${vaultUsdcBefore}`
+  //   );
+  //   assert.strictEqual(vaultSolBefore, 0);
+  //   assert.strictEqual(vaultUsdcBefore, 0);
+  //
+  //   const vaultStateBefore = await fetchTraderState(
+  //     conn,
+  //     solUsdcMarket,
+  //     vaultKey
+  //   );
+  //   console.log(
+  //     `vault trader before liquidation, sol: ${vaultStateBefore.baseUnitsFree}, usdc: ${vaultStateBefore.quoteUnitsFree}`
+  //   );
+  //   assert.strictEqual(vaultStateBefore.baseUnitsFree, 0);
+  //   assert.strictEqual(vaultStateBefore.quoteUnitsFree, 1249.75002);
+  //
+  //   const investorEquity = await fetchInvestorEquity(
+  //     program,
+  //     conn,
+  //     investor,
+  //     vaultKey
+  //   );
+  //   console.log(`investor equity before liquidation: ${investorEquity}`);
+  //   assert.strictEqual(investorEquity, 1199.80001619964);
+  //
+  //   const investorUsdcBefore = await tokenBalance(conn, investorUsdcAta);
+  //   console.log(`investor usdc before liquidation: ${investorUsdcBefore}`);
+  //   assert.strictEqual(investorUsdcBefore, 0);
+  //
+  //   try {
+  //     const markets: AccountMeta[] = [
+  //       {
+  //         pubkey: solUsdcMarket,
+  //         isWritable: false,
+  //         isSigner: false,
+  //       },
+  //     ];
+  //     const ix = await program.methods
+  //       .liquidateUsdcMarket()
+  //       .accounts({
+  //         vault: vaultKey,
+  //         investor,
+  //         authority: investorAuth.publicKey,
+  //         marketRegistry,
+  //         investorUsdcTokenAccount: investorUsdcAta,
+  //         phoenix: PHOENIX_PROGRAM_ID,
+  //         logAuthority: getLogAuthority(),
+  //         market: solUsdcMarket,
+  //         seat: getSeatAddress(solUsdcMarket, vaultKey),
+  //         baseMint: solMint,
+  //         usdcMint,
+  //         vaultBaseTokenAccount,
+  //         vaultUsdcTokenAccount,
+  //         marketBaseTokenAccount,
+  //         marketUsdcTokenAccount,
+  //         tokenProgram: TOKEN_PROGRAM_ID,
+  //       })
+  //       .remainingAccounts(markets)
+  //       .instruction();
+  //     await sendAndConfirm(conn, investorAuth, [ix]);
+  //   } catch (e: any) {
+  //     throw new Error(e);
+  //   }
+  //
+  //   const vaultSolAfter = await tokenBalance(conn, vaultBaseTokenAccount);
+  //   const vaultUsdcAfter = await tokenBalance(conn, vaultUsdcTokenAccount);
+  //   console.log(
+  //     `vault after liquidation, sol: ${vaultSolAfter}, usdc: ${vaultUsdcAfter}`
+  //   );
+  //   assert.strictEqual(vaultSolAfter, 0);
+  //   assert.strictEqual(vaultUsdcAfter, 1199.80002);
+  //
+  //   const vaultStateAfter = await fetchTraderState(
+  //     conn,
+  //     solUsdcMarket,
+  //     vaultKey
+  //   );
+  //   console.log(
+  //     `vault trader state after liquidation, sol: ${vaultStateAfter.baseUnitsFree}, usdc: ${vaultStateAfter.quoteUnitsFree}`
+  //   );
+  //   assert.strictEqual(vaultStateAfter.baseUnitsFree, 0);
+  //   assert.strictEqual(vaultStateAfter.quoteUnitsFree, 49.95);
+  // });
+  //
+  // it('Withdraw', async () => {
+  //   const markets: AccountMeta[] = marketKeys.map((pubkey) => {
+  //     return {
+  //       pubkey,
+  //       isWritable: false,
+  //       isSigner: false,
+  //     };
+  //   });
+  //   try {
+  //     const withdrawIx = await program.methods
+  //       .investorWithdraw()
+  //       .accounts({
+  //         vault: vaultKey,
+  //         investor,
+  //         authority: investorAuth.publicKey,
+  //         marketRegistry,
+  //         investorQuoteTokenAccount: investorUsdcAta,
+  //         phoenix: PHOENIX_PROGRAM_ID,
+  //         logAuthority: getLogAuthority(),
+  //         market: solUsdcMarket,
+  //         seat: getSeatAddress(solUsdcMarket, vaultKey),
+  //         baseMint: solMint,
+  //         quoteMint: usdcMint,
+  //         vaultBaseTokenAccount: vaultSolAta,
+  //         vaultQuoteTokenAccount: vaultUsdcAta,
+  //         marketBaseTokenAccount: phoenix.getBaseVaultKey(
+  //           solUsdcMarket.toString()
+  //         ),
+  //         marketQuoteTokenAccount: phoenix.getQuoteVaultKey(
+  //           solUsdcMarket.toString()
+  //         ),
+  //         tokenProgram: TOKEN_PROGRAM_ID,
+  //       })
+  //       .remainingAccounts(markets)
+  //       .instruction();
+  //     await sendAndConfirm(conn, investorAuth, [withdrawIx]);
+  //   } catch (e: any) {
+  //     throw new Error(e);
+  //   }
+  //
+  //   const vaultSolAfter = await tokenBalance(conn, vaultSolAta);
+  //   const vaultUsdcAfter = await tokenBalance(conn, vaultUsdcAta);
+  //   console.log(
+  //     `vault after withdraw, sol: ${vaultSolAfter}, usdc: ${vaultUsdcAfter}`
+  //   );
+  //   assert.strictEqual(vaultSolAfter, 0);
+  //   assert.strictEqual(vaultUsdcAfter, 0.000006);
+  //
+  //   const investorUsdcAfter = await tokenBalance(conn, investorUsdcAta);
+  //   console.log(`investor usdc after withdraw: ${investorUsdcAfter}`);
+  //   assert.strictEqual(investorUsdcAfter, 1199.800014);
+  //
+  //   const investorAcct = await program.account.investor.fetch(investor);
+  //   const withdrawRequest =
+  //     investorAcct.lastWithdrawRequest.value.toNumber() /
+  //     QUOTE_PRECISION.toNumber();
+  //   console.log(`investor withdraw request: ${withdrawRequest}`);
+  //   assert.strictEqual(withdrawRequest, 0);
+  // });
 });

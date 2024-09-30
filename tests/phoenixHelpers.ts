@@ -357,7 +357,7 @@ export async function marketPrice(
   market: PublicKey
 ): Promise<number> {
   const marketState = await fetchMarketState(conn, market);
-  return marketState.getUiLadder(1, 0, 0).asks[0].price;
+  return marketState.getUiLadder(1, 0, 0).bids[0].price;
 }
 
 function isAvailable(position: MarketPosition) {
@@ -382,7 +382,7 @@ export async function fetchVaultEquity(
       continue;
     }
     const marketState = await fetchMarketState(conn, position.market);
-    const price = marketState.getUiLadder(1, 0, 0).asks[0].price;
+    const price = marketState.getUiLadder(1, 0, 0).bids[0].price;
     const vaultState = parseTraderState(marketState, vault);
     const baseQuoteUnits =
       (vaultState.baseUnitsFree + vaultState.baseUnitsLocked) * price;
