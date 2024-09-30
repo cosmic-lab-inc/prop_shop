@@ -66,7 +66,6 @@ kill_process() {
     if [[ -n $solana_pid ]]; then
         pkill -f solana
     fi
-
     # exit shell script with success status
     exit 0
 }
@@ -93,7 +92,7 @@ fi
 
 # suppress output form anchor localnet
 # start anchor localnet in background
-bkg anchor localnet || exit 1
+bkg anchor localnet || kill_process
 # sleep to warmup validator
 sleep 10
 
@@ -110,11 +109,11 @@ if [[ $no_test == false ]]; then
   # if test == "drift" run yarn test:drift
   # else run yarn anchor-tests
   if [[ $test == "phoenix" ]]; then
-    yarn test:phoenix || exit 1
+    yarn test:phoenix || kill_process
   elif [[ $test == "drift" ]]; then
-    yarn test:drift || exit 1
+    yarn test:drift || kill_process
   else
-    yarn anchor-tests || exit 1
+    yarn anchor-tests || kill_process
   fi
 fi
 

@@ -83,15 +83,6 @@ describe("driftVaults", () => {
   let protocolClient: VaultClient;
   let protocolVdUserUSDCAccount: PublicKey;
 
-  // ammInvariant == k == x * y
-  const mantissaSqrtScale = new BN(100_000);
-  const ammInitialQuoteAssetReserve = new BN(5 * 10 ** 13).mul(
-    mantissaSqrtScale,
-  );
-  const ammInitialBaseAssetReserve = new BN(5 * 10 ** 13).mul(
-    mantissaSqrtScale,
-  );
-
   const usdcMint = TEST_USDC_MINT;
   const usdcMintAuth = TEST_USDC_MINT_AUTHORITY;
   let solPerpOracle: PublicKey;
@@ -138,13 +129,17 @@ describe("driftVaults", () => {
       await adminClient.subscribe();
       await initializeQuoteSpotMarket(adminClient, usdcMint.publicKey);
 
-      const periodicity = new BN(0);
+      const mantissaSqrtScale = new BN(100_000);
       await adminClient.initializePerpMarket(
         0,
         solPerpOracle,
-        ammInitialBaseAssetReserve,
-        ammInitialQuoteAssetReserve,
-        periodicity,
+        new BN(5 * 10 ** 13).mul(
+          mantissaSqrtScale,
+        ),
+        new BN(5 * 10 ** 13).mul(
+          mantissaSqrtScale,
+        ),
+        new BN(0),
         new BN(initialSolPerpPrice).mul(PEG_PRECISION),
       );
       await adminClient.updatePerpAuctionDuration(new BN(0));
@@ -908,7 +903,7 @@ describe("driftVaults", () => {
       withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber(),
     );
     // 10% of protocolVault depositor's ~$502 profit
-    assert(withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber() === 50.205831);
+    assert.strictEqual(withdrawAmount.toNumber() / QUOTE_PRECISION.toNumber(), 50.205831);
 
     try {
       await protocolClient.program.methods
@@ -949,8 +944,6 @@ describe("driftVaults", () => {
     }
 
     try {
-      const vaultAccount = await program.account.vault.fetch(protocolVault);
-
       await protocolClient.program.methods
         .protocolWithdraw()
         .accounts({
@@ -968,8 +961,86 @@ describe("driftVaults", () => {
         .remainingAccounts(remainingAccounts)
         .rpc();
     } catch (e) {
-      console.log("failed to withdraw:", e);
-      assert(false);
+      throw new Error(`failed to withdraw: ${e}`);
     }
   });
+
+  it('Hoard of Investors', async () => {
+    console.log('generating hoard of investors...');
+    for (let i = 0; i < 50; i++) {
+      // the VaultDepositor for the protocol vault
+      const bootstrapInvestor = await bootstrapSignerClientAndUser({
+        payer: provider,
+        programId: program.programId,
+        usdcMint,
+        usdcMintAuth,
+        usdcAmount,
+        depositCollateral: false,
+        driftClientConfig: {
+          accountSubscription: {
+            type: "websocket",
+            resubTimeoutMs: 30_000,
+          },
+          opts,
+          activeSubAccountId: 0,
+          perpMarketIndexes: [0],
+          spotMarketIndexes: [0],
+          oracleInfos: [
+            {publicKey: solPerpOracle, source: OracleSource.PYTH},
+          ],
+        },
+      });
+      const investorSigner = bootstrapInvestor.signer;
+      const investorClient = bootstrapInvestor.vaultClient;
+      const investorUserUsdcAccount = bootstrapInvestor.userUSDCAccount;
+
+      await investorClient.initializeVaultDepositor(protocolVault, investorSigner.publicKey);
+      const investorKey = getVaultDepositorAddressSync(
+        program.programId,
+        protocolVault,
+        investorSigner.publicKey,
+      );
+
+      const vaultAccount = await program.account.vault.fetch(protocolVault);
+      const remainingAccounts = investorClient.driftClient.getRemainingAccounts({
+        userAccounts: [],
+        writableSpotMarketIndexes: [0],
+      });
+      if (vaultAccount.vaultProtocol) {
+        const vaultProtocol = getVaultProtocolAddressSync(
+          investorClient.program.programId,
+          protocolVault,
+        );
+        remainingAccounts.push({
+          pubkey: vaultProtocol,
+          isSigner: false,
+          isWritable: true,
+        });
+      }
+
+      const driftSpotMarketVault = adminClient.getSpotMarketAccount(0)?.vault;
+      if (!driftSpotMarketVault) {
+        throw new Error("Spot market not found");
+      }
+      try {
+        await investorClient.program.methods
+          .deposit(usdcAmount)
+          .accounts({
+            vault: protocolVault,
+            vaultDepositor: investorKey,
+            vaultTokenAccount: vaultAccount.tokenAccount,
+            driftUserStats: vaultAccount.userStats,
+            driftUser: vaultAccount.user,
+            driftState: await adminClient.getStatePublicKey(),
+            userTokenAccount: investorUserUsdcAccount,
+            driftSpotMarketVault,
+            driftProgram: adminClient.program.programId,
+          })
+          .remainingAccounts(remainingAccounts)
+          .rpc();
+      } catch (e: any) {
+        throw new Error(`failed to deposit to vault: ${e}`);
+      }
+    }
+  }, 60_000);
 });
