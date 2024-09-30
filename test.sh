@@ -4,6 +4,7 @@ detach=false
 no_test=false
 no_build=false
 dev=false
+test=
 
 usage() {
   if [[ -n $1 ]]; then
@@ -22,6 +23,7 @@ OPTIONS:
   --no-test            - Skip running tests and only bootstrap the validator
   --no-build           - Skip building the rust and typescript code
   --dev                - Symlink to local dependencies
+  --test               - Only test "phoenix" or "drift"
 
 EOF
   exit 1
@@ -41,6 +43,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --dev ]]; then
       dev=true
+      shift 1
+    elif [[ $1 = --test ]]; then
+      test="$2"
       shift 1
     elif [[ $1 = -h ]]; then
       usage "$@"
@@ -74,9 +79,9 @@ if [[ $no_build == false ]]; then
   chmod +x ./build.sh
 
   if [[ $dev == true ]]; then
-    ./build.sh --dev
+    ./build.sh --dev || exit 1
   else
-    ./build.sh
+    ./build.sh || exit 1
   fi
 fi
 
@@ -88,19 +93,29 @@ fi
 
 # suppress output form anchor localnet
 # start anchor localnet in background
-bkg anchor localnet
-# sleep for 1 second to warmup validator
-sleep 2
+bkg anchor localnet || exit 1
+# sleep to warmup validator
+sleep 10
 
 # run bootstrap.sh
 chmod +x ./bootstrap.sh
-./bootstrap.sh
+./bootstrap.sh || exit 1
 
 if [[ $no_test == false ]]; then
   export ANCHOR_WALLET="$HOME/.config/solana/cosmic_lab_inc.json"
   rpc_url=$(solana config get | grep "RPC URL" | cut -d " " -f 3)
   export ANCHOR_PROVIDER_URL=$rpc_url
-  yarn anchor-tests
+
+  # if test == "phoenix" run yarn test:phoenix
+  # if test == "drift" run yarn test:drift
+  # else run yarn anchor-tests
+  if [[ $test == "phoenix" ]]; then
+    yarn test:phoenix || exit 1
+  elif [[ $test == "drift" ]]; then
+    yarn test:drift || exit 1
+  else
+    yarn anchor-tests || exit 1
+  fi
 fi
 
 # if detach is false, run kill_process

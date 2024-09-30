@@ -33,68 +33,21 @@ import {
   Side,
 } from '@ellipsis-labs/phoenix-sdk';
 
-export async function simulate(
-  connection: Connection,
-  payer: Signer,
-  instructions: TransactionInstruction[],
-  signers: Signer[] = []
-): Promise<void> {
-  instructions = [
-    ComputeBudgetProgram.setComputeUnitLimit({
-      units: 400_000,
-    }),
-    ComputeBudgetProgram.setComputeUnitPrice({
-      microLamports: 10_000,
-    }),
-    ...instructions,
-  ];
-
-  const recentBlockhash = await connection
-    .getLatestBlockhash()
-    .then((res) => res.blockhash);
-  const msg = new anchor.web3.TransactionMessage({
-    payerKey: payer.publicKey,
-    recentBlockhash,
-    instructions,
-  }).compileToV0Message();
-
-  const tx = new anchor.web3.VersionedTransaction(msg);
-  tx.sign([payer, ...signers]);
-
-  console.log(
-    'signers:',
-    expectedSigners(tx).map((k) => k.toString())
-  );
-  try {
-    const sim = await connection.simulateTransaction(tx, {
-      sigVerify: false,
-    });
-    console.log('simulation:', sim.value.err, sim.value.logs);
-  } catch (e: any) {
-    const missingSigners = checkMissingSigners(tx);
-    console.log(
-      'missing signers:',
-      missingSigners.map((k) => k.toString())
-    );
-    throw new Error(e);
-  }
-}
-
 export async function sendAndConfirm(
   connection: Connection,
   payer: Signer,
-  instructions: TransactionInstruction[],
+  ixs: TransactionInstruction[],
   signers: Signer[] = []
 ): Promise<string> {
   try {
-    instructions = [
+    const instructions = [
       ComputeBudgetProgram.setComputeUnitLimit({
         units: 400_000,
       }),
       ComputeBudgetProgram.setComputeUnitPrice({
         microLamports: 10_000,
       }),
-      ...instructions,
+      ...ixs,
     ];
 
     const recentBlockhash = await connection
@@ -108,19 +61,26 @@ export async function sendAndConfirm(
     const tx = new anchor.web3.VersionedTransaction(msg);
     tx.sign([payer, ...signers]);
 
+    const sim = (await connection.simulateTransaction(tx, {
+      sigVerify: false,
+    })).value;
+    if (sim.err !== null) {
+      console.log('simulation:', sim.err, sim.logs);
+      throw new Error(JSON.stringify(sim.err));
+    }
+
     const sig = await connection.sendTransaction(tx, {
       skipPreflight: true,
     });
     const strategy = {
       signature: sig,
     } as TransactionConfirmationStrategy;
-    const confirm = await connection.confirmTransaction(strategy);
-    if (confirm.value.err) {
-      throw new Error(JSON.stringify(confirm.value.err));
+    const confirm = (await connection.confirmTransaction(strategy)).value;
+    if (confirm.err) {
+      throw new Error(JSON.stringify(confirm.err));
     }
     return sig;
   } catch (e: any) {
-    console.error(e);
     throw new Error(e);
   }
 }

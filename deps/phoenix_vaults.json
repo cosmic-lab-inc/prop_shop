@@ -610,7 +610,7 @@
       "accounts": [
         {
           "name": "vault",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false,
           "docs": [
             "If delegate has authority to sign for vault, then any Phoenix CPI is valid.",
@@ -734,7 +734,7 @@
         },
         {
           "name": "investor",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -824,7 +824,7 @@
         },
         {
           "name": "investor",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -900,6 +900,16 @@
         {
           "name": "marketSolTokenAccount",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "solUsdcMarket",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "solUsdcMarketSeat",
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -2071,5 +2081,8 @@
       "name": "MarketPositionNotFound",
       "msg": "MarketPositionNotFound"
     }
-  ]
+  ],
+  "metadata": {
+    "address": "VAULT8EhRg1mduZJYCab7xkNq7ieXMQ1Tqec2LPU6jv"
+  }
 }

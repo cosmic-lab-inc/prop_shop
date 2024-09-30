@@ -275,31 +275,31 @@ async fn bootstrap_markets() -> anyhow::Result<()> {
     println!("post SOL/USDC balance: {}", post_balance);
     println!("==================================================================");
 
-    // // JUP/SOL market
-    // airdrop(&client, &payer.pubkey(), 10.0).await?;
-    // airdrop(&client, &authority.pubkey(), 10.0).await?;
-    // let pre_balance = get_lamports(&client, &payer.pubkey()).await?;
-    // println!("pre JUP/SOL balance: {}", pre_balance);
-    // bootstrap_market(BootstrapMarketConfig {
-    //     client: &client,
-    //     payer: &payer,
-    //     authority: &authority,
-    //     market: &jup_sol_market,
-    //     quote_mint: &sol_mint,
-    //     quote_decimals: MOCK_SOL_DECIMALS,
-    //     base_mint: &jup_mint,
-    //     base_decimals: MOCK_JUP_DECIMALS,
-    //
-    //     num_quote_lots_per_quote_unit: None,
-    //     num_base_lots_per_base_unit: None,
-    //     tick_size_in_quote_lots_per_base_unit: None,
-    //     fee_bps: None,
-    //     raw_base_units_per_base_unit: None,
-    // })
-    // .await?;
-    // let post_balance = get_lamports(&client, &payer.pubkey()).await?;
-    // println!("post JUP/SOL balance: {}", post_balance);
-    // println!("==================================================================");
+    // JUP/SOL market
+    airdrop(&client, &payer.pubkey(), 10.0).await?;
+    airdrop(&client, &authority.pubkey(), 10.0).await?;
+    let pre_balance = get_lamports(&client, &payer.pubkey()).await?;
+    println!("pre JUP/SOL balance: {}", pre_balance);
+    bootstrap_market(BootstrapMarketConfig {
+        client: &client,
+        payer: &payer,
+        authority: &authority,
+        market: &jup_sol_market,
+        quote_mint: &sol_mint,
+        quote_decimals: MOCK_SOL_DECIMALS,
+        base_mint: &jup_mint,
+        base_decimals: MOCK_JUP_DECIMALS,
+
+        num_quote_lots_per_quote_unit: None,
+        num_base_lots_per_base_unit: None,
+        tick_size_in_quote_lots_per_base_unit: None,
+        fee_bps: None,
+        raw_base_units_per_base_unit: None,
+    })
+    .await?;
+    let post_balance = get_lamports(&client, &payer.pubkey()).await?;
+    println!("post JUP/SOL balance: {}", post_balance);
+    println!("==================================================================");
     //
     // // JUP/USDC market
     // airdrop(&client, &payer.pubkey(), 10.0).await?;
