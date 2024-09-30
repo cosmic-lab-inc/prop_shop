@@ -585,6 +585,19 @@ export class PhoenixVaultsClient {
     return usdc;
   }
 
+  public percentShare(vaultKey: PublicKey): number | undefined {
+    const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
+    const investor = this.investor(investorKey)?.data;
+    if (!investor) {
+      return undefined;
+    }
+    const vault = this.vault(vaultKey)?.data;
+    if (!vault) {
+      return undefined;
+    }
+    return investor.vaultShares.toNumber() / vault.totalShares.toNumber() * 100;
+  }
+
   public equityInVault(vault: PublicKey): number | undefined {
     return this._equities.get(vault.toString());
   }
