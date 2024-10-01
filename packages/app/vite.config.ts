@@ -41,14 +41,14 @@ export default defineConfig(({mode}) => {
     resolve: {
       alias,
     },
-    server: {
-      proxy: {
-        "/api": "http://localhost:5173",
-      },
-      cors: true,
-      strictPort: true,
-      port: 5173,
-    },
+    // server: {
+    //   proxy: {
+    //     "/api": "http://localhost:5173",
+    //   },
+    //   cors: true,
+    //   strictPort: true,
+    //   port: 5173,
+    // },
     define: {
       global: "globalThis",
       "process.env.RPC_URL": JSON.stringify(env.RPC_URL),

@@ -43,8 +43,40 @@ import {
   Wallet,
 } from "@drift-labs/sdk";
 import {IDL, VaultClient} from "@drift-labs/vaults-sdk";
-import {sendTransactionWithResult} from "../packages/sdk";
-import {InstructionReturn, keypairToAsyncSigner, walletToAsyncSigner,} from "@cosmic-lab/data-source";
+import {
+  AsyncSigner,
+  buildAndSignTransaction,
+  InstructionReturn,
+  keypairToAsyncSigner,
+  sendTransaction,
+  walletToAsyncSigner,
+} from "@cosmic-lab/data-source";
+import {err, ok, Result} from "neverthrow";
+
+async function sendTransactionWithResult(
+  instructions: InstructionReturn[],
+  funder: AsyncSigner,
+  connection: Connection
+): Promise<Result<string, TransactionError>> {
+  try {
+    const tx = await buildAndSignTransaction(instructions, funder, {
+      connection,
+      commitment: 'confirmed',
+    });
+    const res = await sendTransaction(tx, connection, {
+      sendOptions: {
+        skipPreflight: false,
+      },
+    });
+    if (res.value.isErr()) {
+      return err(res.value.error);
+    } else {
+      return ok(res.value.value);
+    }
+  } catch (e: any) {
+    throw new Error(e);
+  }
+}
 
 export async function mockOracle(
   price: number = 50 * 10e7,
