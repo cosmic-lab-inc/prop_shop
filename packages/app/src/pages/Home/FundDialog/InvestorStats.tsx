@@ -291,14 +291,16 @@ const Stats = observer(
         <Container>
           <div style={{width: '100%'}}>
             <TableRow hover>
+              <Text>Name</Text>
+              <Text>{fund.title}</Text>
+            </TableRow>
+            <TableRow hover>
               <Text>Equity</Text>
               <Text>{equity ? `$${formatNumber(truncateNumber(equity, 2))}` : '--'}</Text>
-              {/*<TextIconWrapper text={equity ? `$${formatNumber(equity)}` : '--'}/>*/}
             </TableRow>
             <TableRow hover>
               <Text>Ownership</Text>
               <Text>{`${truncateNumber(percentShare ?? 0, 2)}%`}</Text>
-              {/*<TextIconWrapper text={`${truncateNumber(percentShare ?? 0, 2)}%`}/>*/}
             </TableRow>
 
             {timer && (

@@ -207,7 +207,14 @@ function Header({fund}: { fund: FundOverview }) {
   return (
     <Box>
       <TableRow header>
-        <Typography variant="h3">{truncateString(fund.title, 11)}</Typography>
+        <Typography
+          sx={{
+            whiteSpace: 'nowrap',
+          }}
+          variant="h3"
+        >
+          {fund.venue === Venue.Drift ? truncateString(fund.title, 11) : truncateString(fund.title, 13)}
+        </Typography>
         {fund.venue === Venue.Drift ? <DriftIcon/> : <PhoenixIcon/>}
       </TableRow>
     </Box>
@@ -246,8 +253,8 @@ const TableRow = styled('div')<{
       backgroundColor: color,
     }),
 
-    paddingLeft: 20,
-    paddingRight: 20,
+    paddingLeft: 15,
+    paddingRight: 15,
 
     ...(narrow
       ? {
