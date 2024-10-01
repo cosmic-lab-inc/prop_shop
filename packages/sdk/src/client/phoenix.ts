@@ -856,6 +856,7 @@ export class PhoenixVaultsClient {
 
   private removeWithdrawTimer(vault: PublicKey) {
     const result = this._timers.get(vault.toString());
+    console.log('timer:', result?.equity);
     if (result) {
       clearInterval(result.timer);
     }

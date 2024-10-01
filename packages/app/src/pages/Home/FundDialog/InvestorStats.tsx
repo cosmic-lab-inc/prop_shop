@@ -292,29 +292,14 @@ const Stats = observer(
           <div style={{width: '100%'}}>
             <TableRow hover>
               <Text>Equity</Text>
-              <TextIconWrapper text={equity ? `$${formatNumber(equity)}` : '--'}/>
+              <Text>{equity ? `$${formatNumber(truncateNumber(equity, 2))}` : '--'}</Text>
+              {/*<TextIconWrapper text={equity ? `$${formatNumber(equity)}` : '--'}/>*/}
             </TableRow>
             <TableRow hover>
               <Text>Ownership</Text>
-              {/*<Text>{`${truncateNumber(percentShare ?? 0, 2)}%`}</Text>*/}
-              <TextIconWrapper text={`${truncateNumber(percentShare ?? 0, 2)}%`}/>
+              <Text>{`${truncateNumber(percentShare ?? 0, 2)}%`}</Text>
+              {/*<TextIconWrapper text={`${truncateNumber(percentShare ?? 0, 2)}%`}/>*/}
             </TableRow>
-            {/*<TableRow hover>*/}
-            {/*  <Text>Investor</Text>*/}
-            {/*  <TextIconWrapper*/}
-            {/*    text={client*/}
-            {/*      .getInvestorAddress({*/}
-            {/*        vault: fund.vault,*/}
-            {/*        venue: fund.venue,*/}
-            {/*      })*/}
-            {/*      .toString()}*/}
-            {/*    shorten*/}
-            {/*  />*/}
-            {/*</TableRow>*/}
-            {/*<TableRow hover>*/}
-            {/*  <Text>Fund</Text>*/}
-            {/*  <TextIconWrapper text={fund.vault.toString()} shorten/>*/}
-            {/*</TableRow>*/}
 
             {timer && (
               <>
@@ -326,7 +311,7 @@ const Stats = observer(
                 )}
                 <TableRow hover>
                   <Text>Withdraw Request Equity</Text>
-                  <TextIconWrapper text={`$${timer.equity}`}/>
+                  <Text>{`$${formatNumber(truncateNumber(timer.equity, 2))}`}</Text>
                 </TableRow>
               </>
             )}
