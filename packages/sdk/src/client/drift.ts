@@ -213,10 +213,10 @@ export class DriftVaultsClient {
     if (!this.disableCache) {
       const preSub = Date.now();
       await this.loadCache(driftVaultsProgram);
-      console.log(`DriftVaults cache loaded in ${Date.now() - preSub}ms`);
+      console.debug(`DriftVaults cache loaded in ${Date.now() - preSub}ms`);
     }
 
-    console.log(`initialized DriftVaultsClient in ${Date.now() - now}ms`);
+    console.debug(`initialized DriftVaultsClient in ${Date.now() - now}ms`);
     this.loading = false;
   }
 
