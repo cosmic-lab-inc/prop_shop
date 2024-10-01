@@ -36,7 +36,7 @@ export const Toolbar = observer(
         } as Searchable<FundOverview>;
       });
       setFunds(funds);
-    }, [client, client?.fundOverviews, client?.publicKey]);
+    }, [client, client?.fundOverviews, client?.key]);
 
     const changeSearchInput = (input: string) => {
       setSearchInput(input.toLowerCase());

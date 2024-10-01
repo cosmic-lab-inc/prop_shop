@@ -46,6 +46,7 @@ import {
   getSeatDepositCollectorAddress,
   getSeatManagerAddress,
   MarketState,
+  RawMarketConfig,
 } from '@ellipsis-labs/phoenix-sdk';
 import {
   encodeName,
@@ -161,7 +162,19 @@ export class PhoenixVaultsClient {
       console.debug(`loaded localnet Phoenix markets in ${Date.now() - now}ms`);
     } else {
       const now = Date.now();
-      this._phoenixClient = await PhoenixClient.create(this.conn);
+      const DEFAULT_CONFIG_URL =
+        "https://raw.githubusercontent.com/Ellipsis-Labs/phoenix-sdk/master/master_config.json";
+      const rawMarketConfigs: RawMarketConfig = await fetch(DEFAULT_CONFIG_URL).then(
+        (response) => {
+          return response.json();
+        }
+      );
+      this._phoenixClient = await PhoenixClient.createFromConfig(
+        this.conn,
+        rawMarketConfigs,
+        false,
+        false
+      );
       console.debug(`loaded Phoenix markets in ${Date.now() - now}ms`);
     }
     const registry = await this._program.account.marketRegistry.fetch(

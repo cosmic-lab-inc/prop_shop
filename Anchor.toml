@@ -6,7 +6,7 @@ skip-lint = false
 drift_vaults = "vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR"
 drift = "dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH"
 pyth = "FsJ3A3u2vn5cTVofAjvy6y5kwABJAqYWpe4975bi2epH"
-phoenix_vaults = "VAULT8EhRg1mduZJYCab7xkNq7ieXMQ1Tqec2LPU6jv"
+phoenix_vaults = "VLt8tiD4iUGVuxFRr1NiN63BYJGKua5rNpEcsEGzdBq"
 
 [registry]
 url = "https://api.apr.dev"
@@ -32,7 +32,7 @@ address = "FsJ3A3u2vn5cTVofAjvy6y5kwABJAqYWpe4975bi2epH"
 program = "./deps/pyth.so"
 
 [[test.genesis]]
-address = "VAULT8EhRg1mduZJYCab7xkNq7ieXMQ1Tqec2LPU6jv"
+address = "VLt8tiD4iUGVuxFRr1NiN63BYJGKua5rNpEcsEGzdBq"
 program = "./deps/phoenix_vaults.so"
 
 [[test.genesis]]
