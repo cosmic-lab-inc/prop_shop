@@ -86,6 +86,7 @@ interface SolUsdcMarketConfig {
 export class PhoenixVaultsClient {
   private readonly conn: Connection;
   private wallet: WalletContextState;
+  key: PublicKey;
   _phoenixClient: PhoenixClient | undefined;
   _program: Program<PhoenixVaults> | undefined;
   _solUsdcMarket: SolUsdcMarketConfig | undefined;
@@ -110,6 +111,10 @@ export class PhoenixVaultsClient {
   constructor(config: CreatePropShopClientConfig) {
     makeAutoObservable(this);
     this.wallet = config.wallet;
+    if (!config.wallet.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+    this.key = config.wallet.publicKey;
     this.conn = config.connection;
     this.disableCache = config.disableCache ?? false;
     this.dummyWallet = config.dummyWallet ?? false;
@@ -123,7 +128,7 @@ export class PhoenixVaultsClient {
    * Initialize the client.
    * Call this upon connecting a wallet.
    */
-  public async initialize(): Promise<void> {
+  async initialize(): Promise<void> {
     if (!this.wallet) {
       throw new Error('Wallet not connected during initialization');
     }
@@ -153,11 +158,11 @@ export class PhoenixVaultsClient {
         false,
         false
       );
-      console.log(`loaded localnet Phoenix markets in ${Date.now() - now}ms`);
+      console.debug(`loaded localnet Phoenix markets in ${Date.now() - now}ms`);
     } else {
       const now = Date.now();
       this._phoenixClient = await PhoenixClient.create(this.conn);
-      console.log(`loaded Phoenix markets in ${Date.now() - now}ms`);
+      console.debug(`loaded Phoenix markets in ${Date.now() - now}ms`);
     }
     const registry = await this._program.account.marketRegistry.fetch(
       getMarketRegistryAddressSync()
@@ -209,10 +214,10 @@ export class PhoenixVaultsClient {
     if (!this.disableCache) {
       const preSub = Date.now();
       await this.loadCache(this._program);
-      console.log(`PhoenixVaults cache loaded in ${Date.now() - preSub}ms`);
+      console.debug(`PhoenixVaults cache loaded in ${Date.now() - preSub}ms`);
     }
 
-    console.log(`initialized PhoenixVaultsClient in ${Date.now() - now}ms`);
+    console.debug(`initialized PhoenixVaultsClient in ${Date.now() - now}ms`);
     this.loading = false;
   }
 
@@ -239,9 +244,17 @@ export class PhoenixVaultsClient {
     await this._cache.subscribe();
   }
 
-  public async updateWallet(config: UpdateWalletConfig) {
+  private setWallet(wallet: WalletContextState) {
+    this.wallet = wallet;
+    if (!wallet.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+    this.key = wallet.publicKey;
+  }
+
+  async updateWallet(config: UpdateWalletConfig) {
     this.dummyWallet = config.dummyWallet ?? false;
-    this.wallet = config.wallet;
+    this.setWallet(config.wallet);
 
     // update VaultClient wallet
     const anchorWallet = walletAdapterToAnchorWallet(this.wallet);
@@ -263,25 +276,18 @@ export class PhoenixVaultsClient {
   // Getters and utils
   //
 
-  public get phoenixClient(): PhoenixClient {
+  get phoenixClient(): PhoenixClient {
     if (!this._phoenixClient) {
       throw new Error('PhoenixVaultsClient not initialized');
     }
     return this._phoenixClient;
   }
 
-  public get program(): Program<PhoenixVaults> {
+  get program(): Program<PhoenixVaults> {
     if (!this._program) {
       throw new Error('PhoenixVaultsClient not initialized');
     }
     return this._program;
-  }
-
-  get publicKey(): PublicKey {
-    if (!this.wallet.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-    return this.wallet.publicKey;
   }
 
   get solUsdcMarket(): SolUsdcMarketConfig {
@@ -311,7 +317,7 @@ export class PhoenixVaultsClient {
         message: `Vault ${vault.toString()} not found`,
       });
     }
-    if (vaultAcct.protocol.equals(this.publicKey)) {
+    if (vaultAcct.protocol.equals(this.key)) {
       return ok(true);
     } else {
       return ok(false);
@@ -327,14 +333,14 @@ export class PhoenixVaultsClient {
       });
     }
     // check if wallet is manager
-    if (vaultAcct.manager.equals(this.publicKey)) {
+    if (vaultAcct.manager.equals(this.key)) {
       return ok(true);
     }
     return ok(false);
   }
 
-  public getInvestorAddress(vault: PublicKey) {
-    return getInvestorAddressSync(vault, this.publicKey);
+  getInvestorAddress(vault: PublicKey) {
+    return getInvestorAddressSync(vault, this.key);
   }
 
   private async sendTx(
@@ -357,7 +363,7 @@ export class PhoenixVaultsClient {
       .getLatestBlockhash()
       .then((res) => res.blockhash);
     const msg = new anchor.web3.TransactionMessage({
-      payerKey: this.publicKey,
+      payerKey: this.key,
       recentBlockhash,
       instructions,
     }).compileToV0Message();
@@ -418,7 +424,7 @@ export class PhoenixVaultsClient {
   // State and cache
   //
 
-  public vault(key: PublicKey): Data<PublicKey, Vault> | undefined {
+  vault(key: PublicKey): Data<PublicKey, Vault> | undefined {
     const data = this._vaults.get(key.toString());
     if (!data) {
       return;
@@ -430,20 +436,20 @@ export class PhoenixVaultsClient {
     }
   }
 
-  public managedVaults(): Data<PublicKey, Vault>[] {
+  managedVaults(): Data<PublicKey, Vault>[] {
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
     const vaults = this.vaults();
     return vaults.filter((v) => {
-      return v.data.manager === this.publicKey;
+      return v.data.manager === this.key;
     });
   }
 
-  public investedVaults(): PublicKey[] {
+  investedVaults(): PublicKey[] {
     const investors = this.investors(true);
     return investors.map((vd) => vd.data.vault);
   }
 
-  public async fetchVault(key: PublicKey): Promise<Vault | undefined> {
+  async fetchVault(key: PublicKey): Promise<Vault | undefined> {
     try {
       const vault: Vault = await this.program.account.vault.fetch(key);
       this._vaults.set(key.toString(), vault);
@@ -453,7 +459,7 @@ export class PhoenixVaultsClient {
     }
   }
 
-  public async fetchInvestor(key: PublicKey): Promise<Investor | undefined> {
+  async fetchInvestor(key: PublicKey): Promise<Investor | undefined> {
     try {
       const investor: Investor = await this.program.account.investor.fetch(key);
       this._investors.set(key.toString(), investor);
@@ -463,14 +469,14 @@ export class PhoenixVaultsClient {
     }
   }
 
-  public vaults(filters?: {
+  vaults(filters?: {
     managed?: boolean;
     invested?: boolean;
   }): Data<PublicKey, Vault>[] {
     const vaults = Array.from(this._vaults.entries())
       .filter(([_key, value]) => {
         const managedFilter = filters?.managed
-          ? value.manager.equals(this.publicKey)
+          ? value.manager.equals(this.key)
           : true;
         const investedFilter = filters?.invested
           ? this.investedVaults()
@@ -488,7 +494,7 @@ export class PhoenixVaultsClient {
     return vaults;
   }
 
-  public investor(key: PublicKey): Data<PublicKey, Investor> | undefined {
+  investor(key: PublicKey): Data<PublicKey, Investor> | undefined {
     const data = this._investors.get(key.toString());
     if (!data) {
       return undefined;
@@ -500,7 +506,7 @@ export class PhoenixVaultsClient {
     }
   }
 
-  public async getOrFetchInvestor(key: PublicKey) {
+  async getOrFetchInvestor(key: PublicKey) {
     const investor = this.investor(key)?.data;
     if (!investor) {
       const _investor = await this.fetchInvestor(key);
@@ -514,7 +520,7 @@ export class PhoenixVaultsClient {
     }
   }
 
-  public investors(filterByAuthority?: boolean): Data<PublicKey, Investor>[] {
+  investors(filterByAuthority?: boolean): Data<PublicKey, Investor>[] {
     if (!this._cache) {
       throw new Error('Cache not initialized');
     }
@@ -522,7 +528,7 @@ export class PhoenixVaultsClient {
     const investors = Array.from(this._investors.entries())
       .filter(([_key, data]) => {
         if (filterByAuthority) {
-          return data.authority.equals(this.publicKey);
+          return data.authority.equals(this.key);
         } else {
           return true;
         }
@@ -540,7 +546,7 @@ export class PhoenixVaultsClient {
   // Fetch and aggregate data
   //
 
-  public async fetchVaultEquity(vault: Vault): Promise<number> {
+  async fetchVaultEquity(vault: Vault): Promise<number> {
     await this.phoenixClient.refreshAllMarkets(false);
     let equity = 0;
     equity += await getTokenBalance(this.conn, vault.usdcTokenAccount);
@@ -559,7 +565,7 @@ export class PhoenixVaultsClient {
     return equity;
   }
 
-  public async fetchInvestorEquity(
+  async fetchInvestorEquity(
     vaultKey: PublicKey
   ): Promise<number | undefined> {
     const vault = this.vault(vaultKey)?.data;
@@ -567,7 +573,7 @@ export class PhoenixVaultsClient {
       throw new Error(`Vault ${vaultKey.toString()} not found`);
     }
 
-    const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
+    const investorKey = getInvestorAddressSync(vaultKey, this.key);
     const investor = this.investor(investorKey)?.data;
     if (!investor) {
       console.debug(`Investor ${investorKey.toString()} not found for vault`);
@@ -585,8 +591,8 @@ export class PhoenixVaultsClient {
     return usdc;
   }
 
-  public percentShare(vaultKey: PublicKey): number | undefined {
-    const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
+  percentShare(vaultKey: PublicKey): number | undefined {
+    const investorKey = getInvestorAddressSync(vaultKey, this.key);
     const investor = this.investor(investorKey)?.data;
     if (!investor) {
       return undefined;
@@ -598,7 +604,7 @@ export class PhoenixVaultsClient {
     return investor.vaultShares.toNumber() / vault.totalShares.toNumber() * 100;
   }
 
-  public equityInVault(vault: PublicKey): number | undefined {
+  equityInVault(vault: PublicKey): number | undefined {
     return this._equities.get(vault.toString());
   }
 
@@ -606,7 +612,7 @@ export class PhoenixVaultsClient {
     this._fundOverviews.set(key.toString(), fo);
   }
 
-  public async fetchFundOverview(
+  async fetchFundOverview(
     vaultKey: PublicKey
   ): Promise<FundOverview | undefined> {
     const vault = this.vault(vaultKey)?.data;
@@ -652,7 +658,7 @@ export class PhoenixVaultsClient {
     return fo;
   }
 
-  public async fetchFundOverviews(): Promise<FundOverview[]> {
+  async fetchFundOverviews(): Promise<FundOverview[]> {
     const vaultInvestors = new Map<string, Map<string, number>>();
     for (const investor of this.investors()) {
       const vaultKey = investor.data.vault.toString();
@@ -697,7 +703,7 @@ export class PhoenixVaultsClient {
     return fundOverviews;
   }
 
-  public get fundOverviews(): FundOverview[] {
+  get fundOverviews(): FundOverview[] {
     const values = Array.from(this._fundOverviews.values());
     values.sort((a, b) => {
       const _a = fundDollarPnl(a);
@@ -711,7 +717,7 @@ export class PhoenixVaultsClient {
   // Withdraw timers
   //
 
-  public withdrawTimer(vault: PublicKey): WithdrawRequestTimer | undefined {
+  withdrawTimer(vault: PublicKey): WithdrawRequestTimer | undefined {
     return this._timers.get(vault.toString());
   }
 
@@ -720,7 +726,7 @@ export class PhoenixVaultsClient {
     if (!vaultAcct) {
       throw new Error(`Vault ${vault.toString()} not found`);
     }
-    const investorKey = getInvestorAddressSync(vault, this.publicKey);
+    const investorKey = getInvestorAddressSync(vault, this.key);
 
     // force fetch of vault and vaultDepositor accounts in case websocket is slow to update
     await this.fetchVault(vault);
@@ -848,7 +854,7 @@ export class PhoenixVaultsClient {
     }, 1000);
   }
 
-  public async createWithdrawTimer(vault: PublicKey): Promise<void> {
+  async createWithdrawTimer(vault: PublicKey): Promise<void> {
     await this.createManagerWithdrawTimer(vault);
     await this.createProtocolWithdrawTimer(vault);
     await this.createInvestorWithdrawTimer(vault);
@@ -867,7 +873,7 @@ export class PhoenixVaultsClient {
   // Investor actions
   //
 
-  public async deposit(vaultKey: PublicKey, usdc: number): Promise<SnackInfo> {
+  async deposit(vaultKey: PublicKey, usdc: number): Promise<SnackInfo> {
     const vault = this.vault(vaultKey)?.data;
     if (!vault) {
       return {
@@ -881,10 +887,10 @@ export class PhoenixVaultsClient {
       vaultKey,
       true
     );
-    const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
+    const investorKey = getInvestorAddressSync(vaultKey, this.key);
     const investorQuoteTokenAccount = getAssociatedTokenAddressSync(
       solUsdcMarket.usdcMint,
-      this.publicKey
+      this.key
     );
 
     const ixs: TransactionInstruction[] = [];
@@ -894,9 +900,9 @@ export class PhoenixVaultsClient {
     if (investorUsdcExists === null) {
       ixs.push(
         createAssociatedTokenAccountInstruction(
-          this.publicKey,
+          this.key,
           investorQuoteTokenAccount,
-          this.publicKey,
+          this.key,
           solUsdcMarket.usdcMint
         )
       );
@@ -910,7 +916,7 @@ export class PhoenixVaultsClient {
           .accounts({
             vault: vaultKey,
             investor: investorKey,
-            authority: this.publicKey,
+            authority: this.key,
           })
           .instruction()
       );
@@ -924,7 +930,7 @@ export class PhoenixVaultsClient {
         .accounts({
           vault: vaultKey,
           investor: investorKey,
-          authority: this.publicKey,
+          authority: this.key,
           marketRegistry: getMarketRegistryAddressSync(),
           investorQuoteTokenAccount,
           vaultQuoteTokenAccount,
@@ -943,11 +949,11 @@ export class PhoenixVaultsClient {
     );
   }
 
-  public async requestWithdraw(
+  async requestWithdraw(
     vaultKey: PublicKey,
     usdc: number
   ): Promise<SnackInfo> {
-    const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
+    const investorKey = getInvestorAddressSync(vaultKey, this.key);
     const amount = new BN(usdc * QUOTE_PRECISION.toNumber());
     const vault = this.vault(vaultKey)?.data;
     if (!vault) {
@@ -962,7 +968,7 @@ export class PhoenixVaultsClient {
       .accounts({
         vault: vaultKey,
         investor: investorKey,
-        authority: this.publicKey,
+        authority: this.key,
         marketRegistry: getMarketRegistryAddressSync(),
         vaultUsdcTokenAccount,
       })
@@ -980,7 +986,7 @@ export class PhoenixVaultsClient {
     );
   }
 
-  public async cancelWithdrawRequest(vaultKey: PublicKey): Promise<SnackInfo> {
+  async cancelWithdrawRequest(vaultKey: PublicKey): Promise<SnackInfo> {
     const vault = this.vault(vaultKey)?.data;
     if (!vault) {
       return {
@@ -993,9 +999,9 @@ export class PhoenixVaultsClient {
       .cancelWithdrawRequest()
       .accounts({
         vault: vaultKey,
-        investor: getInvestorAddressSync(vaultKey, this.publicKey),
+        investor: getInvestorAddressSync(vaultKey, this.key),
         marketRegistry: getMarketRegistryAddressSync(),
-        authority: this.publicKey,
+        authority: this.key,
         vaultUsdcTokenAccount: vault.usdcTokenAccount,
       })
       .remainingAccounts(this.marketAccountMetas)
@@ -1012,7 +1018,7 @@ export class PhoenixVaultsClient {
     );
   }
 
-  public async withdraw(vaultKey: PublicKey): Promise<SnackInfo> {
+  async withdraw(vaultKey: PublicKey): Promise<SnackInfo> {
     const vault = this.vault(vaultKey)?.data;
     if (!vault) {
       return {
@@ -1020,12 +1026,12 @@ export class PhoenixVaultsClient {
         message: `Vault ${vaultKey.toString()} not found`,
       };
     }
-    const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
+    const investorKey = getInvestorAddressSync(vaultKey, this.key);
     const {market: solUsdcMarket, usdcMint, solMint} = this.solUsdcMarket;
     const marketRegistry = getMarketRegistryAddressSync();
     const investorUsdcTokenAccount = getAssociatedTokenAddressSync(
       usdcMint,
-      this.publicKey
+      this.key
     );
     const vaultSolTokenAccount = getAssociatedTokenAddressSync(
       solMint,
@@ -1057,7 +1063,7 @@ export class PhoenixVaultsClient {
         .accounts({
           vault: vaultKey,
           investor: investorKey,
-          authority: this.publicKey,
+          authority: this.key,
           marketRegistry,
           vaultQuoteTokenAccount: vaultUsdcTokenAccount,
         })
@@ -1106,7 +1112,7 @@ export class PhoenixVaultsClient {
       .accounts({
         vault: vaultKey,
         investor: investorKey,
-        authority: this.publicKey,
+        authority: this.key,
         marketRegistry,
         investorQuoteTokenAccount: investorUsdcTokenAccount,
         phoenix: PHOENIX_PROGRAM_ID,
@@ -1147,11 +1153,11 @@ export class PhoenixVaultsClient {
   ): Promise<Result<TransactionInstruction[], string>> {
     const vaultKey = vault.pubkey;
     const {market: solUsdcMarket, solMint, usdcMint} = this.solUsdcMarket;
-    const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
+    const investorKey = getInvestorAddressSync(vaultKey, this.key);
     const marketRegistry = getMarketRegistryAddressSync();
     const investorUsdcTokenAccount = getAssociatedTokenAddressSync(
       usdcMint,
-      this.publicKey
+      this.key
     );
     const vaultSolTokenAccount = getAssociatedTokenAddressSync(
       solMint,
@@ -1185,13 +1191,13 @@ export class PhoenixVaultsClient {
       .claimSeat()
       .accounts({
         vault: vaultKey,
-        delegate: this.publicKey,
+        delegate: this.key,
         phoenix: PHOENIX_PROGRAM_ID,
         logAuthority,
         market,
         seatManager,
         seatDepositCollector,
-        payer: this.publicKey,
+        payer: this.key,
         seat,
         systemProgram: SystemProgram.programId,
         phoenixSeatManager: PHOENIX_SEAT_MANAGER_PROGRAM_ID,
@@ -1205,13 +1211,13 @@ export class PhoenixVaultsClient {
       .claimSeat()
       .accounts({
         vault: vaultKey,
-        delegate: this.publicKey,
+        delegate: this.key,
         phoenix: PHOENIX_PROGRAM_ID,
         logAuthority,
         market: solUsdcMarket,
         seatManager: getSeatManagerAddress(solUsdcMarket),
         seatDepositCollector: getSeatDepositCollectorAddress(solUsdcMarket),
-        payer: this.publicKey,
+        payer: this.key,
         seat: solUsdcMarketSeat,
         systemProgram: SystemProgram.programId,
         phoenixSeatManager: PHOENIX_SEAT_MANAGER_PROGRAM_ID,
@@ -1224,7 +1230,7 @@ export class PhoenixVaultsClient {
       .accounts({
         vault: vaultKey,
         investor: investorKey,
-        authority: this.publicKey,
+        authority: this.key,
         marketRegistry,
         investorUsdcTokenAccount,
         phoenix: PHOENIX_PROGRAM_ID,
@@ -1264,11 +1270,11 @@ export class PhoenixVaultsClient {
   ): Promise<Result<TransactionInstruction[], string>> {
     const vaultKey = vault.pubkey;
     const {usdcMint} = this.solUsdcMarket;
-    const investorKey = getInvestorAddressSync(vaultKey, this.publicKey);
+    const investorKey = getInvestorAddressSync(vaultKey, this.key);
     const marketRegistry = getMarketRegistryAddressSync();
     const investorUsdcTokenAccount = getAssociatedTokenAddressSync(
       usdcMint,
-      this.publicKey
+      this.key
     );
     const vaultUsdcTokenAccount = getAssociatedTokenAddressSync(
       usdcMint,
@@ -1297,13 +1303,13 @@ export class PhoenixVaultsClient {
       .claimSeat()
       .accounts({
         vault: vaultKey,
-        delegate: this.publicKey,
+        delegate: this.key,
         phoenix: PHOENIX_PROGRAM_ID,
         logAuthority,
         market,
         seatManager,
         seatDepositCollector,
-        payer: this.publicKey,
+        payer: this.key,
         seat,
         systemProgram: SystemProgram.programId,
         phoenixSeatManager: PHOENIX_SEAT_MANAGER_PROGRAM_ID,
@@ -1316,7 +1322,7 @@ export class PhoenixVaultsClient {
       .accounts({
         vault: vaultKey,
         investor: investorKey,
-        authority: this.publicKey,
+        authority: this.key,
         marketRegistry,
         investorUsdcTokenAccount,
         phoenix: PHOENIX_PROGRAM_ID,
@@ -1341,7 +1347,7 @@ export class PhoenixVaultsClient {
     return ok([claimSeatIx, liquidateIx]);
   }
 
-  public async createVault(params: CreateVaultConfig): Promise<{
+  async createVault(params: CreateVaultConfig): Promise<{
     vault: PublicKey;
     snack: SnackInfo;
   }> {
@@ -1393,7 +1399,7 @@ export class PhoenixVaultsClient {
         this.conn,
         marketState,
         vaultKey,
-        this.publicKey
+        this.key
       ))
     );
     ixs.push(
@@ -1413,7 +1419,7 @@ export class PhoenixVaultsClient {
             true
           ),
           solMint: this.solUsdcMarket.solMint,
-          manager: this.publicKey,
+          manager: this.key,
         })
         .instruction()
     );
@@ -1433,7 +1439,7 @@ export class PhoenixVaultsClient {
           .updateVault(updateParams)
           .accounts({
             vault: vaultKey,
-            manager: this.publicKey,
+            manager: this.key,
           })
           .instruction()
       );
@@ -1457,7 +1463,7 @@ export class PhoenixVaultsClient {
     };
   }
 
-  public defaultUpdateVaultConfig(vault: PublicKey): UpdateVaultConfig {
+  defaultUpdateVaultConfig(vault: PublicKey): UpdateVaultConfig {
     const vaultAcct = this.vault(vault)?.data;
     if (!vaultAcct) {
       throw new Error(`Vault ${vault.toString()} not found`);
@@ -1482,7 +1488,7 @@ export class PhoenixVaultsClient {
     return config;
   }
 
-  public async updateVault(vaultKey: PublicKey, config: UpdateVaultConfig) {
+  async updateVault(vaultKey: PublicKey, config: UpdateVaultConfig) {
     const vault = this.vault(vaultKey)?.data;
     if (!vault) {
       throw new Error(`Vault ${vaultKey.toString()} not found`);
@@ -1534,7 +1540,7 @@ export class PhoenixVaultsClient {
       .updateVault(params)
       .accounts({
         vault: vaultKey,
-        manager: this.publicKey,
+        manager: this.key,
       })
       .instruction();
     return await this.sendTx(

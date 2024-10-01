@@ -1,80 +1,80 @@
 import {
-	AccountMeta,
-	Connection,
-	GetProgramAccountsFilter,
-	PublicKey,
-	SystemProgram,
-	SYSVAR_RENT_PUBKEY,
-	TransactionError,
-	TransactionInstruction,
+  AccountMeta,
+  Connection,
+  GetProgramAccountsFilter,
+  PublicKey,
+  SystemProgram,
+  SYSVAR_RENT_PUBKEY,
+  TransactionError,
+  TransactionInstruction,
 } from '@solana/web3.js';
 import {makeAutoObservable} from 'mobx';
 import * as anchor from '@coral-xyz/anchor';
 import {AnchorProvider, BN, Program, ProgramAccount} from '@coral-xyz/anchor';
 import {
-	decodeName,
-	DriftClient,
-	DriftClientConfig,
-	encodeName,
-	getUserAccountPublicKey,
-	getUserAccountPublicKeySync,
-	getUserStatsAccountPublicKey,
-	QUOTE_PRECISION,
-	SpotMarketAccount,
-	TEN,
-	unstakeSharesToAmount as depositSharesToVaultAmount,
+  decodeName,
+  DriftClient,
+  DriftClientConfig,
+  encodeName,
+  getUserAccountPublicKey,
+  getUserAccountPublicKeySync,
+  getUserStatsAccountPublicKey,
+  QUOTE_PRECISION,
+  SpotMarketAccount,
+  TEN,
+  unstakeSharesToAmount as depositSharesToVaultAmount,
 } from '@drift-labs/sdk';
 import {
-	DRIFT_VAULTS_PROGRAM_ID,
-	ONE_DAY,
-	PROP_SHOP_PERCENT_ANNUAL_FEE,
-	PROP_SHOP_PERCENT_PROFIT_SHARE,
-	PROP_SHOP_PROTOCOL,
+  DRIFT_VAULTS_PROGRAM_ID,
+  ONE_DAY,
+  PROP_SHOP_PERCENT_ANNUAL_FEE,
+  PROP_SHOP_PERCENT_PROFIT_SHARE,
+  PROP_SHOP_PROTOCOL,
 } from '../constants';
 import {getAssociatedTokenAddress} from '../programs';
 import {
-	fundDollarPnl,
-	percentPrecisionToPercent,
-	percentToPercentPrecision,
-	walletAdapterToAnchorWallet,
-	walletAdapterToIWallet,
+  fundDollarPnl,
+  percentPrecisionToPercent,
+  percentToPercentPrecision,
+  walletAdapterToAnchorWallet,
+  walletAdapterToIWallet,
 } from '../utils';
 import {confirmTransactions, sendTransactionWithResult, signatureLink,} from '../rpc';
 import {
-	CreateVaultConfig,
-	Data,
-	DriftSubscriber,
-	DriftVaultsAccountEvents,
-	FundOverview,
-	SnackInfo,
-	UpdateVaultConfig,
-	Venue,
-	WithdrawRequestTimer,
+  CreateVaultConfig,
+  Data,
+  DriftSubscriber,
+  DriftVaultsAccountEvents,
+  FundOverview,
+  SnackInfo,
+  UpdateVaultConfig,
+  Venue,
+  WithdrawRequestTimer,
 } from '../types';
 import {
-	DriftVaults,
-	getTokenVaultAddressSync,
-	getVaultAddressSync,
-	getVaultDepositorAddressSync,
-	IDL as DRIFT_VAULTS_IDL,
-	UpdateVaultParams,
-	Vault,
-	VaultClient,
-	VaultDepositor,
-	VaultParams,
-	VaultProtocol,
-	VaultProtocolParams,
-	VaultWithProtocolParams,
-	WithdrawUnit,
+  DriftVaults,
+  getTokenVaultAddressSync,
+  getVaultAddressSync,
+  getVaultDepositorAddressSync,
+  IDL as DRIFT_VAULTS_IDL,
+  UpdateVaultParams,
+  Vault,
+  VaultClient,
+  VaultDepositor,
+  VaultParams,
+  VaultProtocol,
+  VaultProtocolParams,
+  VaultWithProtocolParams,
+  WithdrawUnit,
 } from '@drift-labs/vaults-sdk';
 import {EventEmitter} from 'events';
 import bs58 from 'bs58';
 import StrictEventEmitter from 'strict-event-emitter-types';
 import {WalletContextState} from '@solana/wallet-adapter-react';
 import {
-	createAssociatedTokenAccountInstruction,
-	getAssociatedTokenAddressSync,
-	TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
 import {err, ok, Result} from 'neverthrow';
 import {InstructionReturn, walletAdapterToAsyncSigner,} from '@cosmic-lab/data-source';
@@ -84,6 +84,7 @@ import {CreatePropShopClientConfig, UpdateWalletConfig} from './types';
 export class DriftVaultsClient {
   private readonly connection: Connection;
   private wallet: WalletContextState;
+  key: PublicKey;
   _vaultClient: VaultClient | undefined;
 
   loading = false;
@@ -106,6 +107,10 @@ export class DriftVaultsClient {
   constructor(config: CreatePropShopClientConfig) {
     makeAutoObservable(this);
     this.wallet = config.wallet;
+    if (!config.wallet.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+    this.key = config.wallet.publicKey;
     this.connection = config.connection;
     this.disableCache = config.disableCache ?? false;
     this.dummyWallet = config.dummyWallet ?? false;
@@ -119,7 +124,7 @@ export class DriftVaultsClient {
    * Initialize the VaultClient.
    * Call this upon connecting a wallet.
    */
-  public async initialize(): Promise<void> {
+  async initialize(): Promise<void> {
     if (!this.wallet) {
       throw new Error('Wallet not connected during initialization');
     }
@@ -170,7 +175,7 @@ export class DriftVaultsClient {
     });
     const preDriftSub = Date.now();
     await driftClient.subscribe();
-    console.log(`DriftClient subscribed in ${Date.now() - preDriftSub}ms`);
+    console.debug(`DriftClient subscribed in ${Date.now() - preDriftSub}ms`);
 
     this._vaultClient = new VaultClient({
       // @ts-ignore
@@ -238,9 +243,17 @@ export class DriftVaultsClient {
     await this._cache.subscribe();
   }
 
-  public async updateWallet(config: UpdateWalletConfig) {
+  private setWallet(wallet: WalletContextState) {
+    this.wallet = wallet;
+    if (!wallet.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+    this.key = wallet.publicKey;
+  }
+
+  async updateWallet(config: UpdateWalletConfig) {
     this.dummyWallet = config.dummyWallet ?? false;
-    this.wallet = config.wallet;
+    this.setWallet(config.wallet);
 
     // update VaultClient wallet
     const anchorWallet = walletAdapterToAnchorWallet(this.wallet);
@@ -266,13 +279,13 @@ export class DriftVaultsClient {
     const preUserSub = Date.now();
     const subUsers = await driftClient.addAndSubscribeToUsers();
     // 1.2s
-    console.log(
+    console.debug(
       `DriftClient subscribed to users in ${Date.now() - preUserSub}ms`
     );
 
     const preAcctSub = Date.now();
     const subAcctSub = await driftClient.accountSubscriber.subscribe();
-    console.log(
+    console.debug(
       `DriftClient subscribed to accounts in ${Date.now() - preAcctSub}ms`
     );
 
@@ -280,25 +293,18 @@ export class DriftVaultsClient {
     if (driftClient.userStats !== undefined) {
       const preStatsSub = Date.now();
       subUserStats = await driftClient.userStats.subscribe();
-      console.log(
+      console.debug(
         `DriftClient subscribed to user stats in ${Date.now() - preStatsSub}ms`
       );
     }
     driftClient.isSubscribed = subUsers && subAcctSub && subUserStats;
   }
 
-  get publicKey(): PublicKey {
-    if (!this.wallet.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-    return this.wallet.publicKey;
-  }
-
   getVaultDepositorAddress(vault: PublicKey): PublicKey {
     return getVaultDepositorAddressSync(
       this.vaultProgram.programId,
       vault,
-      this.publicKey
+      this.key
     );
   }
 
@@ -317,7 +323,7 @@ export class DriftVaultsClient {
     const ixs = [];
     const userKey = getUserAccountPublicKeySync(
       this.driftProgram.programId,
-      this.publicKey,
+      this.key,
       subAccountId
     );
 
@@ -344,11 +350,11 @@ export class DriftVaultsClient {
    * and optionally deposit USDC as collateral.
    * Call this before joining or depositing to a vault.
    */
-  public async initUser(subAccountId = 0): Promise<void> {
+  async initUser(subAccountId = 0): Promise<void> {
     const ixs = [];
     const userKey = getUserAccountPublicKeySync(
       this.driftProgram.programId,
-      this.publicKey,
+      this.key,
       subAccountId
     );
 
@@ -377,7 +383,7 @@ export class DriftVaultsClient {
   /**
    * Uses the active subAccountId and connected wallet as the authority.
    */
-  public userInitialized(): boolean {
+  userInitialized(): boolean {
     const user = this.driftClient.getUserAccount();
     return !!user;
   }
@@ -409,7 +415,7 @@ export class DriftVaultsClient {
     }
   }
 
-  public vault(key: PublicKey): Data<PublicKey, Vault> | undefined {
+  vault(key: PublicKey): Data<PublicKey, Vault> | undefined {
     const data = this._vaults.get(key.toString());
     if (!data) {
       return undefined;
@@ -421,7 +427,7 @@ export class DriftVaultsClient {
     }
   }
 
-  public vaults(filters?: {
+  vaults(filters?: {
     hasProtocol?: boolean;
     managed?: boolean;
     invested?: boolean;
@@ -432,7 +438,7 @@ export class DriftVaultsClient {
           ? value.vaultProtocol
           : true;
         const managedFilter = filters?.managed
-          ? value.manager.equals(this.publicKey)
+          ? value.manager.equals(this.key)
           : true;
         const investedFilter = filters?.invested
           ? this.investedVaults()
@@ -450,17 +456,12 @@ export class DriftVaultsClient {
     return vaults;
   }
 
-  public vaultDepositor(
+  vaultDepositor(
     key: PublicKey,
-    errorIfMissing = true
   ): Data<PublicKey, VaultDepositor> | undefined {
     const data = this._vaultDepositors.get(key.toString());
     if (!data) {
-      if (errorIfMissing) {
-        throw new Error('VaultDepositor not subscribed');
-      } else {
-        return undefined;
-      }
+      return undefined;
     } else {
       return {
         key,
@@ -469,7 +470,7 @@ export class DriftVaultsClient {
     }
   }
 
-  public vaultDepositors(
+  vaultDepositors(
     filterByAuthority?: boolean
   ): Data<PublicKey, VaultDepositor>[] {
     if (!this._cache) {
@@ -479,7 +480,7 @@ export class DriftVaultsClient {
     const vds = Array.from(this._vaultDepositors.entries())
       .filter(([_key, data]) => {
         if (filterByAuthority) {
-          return data.authority.equals(this.publicKey);
+          return data.authority.equals(this.key);
         } else {
           return true;
         }
@@ -493,7 +494,7 @@ export class DriftVaultsClient {
     return vds;
   }
 
-  public get fundOverviews(): FundOverview[] {
+  get fundOverviews(): FundOverview[] {
     const values = Array.from(this._fundOverviews.values());
     values.sort((a, b) => {
       const _a = fundDollarPnl(a);
@@ -503,7 +504,7 @@ export class DriftVaultsClient {
     return values;
   }
 
-  public async fetchVault(key: PublicKey): Promise<Vault | undefined> {
+  async fetchVault(key: PublicKey): Promise<Vault | undefined> {
     try {
       // @ts-ignore ... Vault type omits padding fields, but this is safe.
       const vault: Vault = await this.vaultProgram.account.vault.fetch(key);
@@ -513,7 +514,7 @@ export class DriftVaultsClient {
     }
   }
 
-  public async fetchVaults(
+  async fetchVaults(
     protocolsOnly?: boolean
   ): Promise<ProgramAccount<Vault>[]> {
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
@@ -535,7 +536,7 @@ export class DriftVaultsClient {
   /**
    * VaultDepositors the connected wallet is the authority of.
    */
-  public async fetchVaultDepositor(
+  async fetchVaultDepositor(
     key: PublicKey
   ): Promise<VaultDepositor | undefined> {
     try {
@@ -550,7 +551,7 @@ export class DriftVaultsClient {
   /**
    * VaultDepositors the connected wallet is the authority of.
    */
-  public async fetchVaultDepositors(
+  async fetchVaultDepositors(
     filterByAuthority?: boolean
   ): Promise<ProgramAccount<VaultDepositor>[]> {
     let filters: GetProgramAccountsFilter[] | undefined = undefined;
@@ -561,7 +562,7 @@ export class DriftVaultsClient {
             // "authority" field offset
             offset: 64,
             // this wallet must be the authority of the VaultDepositor to be the investor
-            bytes: this.publicKey.toBase58(),
+            bytes: this.key.toBase58(),
           },
         },
       ];
@@ -583,7 +584,7 @@ export class DriftVaultsClient {
     this._fundOverviews.set(key.toString(), fo);
   }
 
-  public async fetchFundOverview(vaultKey: PublicKey): Promise<FundOverview> {
+  async fetchFundOverview(vaultKey: PublicKey): Promise<FundOverview> {
     const vault = this.vault(vaultKey);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultKey.toString()}`);
@@ -643,7 +644,7 @@ export class DriftVaultsClient {
     return fo;
   }
 
-  public async fetchFundOverviews(
+  async fetchFundOverviews(
     protocolsOnly?: boolean
   ): Promise<FundOverview[]> {
     const vaults = this.vaults({
@@ -714,20 +715,20 @@ export class DriftVaultsClient {
   /**
    * Vaults the connected wallet manages.
    */
-  public managedVaults(protocolsOnly?: boolean): Data<PublicKey, Vault>[] {
+  managedVaults(protocolsOnly?: boolean): Data<PublicKey, Vault>[] {
     // @ts-ignore ... Vault type omits padding fields, but this is safe.
     const vaults = this.vaults({
       hasProtocol: protocolsOnly,
     });
     return vaults.filter((v) => {
-      return v.data.manager === this.publicKey;
+      return v.data.manager === this.key;
     });
   }
 
   /**
    * Vaults the connected wallet is invested in.
    */
-  public investedVaults(): PublicKey[] {
+  investedVaults(): PublicKey[] {
     const vds = this.vaultDepositors(true);
     return vds.map((vd) => vd.data.vault);
   }
@@ -735,7 +736,7 @@ export class DriftVaultsClient {
   /**
    * Aggregate total value locked across all vaults denominated in USDC.
    */
-  public async aggregateTVL(
+  async aggregateTVL(
     vaults?: Data<PublicKey, Vault>[],
     vaultDepositors?: Data<PublicKey, VaultDepositor>[]
   ): Promise<number> {
@@ -785,7 +786,7 @@ export class DriftVaultsClient {
     return usdc;
   }
 
-  public async managerEquityInDepositAsset(
+  async managerEquityInDepositAsset(
     vault: PublicKey
   ): Promise<number | undefined> {
     const vaultAccount = this.vault(vault)?.data;
@@ -823,7 +824,7 @@ export class DriftVaultsClient {
     return usdcBN.toNumber() / QUOTE_PRECISION.toNumber();
   }
 
-  public async protocolEquityInDepositAsset(
+  async protocolEquityInDepositAsset(
     vault: PublicKey
   ): Promise<number | undefined> {
     const vaultAccount = this.vault(vault)?.data;
@@ -856,7 +857,7 @@ export class DriftVaultsClient {
     return usdcBN.toNumber() / QUOTE_PRECISION.toNumber();
   }
 
-  public async vaultDepositorEquityInDepositAsset(
+  async vaultDepositorEquityInDepositAsset(
     vdKey: PublicKey,
     vaultKey: PublicKey,
     forceFetch = false
@@ -880,7 +881,7 @@ export class DriftVaultsClient {
       }
       vaultDepositor = data;
     } else {
-      vaultDepositor = this.vaultDepositor(vdKey, false)?.data;
+      vaultDepositor = this.vaultDepositor(vdKey)?.data;
     }
     if (!vaultDepositor) {
       return undefined;
@@ -898,7 +899,7 @@ export class DriftVaultsClient {
   /**
    * Aggregate deposits (not including profits) across all vaults denominated in USDC.
    */
-  public aggregateDeposits(
+  aggregateDeposits(
     vaultDepositors?: Data<PublicKey, VaultDepositor>[]
   ): number {
     let vds: Data<PublicKey, VaultDepositor>[];
@@ -922,7 +923,7 @@ export class DriftVaultsClient {
   /**
    * Aggregate PNL across all vaults denominated in USDC.
    */
-  public async aggregatePNL(
+  async aggregatePNL(
     vaultDepositors?: Data<PublicKey, VaultDepositor>[]
   ): Promise<number> {
     let vds: Data<PublicKey, VaultDepositor>[];
@@ -943,7 +944,7 @@ export class DriftVaultsClient {
   // Investor actions
   //
 
-  public async joinVault(vault: PublicKey): Promise<SnackInfo> {
+  async joinVault(vault: PublicKey): Promise<SnackInfo> {
     if (!this.userInitialized()) {
       throw new Error('User not initialized');
     }
@@ -961,16 +962,16 @@ export class DriftVaultsClient {
   private async createUsdcAtaIx(
     mint: PublicKey
   ): Promise<InstructionReturn | undefined> {
-    const userAta = getAssociatedTokenAddressSync(mint, this.publicKey, true);
+    const userAta = getAssociatedTokenAddressSync(mint, this.key, true);
     const userAtaExists = await this.connection.getAccountInfo(userAta);
     if (userAtaExists === null) {
       const funder = walletAdapterToAsyncSigner(this.wallet);
       const ix: InstructionReturn = () => {
         return Promise.resolve({
           instruction: createAssociatedTokenAccountInstruction(
-            this.publicKey,
+            this.key,
             userAta,
-            this.publicKey,
+            this.key,
             mint
           ),
           signers: [funder],
@@ -1019,23 +1020,23 @@ export class DriftVaultsClient {
 
     const userAta = getAssociatedTokenAddressSync(
       spotMarket.mint,
-      this.publicKey,
+      this.key,
       true
     );
     const userAtaExists = await this.connection.getAccountInfo(userAta);
     if (userAtaExists === null) {
       ixs.push(
         createAssociatedTokenAccountInstruction(
-          this.publicKey,
+          this.key,
           userAta,
-          this.publicKey,
+          this.key,
           spotMarket.mint
         )
       );
     }
 
     const vaultDepositor = this.getVaultDepositorAddress(vault);
-    const vdExists = this.vaultDepositor(vaultDepositor, false)?.data;
+    const vdExists = this.vaultDepositor(vaultDepositor)?.data;
     if (!vdExists) {
       ixs.push(
         await this.vaultProgram.methods
@@ -1043,8 +1044,8 @@ export class DriftVaultsClient {
           .accounts({
             vaultDepositor,
             vault,
-            authority: this.publicKey,
-            payer: this.publicKey,
+            authority: this.key,
+            payer: this.key,
             rent: SYSVAR_RENT_PUBKEY,
             systemProgram: SystemProgram.programId,
           })
@@ -1089,7 +1090,7 @@ export class DriftVaultsClient {
       const vpAcct = (await this.vaultProgram.account.vaultProtocol.fetch(
         vp
       )) as VaultProtocol;
-      if (vpAcct.protocol.equals(this.publicKey)) {
+      if (vpAcct.protocol.equals(this.key)) {
         return ok(true);
       }
     }
@@ -1105,13 +1106,13 @@ export class DriftVaultsClient {
       });
     }
     // check if wallet is manager
-    if (vaultAcct.manager.equals(this.publicKey)) {
+    if (vaultAcct.manager.equals(this.key)) {
       return ok(true);
     }
     return ok(false);
   }
 
-  public async deposit(vault: PublicKey, usdc: number): Promise<SnackInfo> {
+  async deposit(vault: PublicKey, usdc: number): Promise<SnackInfo> {
     const vaultAcct = this.vault(vault)?.data;
     if (!vaultAcct) {
       return {
@@ -1124,7 +1125,7 @@ export class DriftVaultsClient {
 
     const userKey = getUserAccountPublicKeySync(
       this.driftProgram.programId,
-      this.publicKey
+      this.key
     );
     let addUserAfter = false;
     if (!(await this.checkIfAccountExists(userKey))) {
@@ -1178,7 +1179,7 @@ export class DriftVaultsClient {
     await this.fetchEquityInVault(vault);
     await this.fetchFundOverview(vault);
     if (addUserAfter) {
-      await this.driftClient.addUser(0, this.publicKey);
+      await this.driftClient.addUser(0, this.key);
     }
 
     return {
@@ -1239,7 +1240,7 @@ export class DriftVaultsClient {
     return ok([ix]);
   }
 
-  public async requestWithdraw(
+  async requestWithdraw(
     vault: PublicKey,
     usdc: number
   ): Promise<SnackInfo> {
@@ -1369,7 +1370,7 @@ export class DriftVaultsClient {
     }
   }
 
-  public async cancelWithdrawRequest(vault: PublicKey): Promise<SnackInfo> {
+  async cancelWithdrawRequest(vault: PublicKey): Promise<SnackInfo> {
     if (!this.userInitialized()) {
       throw new Error('User not initialized');
     }
@@ -1459,7 +1460,7 @@ export class DriftVaultsClient {
     };
   }
 
-  public async withdraw(vault: PublicKey): Promise<SnackInfo> {
+  async withdraw(vault: PublicKey): Promise<SnackInfo> {
     if (!this.userInitialized()) {
       throw new Error('User not initialized');
     }
@@ -1636,7 +1637,7 @@ export class DriftVaultsClient {
   /**
    * The connected wallet will become the manager of the vault.
    */
-  public async createVault(params: CreateVaultConfig): Promise<{
+  async createVault(params: CreateVaultConfig): Promise<{
     vault: PublicKey;
     vaultProtocol: PublicKey;
     snack: SnackInfo;
@@ -1689,6 +1690,10 @@ export class DriftVaultsClient {
     } else {
       sig = await this.vaultClient.initializeVault(vaultParams);
     }
+    const confirmed = (await this.connection.confirmTransaction(sig)).value;
+    if (confirmed.err) {
+      throw new Error(`Failed to create vault: ${confirmed.err}`);
+    }
 
     console.debug('initialize vault:', signatureLink(sig));
     const vault = getVaultAddressSync(
@@ -1710,7 +1715,7 @@ export class DriftVaultsClient {
     };
   }
 
-  public async delegateVaultIx(
+  async delegateVaultIx(
     vault: PublicKey,
     delegate: PublicKey
   ): Promise<TransactionInstruction> {
@@ -1747,7 +1752,7 @@ export class DriftVaultsClient {
     };
   }
 
-  public async updateVaultIx(vault: PublicKey, config: UpdateVaultConfig) {
+  async updateVaultIx(vault: PublicKey, config: UpdateVaultConfig) {
     if (config.redeemPeriod && config.redeemPeriod > ONE_DAY * 90) {
       throw new Error('Redeem period must be less than 90 days');
     }
@@ -1813,7 +1818,7 @@ export class DriftVaultsClient {
         .updateVault(params)
         .accounts({
           vault,
-          manager: this.publicKey,
+          manager: this.key,
         })
         .remainingAccounts(remainingAccounts)
         .instruction();
@@ -1822,14 +1827,14 @@ export class DriftVaultsClient {
         .updateVault(params)
         .accounts({
           vault,
-          manager: this.publicKey,
+          manager: this.key,
         })
         .instruction();
     }
     return ix;
   }
 
-  public defaultUpdateVaultConfig(vault: PublicKey): UpdateVaultConfig {
+  defaultUpdateVaultConfig(vault: PublicKey): UpdateVaultConfig {
     const vaultAcct = this.vault(vault)?.data;
     if (!vaultAcct) {
       throw new Error(`Vault ${vault.toString()} not found`);
@@ -1858,7 +1863,7 @@ export class DriftVaultsClient {
    * Can only reduce the profit share, management fee, or redeem period.
    * Unable to modify protocol fees.
    */
-  public async updateVault(
+  async updateVault(
     vault: PublicKey,
     params: UpdateVaultConfig
   ): Promise<SnackInfo> {
@@ -1943,7 +1948,7 @@ export class DriftVaultsClient {
           driftSpotMarketVault: driftSpotMarket.vault,
           userTokenAccount: getAssociatedTokenAddressSync(
             driftSpotMarket.mint,
-            this.publicKey
+            this.key
           ),
           tokenProgram: TOKEN_PROGRAM_ID,
         })
@@ -1961,7 +1966,7 @@ export class DriftVaultsClient {
       throw new Error(`Vault not found: ${vault.toString()}`);
     }
 
-    if (!this.publicKey.equals(vaultAccount.manager)) {
+    if (!this.key.equals(vaultAccount.manager)) {
       return err({
         variant: 'error',
         message: 'Only the manager can request a manager withdraw',
@@ -2017,7 +2022,7 @@ export class DriftVaultsClient {
       });
     }
 
-    if (!this.publicKey.equals(vaultAccount.manager)) {
+    if (!this.key.equals(vaultAccount.manager)) {
       return err({
         variant: 'error',
         message: 'Only the manager can cancel a manager withdraw request',
@@ -2025,7 +2030,7 @@ export class DriftVaultsClient {
     }
 
     const accounts = {
-      manager: this.publicKey,
+      manager: this.key,
       vault,
       driftUserStats: getUserStatsAccountPublicKey(
         this.driftProgram.programId,
@@ -2070,7 +2075,7 @@ export class DriftVaultsClient {
       });
     }
 
-    if (!this.publicKey.equals(vaultAccount.manager)) {
+    if (!this.key.equals(vaultAccount.manager)) {
       return err({
         variant: 'error',
         message: 'Only the manager can manager withdraw',
@@ -2108,7 +2113,7 @@ export class DriftVaultsClient {
         .managerWithdraw()
         .accounts({
           vault,
-          manager: this.publicKey,
+          manager: this.key,
           vaultTokenAccount: vaultAccount.tokenAccount,
           driftUser: await getUserAccountPublicKey(
             this.driftProgram.programId,
@@ -2123,7 +2128,7 @@ export class DriftVaultsClient {
           driftSpotMarketVault: spotMarket.vault,
           userTokenAccount: getAssociatedTokenAddressSync(
             spotMarket.mint,
-            this.publicKey
+            this.key
           ),
           driftSigner: this.driftClient.getStateAccount().signer,
           tokenProgram: TOKEN_PROGRAM_ID,
@@ -2160,7 +2165,7 @@ export class DriftVaultsClient {
     const vpAccount = (await this.vaultProgram.account.vaultProtocol.fetch(
       vp
     )) as VaultProtocol;
-    if (!this.publicKey.equals(vpAccount.protocol)) {
+    if (!this.key.equals(vpAccount.protocol)) {
       return err({
         variant: 'error',
         message: 'Only the protocol can request a protocol withdraw',
@@ -2224,7 +2229,7 @@ export class DriftVaultsClient {
     }
 
     const accounts = {
-      manager: this.publicKey,
+      manager: this.key,
       vault,
       driftUserStats: getUserStatsAccountPublicKey(
         this.driftProgram.programId,
@@ -2307,7 +2312,7 @@ export class DriftVaultsClient {
         .managerWithdraw()
         .accounts({
           vault,
-          manager: this.publicKey,
+          manager: this.key,
           vaultTokenAccount: vaultAccount.tokenAccount,
           driftUser: await getUserAccountPublicKey(
             this.driftProgram.programId,
@@ -2322,7 +2327,7 @@ export class DriftVaultsClient {
           driftSpotMarketVault: spotMarket.vault,
           userTokenAccount: getAssociatedTokenAddressSync(
             spotMarket.mint,
-            this.publicKey
+            this.key
           ),
           driftSigner: this.driftClient.getStateAccount().signer,
           tokenProgram: TOKEN_PROGRAM_ID,
@@ -2336,14 +2341,14 @@ export class DriftVaultsClient {
   // Utils
   //
 
-  public clientVaultDepositor(
+  clientVaultDepositor(
     vault: PublicKey
   ): Data<PublicKey, VaultDepositor> | undefined {
     const key = this.getVaultDepositorAddress(vault);
-    return this.vaultDepositor(key, false);
+    return this.vaultDepositor(key);
   }
 
-  public withdrawTimer(vault: PublicKey): WithdrawRequestTimer | undefined {
+  withdrawTimer(vault: PublicKey): WithdrawRequestTimer | undefined {
     return this._timers.get(vault.toString());
   }
 
@@ -2360,7 +2365,7 @@ export class DriftVaultsClient {
     await this.fetchVault(vault);
     await this.fetchVaultDepositor(vdKey);
 
-    const vdAcct = this.vaultDepositor(vdKey, false)?.data;
+    const vdAcct = this.vaultDepositor(vdKey)?.data;
     if (!vdAcct) {
       this.removeWithdrawTimer(vault);
       return;
@@ -2485,7 +2490,7 @@ export class DriftVaultsClient {
     }, 1000);
   }
 
-  public async createWithdrawTimer(vault: PublicKey): Promise<void> {
+  async createWithdrawTimer(vault: PublicKey): Promise<void> {
     await this.createManagerWithdrawTimer(vault);
     await this.createProtocolWithdrawTimer(vault);
     await this.createVaultDepositorWithdrawTimer(vault);
@@ -2499,7 +2504,7 @@ export class DriftVaultsClient {
     this._timers.delete(vault.toString());
   }
 
-  public percentShare(vaultKey: PublicKey): number | undefined {
+  percentShare(vaultKey: PublicKey): number | undefined {
     const investorKey = this.getVaultDepositorAddress(vaultKey);
     const investor = this.vaultDepositor(investorKey)?.data;
     if (!investor) {
@@ -2512,7 +2517,7 @@ export class DriftVaultsClient {
     return investor.vaultShares.toNumber() / vault.totalShares.toNumber() * 100;
   }
 
-  public async fetchEquityInVault(
+  async fetchEquityInVault(
     vault: PublicKey
   ): Promise<number | undefined> {
     const isManager = this.isManager(vault).unwrapOr(false);
@@ -2548,17 +2553,17 @@ export class DriftVaultsClient {
     return usdc;
   }
 
-  public equityInVault(vault: PublicKey): number | undefined {
+  equityInVault(vault: PublicKey): number | undefined {
     return this._equities.get(vault.toString());
   }
 
-  public async fetchWalletUsdc(): Promise<number | undefined> {
+  async fetchWalletUsdc(): Promise<number | undefined> {
     const spotMarket = this.driftClient.getSpotMarketAccount(0);
     if (!spotMarket) {
       throw new Error('USDC spot market not found in DriftClient');
     }
     const usdcMint = spotMarket.mint;
-    const usdcAta = getAssociatedTokenAddress(usdcMint, this.publicKey);
+    const usdcAta = getAssociatedTokenAddress(usdcMint, this.key);
     try {
       const acct = await this.connection.getTokenAccountBalance(usdcAta);
       return acct.value.uiAmount ?? undefined;
@@ -2584,22 +2589,22 @@ export class DriftVaultsClient {
     return sendTransactionWithResult(_ixs, funder, this.connection);
   }
 
-  public get vaultClient(): VaultClient {
+  get vaultClient(): VaultClient {
     if (!this._vaultClient) {
       throw new Error('Drift VaultClient not initialized');
     }
     return this._vaultClient;
   }
 
-  public get driftClient(): DriftClient {
+  get driftClient(): DriftClient {
     return this.vaultClient.driftClient;
   }
 
-  public get driftProgram(): anchor.Program {
+  get driftProgram(): anchor.Program {
     return this.driftClient.program;
   }
 
-  public get vaultProgram(): anchor.Program<DriftVaults> {
+  get vaultProgram(): anchor.Program<DriftVaults> {
     return this.vaultClient.program;
   }
 }

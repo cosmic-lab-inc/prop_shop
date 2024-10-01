@@ -37,7 +37,7 @@ export function NewFund({client}: { client: PropShopClient }) {
           }}
         >
           <Typography variant="h2">
-            Crowdsourced capital for rapid growth.
+            Crowdsourced capital for rapid growth
           </Typography>
           <Typography variant="h2">
             Earn up to 40% of investor profits

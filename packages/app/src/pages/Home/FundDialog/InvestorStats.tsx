@@ -41,8 +41,10 @@ export const InvestorStats = observer(
     const [isManager, setIsManager] = React.useState<boolean>(false);
     React.useEffect(() => {
       const result = client.isManager(fund);
+      console.log('key:', client.key.toString());
+      console.log('manager:', fund.manager.toString());
       setIsManager(result);
-    });
+    }, [client, client?.key]);
 
     // CLIENT ACTIONS
     async function requestWithdraw() {
@@ -139,7 +141,7 @@ export const InvestorStats = observer(
           onClose={() => setOpenSettingsDialog(false)}
         />
         <TransferInputDialog
-          defaultValue={defaultValue!}
+          defaultValue={defaultValue ?? 0}
           open={openTransferDialog}
           onClose={() => resetTransferDialog()}
           onChange={(value: number) => setInput(value)}

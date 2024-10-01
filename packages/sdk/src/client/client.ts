@@ -7,13 +7,13 @@ import {
   TransactionConfirmationStrategy,
   TransactionInstruction,
 } from '@solana/web3.js';
-import {makeAutoObservable} from 'mobx';
+import {autorun, makeAutoObservable} from 'mobx';
 import {CreatePropShopClientConfig, UpdateWalletConfig} from './types';
 import {WalletContextState} from '@solana/wallet-adapter-react';
 import {DriftVaultsClient} from './drift';
 import {PhoenixVaultsClient} from './phoenix';
 import {CreateVaultConfig, FundOverview, SnackInfo, UpdateVaultConfig, Venue, WithdrawRequestTimer,} from '../types';
-import {fundDollarPnl} from '../utils';
+import {fundDollarPnl, shortenAddress} from '../utils';
 import {signatureLink} from '../rpc';
 import {walletAdapterToAsyncSigner} from '@cosmic-lab/data-source';
 import {TEST_USDC_MINT, TEST_USDC_MINT_AUTHORITY} from '../constants';
@@ -27,9 +27,11 @@ import {
   unpackAccount,
 } from '@solana/spl-token';
 
+
 export class PropShopClient {
   private readonly conn: Connection;
   private wallet: WalletContextState;
+  key: PublicKey;
   private driftVaultsClient: DriftVaultsClient;
   private phoenixVaultsClient: PhoenixVaultsClient;
 
@@ -40,20 +42,30 @@ export class PropShopClient {
   private _usdc = 0;
   private _usdcSubId: number | undefined;
 
+
   constructor(config: CreatePropShopClientConfig) {
     makeAutoObservable(this);
     this.conn = config.connection;
     this.wallet = config.wallet;
+    if (!config.wallet.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+    this.key = config.wallet.publicKey;
     this.dummyWallet = config.dummyWallet ?? false;
     this.driftVaultsClient = new DriftVaultsClient(config);
     this.phoenixVaultsClient = new PhoenixVaultsClient(config);
+
+    // autorun, react to updates to wallet
+    autorun(() => {
+      console.log('wallet updated');
+    });
   }
 
   /**
    * Initialize the VaultClient.
    * Call this upon connecting a wallet.
    */
-  public async initialize(): Promise<void> {
+  async initialize(): Promise<void> {
     if (!this.wallet) {
       throw new Error('Wallet not connected during initialization');
     }
@@ -71,7 +83,7 @@ export class PropShopClient {
   private async updateTokenBalanceListeners() {
     // websocket RPC subscribe to SOL balance update
     this._solSubId = this.conn.onAccountChange(
-      this.publicKey,
+      this.key,
       (accountInfo) => {
         this._sol = accountInfo.lamports / LAMPORTS_PER_SOL;
       }
@@ -79,7 +91,7 @@ export class PropShopClient {
     // websocket RPC subscribe to SOL balance update
     const usdcAta = getAssociatedTokenAddressSync(
       this.phoenixVaultsClient.solUsdcMarket.usdcMint,
-      this.publicKey
+      this.key
     );
     this._usdcSubId = this.conn.onAccountChange(usdcAta, (accountInfo) => {
       const unpackedTokenAccount = unpackAccount(usdcAta, accountInfo);
@@ -90,16 +102,39 @@ export class PropShopClient {
     });
   }
 
-  public async updateWallet(config: UpdateWalletConfig): Promise<void> {
+  private setWallet(wallet: WalletContextState) {
+    this.wallet = wallet;
+    if (!wallet.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+    this.key = wallet.publicKey;
+  }
+
+  async updateWallet(config: UpdateWalletConfig): Promise<void> {
     const now = Date.now();
-    this.wallet = config.wallet;
+    this.setWallet(config.wallet);
     await this.driftVaultsClient.updateWallet(config);
     await this.phoenixVaultsClient.updateWallet(config);
     await this.updateTokenBalanceListeners();
     await this.fetchWalletSol();
     await this.fetchWalletUsdc();
+    if (
+      config.wallet.publicKey !== null &&
+      this.wallet.publicKey !== null &&
+      !this.wallet.publicKey.equals(config.wallet.publicKey)
+    ) {
+      console.error(
+        `Wallet update failed: ${this.wallet.publicKey?.toString()}`
+      );
+    }
+    if (this.wallet.publicKey === null || !this.wallet.publicKey.equals(this.key)) {
+      const walletKey = this.wallet.publicKey ? shortenAddress(this.wallet.publicKey?.toString()) : null;
+      console.error(
+        `Wallet update failed, this.wallet: ${walletKey}, this.key: ${shortenAddress(this.key.toString())}`
+      );
+    }
     console.log(
-      `updated wallet ${this.publicKey.toString()} in ${Date.now() - now}ms`
+      `updated wallet ${this.key.toString()} in ${Date.now() - now}ms`
     );
   }
 
@@ -114,22 +149,15 @@ export class PropShopClient {
     }
   }
 
-  get publicKey(): PublicKey {
-    if (!this.wallet.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-    return this.wallet.publicKey;
+  isManager(fund: FundOverview): boolean {
+    return this.key.equals(fund.manager);
   }
 
-  public isManager(fund: FundOverview): boolean {
-    return this.publicKey.equals(fund.manager);
+  isInvested(fund: FundOverview): boolean {
+    return fund.investors.has(this.key.toString());
   }
 
-  public isInvested(fund: FundOverview): boolean {
-    return fund.investors.has(this.publicKey.toString());
-  }
-
-  public getInvestorAddress(config: {
+  getInvestorAddress(config: {
     vault: PublicKey;
     venue: Venue;
   }): PublicKey {
@@ -140,7 +168,7 @@ export class PropShopClient {
     }
   }
 
-  public get fundOverviews(): FundOverview[] {
+  get fundOverviews(): FundOverview[] {
     const driftFunds = this.driftVaultsClient.fundOverviews;
     const phoenixFunds = this.phoenixVaultsClient.fundOverviews;
     const funds = [...driftFunds, ...phoenixFunds];
@@ -156,7 +184,7 @@ export class PropShopClient {
   // Tokens and timers
   //
 
-  public withdrawTimer(config: {
+  withdrawTimer(config: {
     venue: Venue;
     vault: PublicKey;
   }): WithdrawRequestTimer | undefined {
@@ -167,14 +195,14 @@ export class PropShopClient {
     }
   }
 
-  public hasWithdrawRequest(config: {
+  hasWithdrawRequest(config: {
     vault: PublicKey;
     venue: Venue;
   }): boolean {
     return !!this.withdrawTimer(config);
   }
 
-  public async createWithdrawTimer(config: {
+  async createWithdrawTimer(config: {
     venue: Venue;
     vault: PublicKey;
   }): Promise<void> {
@@ -185,7 +213,7 @@ export class PropShopClient {
     }
   }
 
-  public async fetchEquityInVault(config: {
+  async fetchEquityInVault(config: {
     venue: Venue;
     vault: PublicKey;
   }): Promise<number | undefined> {
@@ -196,7 +224,7 @@ export class PropShopClient {
     }
   }
 
-  public percentShare(config: {
+  percentShare(config: {
     venue: Venue;
     vault: PublicKey;
   }): number | undefined {
@@ -207,7 +235,7 @@ export class PropShopClient {
     }
   }
 
-  public equityInVault(config: {
+  equityInVault(config: {
     vault: PublicKey;
     venue: Venue;
   }): number | undefined {
@@ -218,30 +246,30 @@ export class PropShopClient {
     }
   }
 
-  public get sol(): number {
+  get sol(): number {
     return this._sol;
   }
 
-  public get usdc(): number {
+  get usdc(): number {
     return this._usdc;
   }
 
-  public async fetchWalletSol(): Promise<number> {
-    const sol = (await this.conn.getBalance(this.publicKey)) / LAMPORTS_PER_SOL;
+  async fetchWalletSol(): Promise<number> {
+    const sol = (await this.conn.getBalance(this.key)) / LAMPORTS_PER_SOL;
     this._sol = sol;
     return sol;
   }
 
-  public async fetchWalletUsdc(): Promise<number> {
+  async fetchWalletUsdc(): Promise<number> {
     const usdc = (await this.driftVaultsClient.fetchWalletUsdc()) ?? 0;
     this._usdc = usdc;
     return usdc;
   }
 
-  public async airdropSol(): Promise<SnackInfo> {
+  async airdropSol(): Promise<SnackInfo> {
     try {
       const signature = await this.conn.requestAirdrop(
-        this.publicKey,
+        this.key,
         LAMPORTS_PER_SOL
       );
       await this.conn.confirmTransaction({
@@ -261,7 +289,7 @@ export class PropShopClient {
     }
   }
 
-  public async airdropUsdc(usdc = 1000): Promise<SnackInfo> {
+  async airdropUsdc(usdc = 1000): Promise<SnackInfo> {
     const mint = TEST_USDC_MINT.publicKey;
     const mintAuthSigner = TEST_USDC_MINT_AUTHORITY;
 
@@ -269,14 +297,14 @@ export class PropShopClient {
     // USDC has 6 decimals which happens to be the same as the QUOTE_PRECISION
     const usdcAmount = new BN(usdc).mul(QUOTE_PRECISION);
 
-    const usdcAta = getAssociatedTokenAddressSync(mint, this.publicKey, true);
+    const usdcAta = getAssociatedTokenAddressSync(mint, this.key, true);
     const ataExists = await this.conn.getAccountInfo(usdcAta);
     if (ataExists === null) {
       ixs.push(
         createAssociatedTokenAccountInstruction(
-          this.publicKey,
+          this.key,
           usdcAta,
-          this.publicKey,
+          this.key,
           mint
         )
       );
@@ -327,7 +355,7 @@ export class PropShopClient {
       .getLatestBlockhash()
       .then((res) => res.blockhash);
     const msg = new anchor.web3.TransactionMessage({
-      payerKey: this.publicKey,
+      payerKey: this.key,
       recentBlockhash,
       instructions,
     }).compileToV0Message();
@@ -380,7 +408,7 @@ export class PropShopClient {
   // Investor actions
   //
 
-  public async deposit(config: {
+  async deposit(config: {
     venue: Venue;
     vault: PublicKey;
     usdc: number;
@@ -392,7 +420,7 @@ export class PropShopClient {
     }
   }
 
-  public async requestWithdraw(config: {
+  async requestWithdraw(config: {
     venue: Venue;
     vault: PublicKey;
     usdc: number;
@@ -407,7 +435,7 @@ export class PropShopClient {
     }
   }
 
-  public async cancelWithdrawRequest(config: {
+  async cancelWithdrawRequest(config: {
     venue: Venue;
     vault: PublicKey;
   }): Promise<SnackInfo> {
@@ -418,7 +446,7 @@ export class PropShopClient {
     }
   }
 
-  public async withdraw(config: {
+  async withdraw(config: {
     venue: Venue;
     vault: PublicKey;
   }): Promise<SnackInfo> {
@@ -436,7 +464,7 @@ export class PropShopClient {
   /**
    * The connected wallet will become the manager of the vault.
    */
-  public async createVault(config: CreateVaultConfig): Promise<{
+  async createVault(config: CreateVaultConfig): Promise<{
     vault: PublicKey;
     snack: SnackInfo;
   }> {
@@ -447,7 +475,7 @@ export class PropShopClient {
     }
   }
 
-  public defaultUpdateVaultConfig(config: {
+  defaultUpdateVaultConfig(config: {
     venue: Venue;
     vault: PublicKey;
   }): UpdateVaultConfig {
@@ -462,7 +490,7 @@ export class PropShopClient {
    * Can only reduce the profit share, management fee, or redeem period.
    * Unable to modify protocol fees.
    */
-  public async updateVault(config: {
+  async updateVault(config: {
     venue: Venue;
     vault: PublicKey;
     params: UpdateVaultConfig;

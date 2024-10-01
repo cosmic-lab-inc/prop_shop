@@ -24,7 +24,12 @@ function formatPnl(fund: FundOverview): {
   // const pnl = fund.profit;
   // const displayPnl = `$${prettyNumber(pnl)}`;
   // pct pnl
-  const pnl = fund.profit / fund.tvl * 100;
+  let pnl;
+  if (fund.tvl === 0) {
+    pnl = 0;
+  } else {
+    pnl = fund.profit / fund.tvl * 100;
+  }
   const displayPnl = `${prettyNumber(pnl)}%`;
   const displayPnlColor =
     displayPnl !== '--'
