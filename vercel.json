@@ -5,10 +5,10 @@
       "destination": "index.html"
     }
   ],
-  "installCommand": "yarn install && node_modules/.bin/lerna exec yarn install",
-  "buildCommand": "lerna run build",
+  "installCommand": "yarn install",
+  "buildCommand": "yarn build:app",
   "devCommand": "yarn start",
   "framework": "vite",
-  "outputDirectory": "dist",
+  "outputDirectory": "packages/app/dist",
   "public": true
 }

@@ -12,9 +12,9 @@ function hash() {
 // @ts-ignore
 export default defineConfig(({mode}) => {
   // get env from root of workspace
-  const env = loadEnv(mode, `${process.cwd()}/../../`, "");
+  const env = loadEnv(mode, process.cwd(), "");
   env.PORT = env.PORT ? env.PORT : "3001";
-  env.ENV = env.ENV ? env.ENV : "dev";
+  env.ENV = env.ENV ? env.ENV : "prod";
 
   const alias: Record<any, any> = {
     // note: do not uncomment this or vercel says "process is not defined" stack tracing to dependency.
@@ -39,17 +39,8 @@ export default defineConfig(({mode}) => {
     resolve: {
       alias,
     },
-    // server: {
-    //   proxy: {
-    //     "/api": "http://localhost:5173",
-    //   },
-    //   cors: true,
-    //   strictPort: true,
-    //   port: 5173,
-    // },
     define: {
       global: "globalThis",
-      // "process.env": JSON.stringify(env),
       "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
       "process.env.ENV": JSON.stringify(env.ENV),
       "process.env.PORT": JSON.stringify(env.PORT),

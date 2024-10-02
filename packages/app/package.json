@@ -4,9 +4,7 @@
   "author": "Drew Riester <epochsolana@gmail.com>",
   "description": "Prop Shop web app",
   "license": "Apache-2.0",
-  "publishConfig": {
-    "access": "public"
-  },
+  "main": "index.js",
   "scripts": {
     "clean": "yes | rm -rf dist && rm -rf node_modules",
     "check": "tsc --noEmit",
@@ -20,7 +18,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",
     "@cosmic-lab/data-source": "^0.7.4",
-    "@cosmic-lab/prop-shop-sdk": "0.2.11",
+    "@cosmic-lab/prop-shop-sdk": "^0.2.11",
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.11.16",

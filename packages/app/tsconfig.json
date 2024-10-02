@@ -2,7 +2,6 @@
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
-    "rootDir": ".",
     "composite": true,
     "downlevelIteration": true,
     "experimentalDecorators": true,
@@ -21,7 +20,10 @@
   },
   "include": [
     "src/**/*",
-    "package.json",
-    "dist/**/*"
+    "package.json"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
   ]
 }

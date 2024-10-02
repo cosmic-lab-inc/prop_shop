@@ -3,7 +3,7 @@ export * from './arrays';
 export * from './numbers';
 export * from './time';
 export * from './strings';
-export * from './process';
+// export * from './process';
 export * from './fund';
 export * from './wallet';
 export * from './equity';

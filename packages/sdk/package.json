@@ -1,11 +1,10 @@
 {
+  "private": true,
   "name": "@cosmic-lab/prop-shop-sdk",
   "version": "0.2.11",
   "author": "Drew Riester <epochsolana@gmail.com>",
   "description": "Frontend client for Prop Shop",
-  "license": "Apache-2.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "src/index.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/cosmic-lab-inc/prop_shop.git"
