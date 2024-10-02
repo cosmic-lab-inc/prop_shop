@@ -9,6 +9,6 @@
   "buildCommand": "lerna run build",
   "devCommand": "yarn start",
   "framework": "vite",
-  "outputDirectory": "packages/app/dist",
+  "outputDirectory": "dist",
   "public": true
 }
