@@ -68,7 +68,7 @@ export default defineConfig(({mode}) => {
         ],
       },
       // https://vitejs.dev/guide/dep-pre-bundling.html#monorepos-and-linked-dependencies
-      include: ["@cosmic-lab/prop-shop-sdk"],
+      // include: ["@cosmic-lab/prop-shop-sdk"],
       // restart of app will recompile deps
       force: true,
     },
@@ -92,11 +92,11 @@ export default defineConfig(({mode}) => {
           assetFileNames: `[name]` + hash() + `.[ext]`,
         },
       },
-      commonjsOptions: {
-        transformMixedEsModules: true,
-        // https://vitejs.dev/guide/dep-pre-bundling.html#monorepos-and-linked-dependencies
-        include: [/@cosmic-lab\/prop-shop-sdk/, /node_modules/],
-      },
+      // commonjsOptions: {
+      //   transformMixedEsModules: true,
+      //   // https://vitejs.dev/guide/dep-pre-bundling.html#monorepos-and-linked-dependencies
+      //   include: [/@cosmic-lab\/prop-shop-sdk/, /node_modules/],
+      // },
     },
     publicDir: "static",
   };
