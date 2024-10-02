@@ -16,11 +16,11 @@
     "skipLibCheck": true,
     "strictNullChecks": true,
     "strictPropertyInitialization": true,
-    "outDir": "dist",
-    "rootDir": "."
+    "outDir": "dist"
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "package.json"
   ],
   "exclude": [
     "node_modules",

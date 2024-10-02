@@ -76,7 +76,6 @@ export default defineConfig(({mode}) => {
         external: [
           "crypto",
           "@drift-labs/vaults-sdk",
-          "@cosmic-lab/prop-shop-sdk",
         ],
         output: {
           entryFileNames: `[name]` + hash() + `.js`,
