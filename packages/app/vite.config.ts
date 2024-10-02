@@ -73,9 +73,9 @@ export default defineConfig(({mode}) => {
             Buffer: ["buffer", "Buffer"],
           }),
         ],
-        external: [
-          "crypto",
-        ],
+        // external: [
+        //   "crypto",
+        // ],
         output: {
           entryFileNames: `[name]` + hash() + `.js`,
           chunkFileNames: `[name]` + hash() + `.js`,
