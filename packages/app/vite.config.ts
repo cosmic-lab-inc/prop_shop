@@ -49,10 +49,10 @@ export default defineConfig(({mode}) => {
     // },
     define: {
       global: "globalThis",
-      "process.env": JSON.stringify(env),
-      // "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
-      // "process.env.ENV": JSON.stringify(env.ENV),
-      // "process.env.PORT": JSON.stringify(env.PORT),
+      // "process.env": JSON.stringify(env),
+      "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
+      "process.env.ENV": JSON.stringify(env.ENV),
+      "process.env.PORT": JSON.stringify(env.PORT),
     },
     plugins: [react(), nodePolyfills()],
     optimizeDeps: {
