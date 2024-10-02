@@ -3,7 +3,6 @@ import react from "@vitejs/plugin-react";
 import {NodeGlobalsPolyfillPlugin} from "@esbuild-plugins/node-globals-polyfill";
 import rollupNodePolyFill from "rollup-plugin-node-polyfills";
 import inject from "@rollup/plugin-inject";
-import * as path from "path";
 import {nodePolyfills} from "vite-plugin-node-polyfills";
 
 function hash() {
@@ -14,7 +13,6 @@ function hash() {
 export default defineConfig(({mode}) => {
   // get env from root of workspace
   const env = loadEnv(mode, `${process.cwd()}/../../`, "");
-  // const env = loadEnv(mode, process.cwd(), "");
   env.PORT = env.PORT ? env.PORT : "3001";
   env.ENV = env.ENV ? env.ENV : "dev";
 
@@ -32,10 +30,10 @@ export default defineConfig(({mode}) => {
     zlib: "zlib",
     events: "events",
   };
-  if (env.ENV === "dev") {
-    console.log("using @cosmic-lab/prop-shop-sdk symlink for development");
-    alias["@cosmic-lab/prop-shop-sdk"] = path.resolve(__dirname, "../sdk");
-  }
+  // if (env.ENV === "dev") {
+  //   console.log("using @cosmic-lab/prop-shop-sdk symlink for development");
+  //   alias["@cosmic-lab/prop-shop-sdk"] = path.resolve(__dirname, "../sdk");
+  // }
 
   return {
     resolve: {
@@ -51,9 +49,10 @@ export default defineConfig(({mode}) => {
     // },
     define: {
       global: "globalThis",
-      "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
-      "process.env.ENV": JSON.stringify(env.ENV),
-      "process.env.PORT": JSON.stringify(env.PORT),
+      "process.env": JSON.stringify(env),
+      // "process.env.RPC_URL": JSON.stringify(env.RPC_URL),
+      // "process.env.ENV": JSON.stringify(env.ENV),
+      // "process.env.PORT": JSON.stringify(env.PORT),
     },
     plugins: [react(), nodePolyfills()],
     optimizeDeps: {
@@ -74,6 +73,7 @@ export default defineConfig(({mode}) => {
       force: true,
     },
     build: {
+      chunkSizeWarningLimit: 1024,
       rollupOptions: {
         plugins: [
           rollupNodePolyFill() as any,

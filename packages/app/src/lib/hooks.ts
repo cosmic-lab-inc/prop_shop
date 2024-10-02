@@ -1,6 +1,6 @@
 import React from 'react';
 import {useConnection, useWallet, WalletContextState,} from '@solana/wallet-adapter-react';
-import {keypairToWalletContextState, PropShopClient,} from '@cosmic-lab/prop-shop-sdk';
+import {keypairToWalletContextState, PropShopClient} from '@cosmic-lab/prop-shop-sdk';
 import {Keypair} from '@solana/web3.js';
 
 export function useClient(): PropShopClient | undefined {
