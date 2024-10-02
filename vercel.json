@@ -5,9 +5,9 @@
       "destination": "index.html"
     }
   ],
-  "installCommand": "yarn install",
-  "buildCommand": "yarn build",
-  "devCommand": "yarn start",
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm build",
+  "devCommand": "pnpm start",
   "framework": "vite",
   "outputDirectory": "dist",
   "public": true
