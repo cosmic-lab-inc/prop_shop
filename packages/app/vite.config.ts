@@ -75,7 +75,6 @@ export default defineConfig(({mode}) => {
         ],
         external: [
           "crypto",
-          "@drift-labs/vaults-sdk",
         ],
         output: {
           entryFileNames: `[name]` + hash() + `.js`,
