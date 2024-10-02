@@ -38,6 +38,7 @@ export default defineConfig(({mode}) => {
   return {
     resolve: {
       alias,
+      preserveSymlinks: true
     },
     define: {
       global: "globalThis",

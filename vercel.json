@@ -6,9 +6,9 @@
     }
   ],
   "installCommand": "yarn install",
-  "buildCommand": "yarn build:app",
+  "buildCommand": "yarn build",
   "devCommand": "yarn start",
   "framework": "vite",
-  "outputDirectory": "packages/app/dist",
+  "outputDirectory": "dist",
   "public": true
 }
