@@ -19,7 +19,8 @@ export function DriftIcon({size}: IconProps) {
         pl: '2px',
       }}
       alt="Drift"
-      src={'/src/assets/drift.png'}
+      // src={'/src/assets/drift.png'}
+      src={new URL('/src/assets/drift.png', import.meta.url).href}
     />
   );
 }

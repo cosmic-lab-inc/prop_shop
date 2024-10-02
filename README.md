@@ -14,18 +14,3 @@ Prop Shop solves both of these problems -- any trader can create a fund and anyo
 Investors can build their wealth while they sleep by letting an experienced trader or algorithm manage their capital.
 Traders or a trading algorithm can rapidly scale their assets under management by attracting investment from the public.
 The traders, or "fund managers" as they are called, earn up to a 40% commission on profits earned for their investors.
-
-## Development
-
-See `packages/app/.env.exmaple` and next to it create a file named `.env`.
-To test on localnet, run `anchor test --detach` to bootstrap the program and keep the validator running.
-In a separate process, run `yarn build && yarn start:dev` to start the frontend.
-
-## Testing
-
-To run tests, create a directory and file `.jest/env.ts`.
-In it put:
-
-```typescript
-export const RPC_URL = "https://your-solana-rpc"
-```

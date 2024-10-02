@@ -171,13 +171,16 @@ describe('demo', () => {
       solMint,
     };
     try {
-      await program.methods
+      console.log('expected program:', program.programId.toString());
+      const ix = await program.methods
         .initializeMarketRegistry(params)
         .accounts({
           authority: provider.publicKey,
           marketRegistry,
         })
-        .rpc();
+        .instruction();
+      console.log('ix program:', ix.programId.toString());
+      await sendAndConfirm(conn, payer, [ix]);
     } catch (e: any) {
       throw new Error(e);
     }
@@ -335,12 +338,10 @@ describe('demo', () => {
       const investorAcct = await program.account.investor.fetch(investorKey);
       const deposits = investorAcct.netDeposits.div(QUOTE_PRECISION).toNumber();
       const shares = investorAcct.vaultShares.div(QUOTE_PRECISION).toNumber();
-      console.log(`investor after deposit, usdc: ${deposits}, shares: ${shares}`);
       assert.equal(deposits, usdcUiAmount);
-      // assert.equal(shares, usdcUiAmount);
+      assert.equal(shares, 10_000_000);
 
       const vaultUsdc = await tokenBalance(conn, vaultUsdcAta);
-      console.log(`vault after investor deposit, usdc: ${vaultUsdc}`);
       assert.equal(vaultUsdc, usdcUiAmount);
     }
 

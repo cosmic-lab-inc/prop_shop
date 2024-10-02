@@ -44,4 +44,4 @@ address = "PSMxQbAoDWDbvd9ezQJgARyq6R9L5kJAasaLDVcZwf1"
 program = "./deps/phoenix_seat_manager.so"
 
 [scripts]
-test = "yarn anchor-tests"
+test = "pnpm anchor-tests"

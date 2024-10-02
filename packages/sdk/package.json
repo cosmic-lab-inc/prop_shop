@@ -17,7 +17,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",
     "@cosmic-lab/data-source": "^0.7.4",
-    "@cosmic-lab/phoenix-vaults-sdk": "0.1.5",
+    "@cosmic-lab/phoenix-vaults-sdk": "^0.1.6",
     "@drift-labs/sdk": "2.96.0-beta.14",
     "@drift-labs/vaults-sdk": "0.1.468",
     "@ellipsis-labs/phoenix-sdk": "2.0.3"

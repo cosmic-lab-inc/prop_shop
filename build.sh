@@ -58,14 +58,14 @@ CXX=/opt/homebrew/bin/c++-14 cargo build || exit 1
 
 cargo fmt || exit 1
 
-yarn || exit 1
+pnpm i || exit 1
 
 if [[ $dev == true ]]; then
-  yarn link:all || exit 1
+  pnpm link:all || exit 1
 fi
 
-yarn dep:all || exit 1
+pnpm dep:all || exit 1
 
-yarn build || exit 1
+pnpm build || exit 1
 
-yarn prettify:fix || exit 1
+pnpm prettify || exit 1

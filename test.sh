@@ -108,16 +108,16 @@ if [[ $no_test == false ]]; then
   export ANCHOR_PROVIDER_URL=$rpc_url
 
   if [[ $custom_test == false ]]; then
-    yarn anchor-tests || kill_process
+    pnpm anchor-tests || kill_process
   else
     echo "Running test: $test"
     if [[ $test == "phoenix" ]]; then
-      yarn test:phoenix || kill_process
+      pnpm test:phoenix || kill_process
     elif [[ $test == "drift" ]]; then
-      yarn test:drift || kill_process
+      pnpm test:drift || kill_process
     elif [[ $test == "demo" ]]; then
-      yarn test:drift || kill_process
-      yarn test:demo || kill_process
+      pnpm test:drift || kill_process
+      pnpm test:demo || kill_process
     else
       echo "Unknown test: $test"
       kill_process
