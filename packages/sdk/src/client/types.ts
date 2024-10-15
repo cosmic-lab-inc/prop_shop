@@ -1,14 +1,14 @@
-import { WalletContextState } from '@solana/wallet-adapter-react';
-import { Connection } from '@solana/web3.js';
+import {Connection} from '@solana/web3.js';
+import {AsyncSigner} from "@cosmic-lab/data-source";
 
 export interface CreatePropShopClientConfig {
-	wallet: WalletContextState;
-	connection: Connection;
-	disableCache?: boolean;
-	dummyWallet?: boolean;
+  signer: AsyncSigner;
+  connection: Connection;
+  disableCache?: boolean;
+  dummyWallet?: boolean;
 }
 
 export interface UpdateWalletConfig {
-	wallet: WalletContextState;
-	dummyWallet?: boolean;
+  signer: AsyncSigner;
+  dummyWallet?: boolean;
 }

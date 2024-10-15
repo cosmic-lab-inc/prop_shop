@@ -1,35 +1,34 @@
 import {
-	ComputeBudgetProgram,
-	Connection,
-	LAMPORTS_PER_SOL,
-	PublicKey,
-	Signer,
-	TransactionConfirmationStrategy,
-	TransactionInstruction,
+  ComputeBudgetProgram,
+  Connection,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  Signer,
+  TransactionConfirmationStrategy,
+  TransactionInstruction,
 } from '@solana/web3.js';
 import {autorun, makeAutoObservable} from 'mobx';
 import {CreatePropShopClientConfig, UpdateWalletConfig} from './types';
-import {WalletContextState} from '@solana/wallet-adapter-react';
 import {DriftVaultsClient} from './drift';
 import {PhoenixVaultsClient} from './phoenix';
 import {CreateVaultConfig, FundOverview, SnackInfo, UpdateVaultConfig, Venue, WithdrawRequestTimer,} from '../types';
 import {fundDollarPnl, shortenAddress} from '../utils';
 import {signatureLink} from '../rpc';
-import {walletAdapterToAsyncSigner} from '@cosmic-lab/data-source';
+import {AsyncSigner} from '@cosmic-lab/data-source';
 import {TEST_USDC_MINT, TEST_USDC_MINT_AUTHORITY} from '../constants';
 import * as anchor from '@coral-xyz/anchor';
 import {BN} from '@coral-xyz/anchor';
 import {QUOTE_PRECISION} from '@drift-labs/sdk';
 import {
-	createAssociatedTokenAccountInstruction,
-	createMintToInstruction,
-	getAssociatedTokenAddressSync,
-	unpackAccount,
+  createAssociatedTokenAccountInstruction,
+  createMintToInstruction,
+  getAssociatedTokenAddressSync,
+  unpackAccount,
 } from '@solana/spl-token';
 
 export class PropShopClient {
   private readonly conn: Connection;
-  private wallet: WalletContextState;
+  private signer: AsyncSigner;
   key: PublicKey;
   private driftVaultsClient: DriftVaultsClient;
   private phoenixVaultsClient: PhoenixVaultsClient;
@@ -44,11 +43,11 @@ export class PropShopClient {
   constructor(config: CreatePropShopClientConfig) {
     makeAutoObservable(this);
     this.conn = config.connection;
-    this.wallet = config.wallet;
-    if (!config.wallet.publicKey) {
+    this.signer = config.signer;
+    if (!config.signer.publicKey()) {
       throw new Error('Wallet not connected');
     }
-    this.key = config.wallet.publicKey;
+    this.key = config.signer.publicKey();
     this.dummyWallet = config.dummyWallet ?? false;
     this.driftVaultsClient = new DriftVaultsClient(config);
     this.phoenixVaultsClient = new PhoenixVaultsClient(config);
@@ -64,7 +63,7 @@ export class PropShopClient {
    * Call this upon connecting a wallet.
    */
   async initialize(): Promise<void> {
-    if (!this.wallet) {
+    if (!this.signer) {
       throw new Error('Wallet not connected during initialization');
     }
     const now = Date.now();
@@ -97,37 +96,37 @@ export class PropShopClient {
     });
   }
 
-  private setWallet(wallet: WalletContextState) {
-    this.wallet = wallet;
-    if (!wallet.publicKey) {
+  private setSigner(signer: AsyncSigner) {
+    this.signer = signer;
+    if (!signer.publicKey()) {
       throw new Error('Wallet not connected');
     }
-    this.key = wallet.publicKey;
+    this.key = signer.publicKey();
   }
 
   async updateWallet(config: UpdateWalletConfig): Promise<void> {
     const now = Date.now();
-    this.setWallet(config.wallet);
+    this.setSigner(config.signer);
     await this.driftVaultsClient.updateWallet(config);
     await this.phoenixVaultsClient.updateWallet(config);
     await this.updateTokenBalanceListeners();
     await this.fetchWalletSol();
     await this.fetchWalletUsdc();
     if (
-      config.wallet.publicKey !== null &&
-      this.wallet.publicKey !== null &&
-      !this.wallet.publicKey.equals(config.wallet.publicKey)
+      config.signer.publicKey() !== null &&
+      this.signer.publicKey() !== null &&
+      !this.signer.publicKey().equals(config.signer.publicKey())
     ) {
       console.error(
-        `Wallet update failed: ${this.wallet.publicKey?.toString()}`
+        `Wallet update failed: ${this.signer.publicKey()?.toString()}`
       );
     }
     if (
-      this.wallet.publicKey === null ||
-      !this.wallet.publicKey.equals(this.key)
+      this.signer.publicKey() === null ||
+      !this.signer.publicKey().equals(this.key)
     ) {
-      const walletKey = this.wallet.publicKey
-        ? shortenAddress(this.wallet.publicKey?.toString())
+      const walletKey = this.signer.publicKey()
+        ? shortenAddress(this.signer.publicKey()?.toString())
         : null;
       console.error(
         `Wallet update failed, this.wallet: ${walletKey}, this.key: ${shortenAddress(this.key.toString())}`
@@ -351,8 +350,7 @@ export class PropShopClient {
       instructions,
     }).compileToV0Message();
     let tx = new anchor.web3.VersionedTransaction(msg);
-    const funder = walletAdapterToAsyncSigner(this.wallet);
-    tx = await funder.sign(tx);
+    tx = await this.signer.sign(tx);
     tx.sign(signers);
 
     const sim = (
