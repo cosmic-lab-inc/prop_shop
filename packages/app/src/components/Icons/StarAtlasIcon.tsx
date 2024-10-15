@@ -5,7 +5,7 @@ type IconProps = {
 	size?: number | string;
 };
 
-export function DriftIcon({ size }: IconProps) {
+export function StarAtlasIcon({ size }: IconProps) {
 	const _size = size ?? 50;
 	return (
 		<Box
@@ -17,9 +17,10 @@ export function DriftIcon({ size }: IconProps) {
 				justifyContent: 'center',
 				alignItems: 'center',
 				pl: '2px',
+				borderRadius: '50%',
 			}}
 			alt="Drift"
-			src={new URL('/src/assets/drift.png', import.meta.url).href}
+			src={new URL('/src/assets/star_atlas.jpg', import.meta.url).href}
 		/>
 	);
 }

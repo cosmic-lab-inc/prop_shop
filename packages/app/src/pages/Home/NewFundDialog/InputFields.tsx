@@ -302,7 +302,6 @@ const TableRow = styled('div')<{ hover?: boolean; header?: boolean }>(
 );
 
 function TextInput({
-	defaultValue,
 	value,
 	onChange,
 }: {
@@ -355,7 +354,6 @@ function TextInput({
 }
 
 function PercentInput({
-	defaultValue,
 	value,
 	onChange,
 }: {
@@ -422,7 +420,6 @@ function PercentInput({
 }
 
 function DaysInput({
-	defaultValue,
 	value,
 	onChange,
 }: {
@@ -486,7 +483,6 @@ function DaysInput({
 }
 
 function PriceInput({
-	defaultValue,
 	value,
 	onChange,
 }: {
