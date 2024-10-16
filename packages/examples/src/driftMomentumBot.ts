@@ -3,7 +3,6 @@ import * as anchor from '@coral-xyz/anchor';
 import {
   CreatePropShopClientConfig,
   CreateVaultConfig,
-  DRIFT_VAULTS_PROGRAM_ID,
   DriftVaultsClient,
   FundOverview,
   signatureLink,
@@ -88,7 +87,7 @@ export class DriftMomentumBot {
   }
 
   get fundKey(): PublicKey {
-    return getVaultAddressSync(DRIFT_VAULTS_PROGRAM_ID, encodeName(this.fundName));
+    return getVaultAddressSync(this.program.programId, encodeName(this.fundName));
   }
 
   get fund(): FundOverview | undefined {
@@ -225,14 +224,14 @@ export class DriftMomentumBot {
     };
   }
 
-  async placeMarketPerpOrder(marketIndex: number, usdc: number, direction: PositionDirection): Promise<SnackInfo> {
+  async placeMarketPerpOrder(marketIndex: number, usdc: number, direction: PositionDirection, slippagePct = 0.5): Promise<SnackInfo> {
     const {price} = await this.fetchPerpMarket(marketIndex);
 
-    let priceDiff50Bps;
+    let priceDiffBps;
     if (direction === PositionDirection.LONG) {
-      priceDiff50Bps = price * (1 + (0.5 / 100));
+      priceDiffBps = price * (1 + (slippagePct / 100));
     } else {
-      priceDiff50Bps = price * (1 - (0.5 / 100));
+      priceDiffBps = price * (1 - (slippagePct / 100));
     }
 
     const baseUnits = usdc / price;
@@ -245,14 +244,13 @@ export class DriftMomentumBot {
     console.log('fund user correct:', fundAcct.user.equals(activeUser.getUserAccountPublicKey()));
     console.log('fund delegate correct:', fundAcct.delegate.equals(this.key));
 
-    // manager places long order and waits to be filler by the filler
     const orderParams = getMarketOrderParams({
       marketIndex,
       direction,
       baseAssetAmount: this.driftClient.convertToPerpPrecision(baseUnits),
       auctionStartPrice: this.driftClient.convertToPricePrecision(price),
-      auctionEndPrice: this.driftClient.convertToPricePrecision(priceDiff50Bps),
-      price: this.driftClient.convertToPricePrecision(priceDiff50Bps),
+      auctionEndPrice: this.driftClient.convertToPricePrecision(priceDiffBps),
+      price: this.driftClient.convertToPricePrecision(priceDiffBps),
       auctionDuration: 60,
       maxTs: new BN(Date.now() + 100),
     });

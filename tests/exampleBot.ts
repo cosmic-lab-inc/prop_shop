@@ -30,10 +30,10 @@ import {
   DriftVaults,
   getVaultDepositorAddressSync,
   getVaultProtocolAddressSync,
+  IDL as DRIFT_VAULTS_IDL,
   VaultClient
 } from "@drift-labs/vaults-sdk";
 import {bootstrapSignerClientAndUser} from "./driftHelpers";
-import {IDL as DRIFT_VAULTS_IDL} from "@drift-labs/vaults-sdk/lib/types/drift_vaults";
 import {signatureLink} from "./phoenixHelpers";
 
 describe("exampleBot", () => {
@@ -296,6 +296,7 @@ describe("exampleBot", () => {
   });
 
   it("Maker Short SOL-PERP", async () => {
+    console.log('maker:', maker.publicKey.toString());
     // maker to fill fund's taker order
     const {price} = await bot.fetchPerpMarket(0);
 
