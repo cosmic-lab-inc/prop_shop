@@ -1,4 +1,5 @@
-import {Connection, Keypair, PublicKey} from '@solana/web3.js';
+import {ComputeBudgetProgram, Connection, Keypair, PublicKey, Signer, TransactionInstruction} from '@solana/web3.js';
+import * as anchor from '@coral-xyz/anchor';
 import {
   CreatePropShopClientConfig,
   CreateVaultConfig,
@@ -9,7 +10,7 @@ import {
   SnackInfo
 } from "@cosmic-lab/prop-shop-sdk";
 import {AsyncSigner, keypairToAsyncSigner} from "@cosmic-lab/data-source";
-import {getVaultAddressSync} from "@drift-labs/vaults-sdk";
+import {DriftVaults, getVaultAddressSync, Vault} from "@drift-labs/vaults-sdk";
 import {
   BN,
   DriftClient,
@@ -60,6 +61,12 @@ export class DriftMomentumBot {
 
   async initialize(): Promise<void> {
     await this.client.initialize();
+
+    if (this.fund !== undefined) {
+      await this.driftClient.addUser(0, this.fundKey);
+      await this.driftClient.switchActiveUser(0, this.fundKey);
+    }
+
     // todo: websocket sub + state management for Drift trades
   }
 
@@ -72,33 +79,47 @@ export class DriftMomentumBot {
     return this.client.driftClient;
   }
 
-  async createFund(config: CreateVaultConfig): Promise<SnackInfo> {
-    if (this.fund() !== undefined) {
-      console.warn(`Fund ${this.fundName} already exists`);
-      return {
-        variant: 'error',
-        message: `Fund ${this.fundName} already exists`
-      };
-    }
-    return (await this.client.createVault(config)).snack;
+  get program(): anchor.Program<DriftVaults> {
+    return this.client.vaultProgram;
   }
 
-  fundKey(): PublicKey {
+  get driftProgram(): anchor.Program<anchor.Idl> {
+    return this.driftClient.program;
+  }
+
+  get fundKey(): PublicKey {
     return getVaultAddressSync(DRIFT_VAULTS_PROGRAM_ID, encodeName(this.fundName));
   }
 
-  fund(): FundOverview | undefined {
+  get fund(): FundOverview | undefined {
     const funds = this.client.fundOverviews;
     return funds.find(f => f.title === this.fundName);
   }
 
-  fundOrErr(): FundOverview {
+  get fundOrErr(): FundOverview {
     const funds = this.client.fundOverviews;
     const fund = funds.find(f => f.title === this.fundName);
     if (!fund) {
       throw new Error(`Fund ${this.fundName} not found`);
     }
     return fund;
+  }
+
+  async createFund(config: CreateVaultConfig): Promise<SnackInfo> {
+    if (this.fund !== undefined) {
+      console.warn(`Fund ${this.fundName} already exists`);
+      return {
+        variant: 'error',
+        message: `Fund ${this.fundName} already exists`
+      };
+    }
+    const snack = (await this.client.createVault(config)).snack;
+
+    // delegate assumes control of vault user
+    await this.driftClient.addUser(0, this.fundKey);
+    await this.driftClient.switchActiveUser(0, this.fundKey);
+
+    return snack;
   }
 
   async driftUsdcBalance(): Promise<number> {
@@ -113,8 +134,73 @@ export class DriftMomentumBot {
     }
   }
 
-  async fundUsdcBalance(): Promise<number> {
-    return this.fund()?.tvl ?? 0;
+  private async sendTx(
+    ixs: TransactionInstruction[],
+    successMessage: string,
+    errorMessage: string,
+    signers: Signer[] = []
+  ): Promise<SnackInfo> {
+    const instructions = [
+      ComputeBudgetProgram.setComputeUnitLimit({
+        units: 400_000,
+      }),
+      ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: 10_000,
+      }),
+      ...ixs,
+    ];
+
+    const recentBlockhash = await this.conn
+      .getLatestBlockhash()
+      .then((res) => res.blockhash);
+    const msg = new anchor.web3.TransactionMessage({
+      payerKey: this.key,
+      recentBlockhash,
+      instructions,
+    }).compileToV0Message();
+    let tx = new anchor.web3.VersionedTransaction(msg);
+    tx = await this.signer.sign(tx);
+    tx.sign(signers);
+
+    const sim = (
+      await this.conn.simulateTransaction(tx, {
+        sigVerify: false,
+      })
+    ).value;
+    if (sim.err) {
+      const msg = `${errorMessage}: ${JSON.stringify(sim.err)}}`;
+      console.log(sim.logs);
+      console.error(msg);
+      return {
+        variant: 'error',
+        message: errorMessage,
+      };
+    }
+
+    try {
+      const sig = await this.conn.sendTransaction(tx, {
+        skipPreflight: true,
+      });
+      console.debug(`${successMessage}: ${signatureLink(sig)}`);
+      const confirm = await this.conn.confirmTransaction(sig);
+      if (confirm.value.err) {
+        console.error(`${errorMessage}: ${JSON.stringify(confirm.value.err)}`);
+        return {
+          variant: 'error',
+          message: errorMessage,
+        };
+      } else {
+        return {
+          variant: 'success',
+          message: successMessage,
+        };
+      }
+    } catch (e: any) {
+      return {
+        variant: 'error',
+        message: errorMessage,
+      };
+    }
   }
 
   async fetchPerpMarket(marketIndex: number): Promise<{
@@ -139,20 +225,25 @@ export class DriftMomentumBot {
     };
   }
 
-  async placeMarketPerpOrder(marketIndex: number, usdc: number, direction: PositionDirection) {
+  async placeMarketPerpOrder(marketIndex: number, usdc: number, direction: PositionDirection): Promise<SnackInfo> {
     const {price} = await this.fetchPerpMarket(marketIndex);
 
     let priceDiff50Bps;
-    let priceDiff75Bps;
     if (direction === PositionDirection.LONG) {
       priceDiff50Bps = price * (1 + (0.5 / 100));
-      priceDiff75Bps = price * (1 + (0.75 / 100));
     } else {
       priceDiff50Bps = price * (1 - (0.5 / 100));
-      priceDiff75Bps = price * (1 - (0.75 / 100));
     }
 
     const baseUnits = usdc / price;
+
+    const activeUser = this.driftClient.getUser(
+      0,
+      this.fundKey,
+    );
+    const fundAcct = (await this.program.account.vault.fetch(this.fundKey)) as Vault;
+    console.log('fund user correct:', fundAcct.user.equals(activeUser.getUserAccountPublicKey()));
+    console.log('fund delegate correct:', fundAcct.delegate.equals(this.key));
 
     // manager places long order and waits to be filler by the filler
     const orderParams = getMarketOrderParams({
@@ -161,17 +252,34 @@ export class DriftMomentumBot {
       baseAssetAmount: this.driftClient.convertToPerpPrecision(baseUnits),
       auctionStartPrice: this.driftClient.convertToPricePrecision(price),
       auctionEndPrice: this.driftClient.convertToPricePrecision(priceDiff50Bps),
-      price: this.driftClient.convertToPricePrecision(priceDiff75Bps),
+      price: this.driftClient.convertToPricePrecision(priceDiff50Bps),
       auctionDuration: 60,
       maxTs: new BN(Date.now() + 100),
     });
+
+    const remainingAccounts = this.driftClient.getRemainingAccounts(
+      {
+        userAccounts: [activeUser.getUserAccount()],
+        useMarketLastSlotCache: true,
+        writablePerpMarketIndexes: [marketIndex],
+      },
+    );
+
     try {
-      const sig = await this.driftClient.placePerpOrder(orderParams);
-      console.log(signatureLink(sig, this.conn));
-      return {
-        variant: 'success',
-        message: `Market order placed starting at ${price.toFixed(2)}`
-      };
+      const ix = await this.driftClient.program.methods
+        .placePerpOrder(orderParams)
+        .accounts({
+          state: await this.driftClient.getStatePublicKey(),
+          user: activeUser.userAccountPublicKey,
+          authority: this.key,
+        })
+        .remainingAccounts(remainingAccounts)
+        .instruction();
+      return await this.sendTx(
+        [ix],
+        `Market order placed starting at $${price.toFixed(2)}`,
+        'Failed to place market order'
+      );
     } catch (e: any) {
       console.error(e);
       return {
