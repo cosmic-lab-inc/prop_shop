@@ -16,7 +16,7 @@ import {
   User,
   UserAccount,
 } from "@drift-labs/sdk";
-import {ConfirmOptions, Keypair, LAMPORTS_PER_SOL} from "@solana/web3.js";
+import {ConfirmOptions, Keypair} from "@solana/web3.js";
 import {
   DRIFT_VAULTS_PROGRAM_ID,
   TEST_MANAGER,
@@ -35,6 +35,7 @@ import {
 } from "@drift-labs/vaults-sdk";
 import {bootstrapSignerClientAndUser} from "./driftHelpers";
 import {signatureLink} from "./phoenixHelpers";
+import {sleep} from "openai/core";
 
 describe("exampleBot", () => {
   const opts: ConfirmOptions = {
@@ -76,7 +77,6 @@ describe("exampleBot", () => {
   const usdcMintAuth = TEST_USDC_MINT_AUTHORITY;
 
   before(async () => {
-    await connection.requestAirdrop(manager.publicKey, LAMPORTS_PER_SOL * 1);
     bot = await DriftMomentumBot.new(connection, manager, fundName);
 
     const marketAcct = bot.driftClient.getPerpMarketAccount(0);
@@ -167,9 +167,15 @@ describe("exampleBot", () => {
   });
 
   it("Fetch Prices", async () => {
+    for (const _ of Array(10).keys()) {
+      const price = bot.perpMarketPrice(0);
+      console.log(`$${price}`);
+      await sleep(2000);
+    }
+
     for (const pm of bot.driftClient.getPerpMarketAccounts()) {
       const name = decodeName(pm.name);
-      const price = (await bot.fetchPerpMarket(pm.marketIndex)).price;
+      const price = bot.perpMarketPrice(pm.marketIndex);
       console.log(`${name}: $${price}`);
     }
   });
@@ -298,7 +304,7 @@ describe("exampleBot", () => {
   it("Maker Short SOL-PERP", async () => {
     console.log('maker:', maker.publicKey.toString());
     // maker to fill fund's taker order
-    const {price} = await bot.fetchPerpMarket(0);
+    const price = bot.perpMarketPrice(0);
 
     const takerUser = bot.driftClient.getUser();
     const takerOrder = takerUser.getOpenOrders()[0];

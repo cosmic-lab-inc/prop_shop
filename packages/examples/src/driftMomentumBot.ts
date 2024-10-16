@@ -15,11 +15,9 @@ import {
   DriftClient,
   encodeName,
   getMarketOrderParams,
-  PerpMarketAccount,
   PositionDirection,
   PRICE_PRECISION,
   QUOTE_PRECISION,
-  SpotMarketAccount
 } from "@drift-labs/sdk";
 
 
@@ -202,30 +200,17 @@ export class DriftMomentumBot {
     }
   }
 
-  async fetchPerpMarket(marketIndex: number): Promise<{
-    price: number;
-    perpMarket: PerpMarketAccount;
-    spotMarket: SpotMarketAccount;
-  }> {
+  perpMarketPrice(marketIndex: number): number {
     const pm = this.driftClient.getPerpMarketAccount(marketIndex);
     if (!pm) {
       throw new Error(`Market ${marketIndex} not found`);
     }
-    const sm = this.driftClient.getSpotMarketAccount(pm.quoteSpotMarketIndex);
-    if (!sm) {
-      throw new Error(`Market ${marketIndex} not found`);
-    }
     const spotOracle = this.driftClient.getOracleDataForPerpMarket(pm.marketIndex);
-    const price = spotOracle.price.toNumber() / PRICE_PRECISION.toNumber();
-    return {
-      price,
-      perpMarket: pm,
-      spotMarket: sm
-    };
+    return spotOracle.price.toNumber() / PRICE_PRECISION.toNumber();
   }
 
   async placeMarketPerpOrder(marketIndex: number, usdc: number, direction: PositionDirection, slippagePct = 0.5): Promise<SnackInfo> {
-    const {price} = await this.fetchPerpMarket(marketIndex);
+    const price = this.perpMarketPrice(marketIndex);
 
     let priceDiffBps;
     if (direction === PositionDirection.LONG) {
