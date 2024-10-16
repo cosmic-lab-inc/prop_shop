@@ -18,10 +18,11 @@ import {
 import {ConfirmOptions, Keypair} from "@solana/web3.js";
 import {
   DRIFT_VAULTS_PROGRAM_ID,
+  signatureLink,
   TEST_MANAGER,
   TEST_USDC_MINT,
   TEST_USDC_MINT_AUTHORITY,
-  Venue,
+  Venue
 } from "@cosmic-lab/prop-shop-sdk";
 import {DriftMomentumBot} from "@cosmic-lab/prop-shop-examples";
 import {assert} from "chai";
@@ -33,7 +34,6 @@ import {
   VaultClient
 } from "@drift-labs/vaults-sdk";
 import {bootstrapSignerClientAndUser} from "./driftHelpers";
-import {signatureLink} from "./phoenixHelpers";
 
 describe("exampleLocalnetBot", () => {
   const opts: ConfirmOptions = {

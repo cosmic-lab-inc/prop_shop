@@ -1,11 +1,4 @@
-import web3, {
-  ComputeBudgetProgram,
-  Connection,
-  Keypair,
-  PublicKey,
-  Signer,
-  TransactionInstruction
-} from '@solana/web3.js';
+import {ComputeBudgetProgram, Connection, Keypair, PublicKey, Signer, TransactionInstruction} from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import {
   CreatePropShopClientConfig,
@@ -27,7 +20,6 @@ import {
   QUOTE_PRECISION,
 } from "@drift-labs/sdk";
 import * as splToken from "@solana/spl-token";
-import {getClusterFromConnection} from "@ellipsis-labs/phoenix-sdk";
 import {WalletContextState} from "@solana/wallet-adapter-react";
 import {err, ok, Result} from "neverthrow";
 
@@ -131,6 +123,11 @@ export class DriftMomentumBot {
       throw new Error(`Fund ${this.fundName} not found`);
     }
     return fund;
+  }
+
+  async fetchFund(): Promise<FundOverview | undefined> {
+    await this.client.fetchFundOverviews();
+    return this.fund;
   }
 
   async createFund(config: CreateVaultConfig): Promise<SnackInfo> {
@@ -250,59 +247,6 @@ export class DriftMomentumBot {
         message: errorMessage,
       };
     }
-  }
-
-  async airdropDevnetUsdc(): Promise<SnackInfo> {
-    const cluster = await getClusterFromConnection(this.conn);
-    if (cluster !== "devnet") {
-      return {
-        variant: 'error',
-        message: 'Airdrop only supported on devnet'
-      };
-    }
-    const mintInfoResult = await this.usdcMintInfo();
-    if (mintInfoResult.isErr()) {
-      return {
-        variant: 'error',
-        message: mintInfoResult.error
-      };
-    }
-    const {
-      mint,
-      authority,
-      decimals
-    } = mintInfoResult.value;
-
-    const amount = 1_000 * Math.pow(10, decimals);
-
-    // Helper types and functions for interacting with the generic token faucet; only used for devnet testing.
-    const airdropSplInstructionDiscriminator = Buffer.from(
-      Uint8Array.from([133, 44, 125, 96, 172, 219, 228, 51])
-    );
-    const numberBuffer = new BN(amount).toBuffer("le", 8);
-    const data = Buffer.concat([
-      airdropSplInstructionDiscriminator,
-      numberBuffer,
-    ]);
-
-    const keys: web3.AccountMeta[] = [
-      {pubkey: mint, isSigner: false, isWritable: true},
-      {pubkey: authority, isSigner: false, isWritable: false},
-      {pubkey: this.key, isSigner: false, isWritable: true},
-      {
-        pubkey: splToken.TOKEN_PROGRAM_ID,
-        isSigner: false,
-        isWritable: false,
-      },
-    ];
-    const faucetProgramId = new PublicKey("FF2UnZt7Lce3S65tW5cMVKz8iVAPoCS8ETavmUhsWLJB");
-    const ix = new TransactionInstruction({keys, programId: faucetProgramId, data});
-
-    return await this.sendTx(
-      [ix],
-      'Airdropped 1,000 USDC',
-      'Failed to airdrop USDC'
-    );
   }
 
   perpMarketPrice(marketIndex: number): number {

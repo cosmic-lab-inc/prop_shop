@@ -1,5 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import {AnchorProvider, Program, Provider} from "@coral-xyz/anchor";
+import * as splToken from "@solana/spl-token";
 import {
   AccountLayout,
   createAssociatedTokenAccountInstruction,
@@ -9,18 +10,22 @@ import {
   getAssociatedTokenAddressSync,
   getMinimumBalanceForRentExemptAccount,
   NATIVE_MINT,
-  TOKEN_PROGRAM_ID,
+  TOKEN_PROGRAM_ID
 } from "@solana/spl-token";
 import {
+  AccountMeta,
+  ComputeBudgetProgram,
   Connection,
   Keypair,
   LAMPORTS_PER_SOL,
   PublicKey,
   sendAndConfirmTransaction,
+  Signer,
   SystemProgram,
   Transaction,
   TransactionConfirmationStrategy,
   TransactionError,
+  TransactionInstruction,
   TransactionSignature,
 } from "@solana/web3.js";
 import {assert} from "chai";
@@ -52,6 +57,8 @@ import {
   walletToAsyncSigner,
 } from "@cosmic-lab/data-source";
 import {err, ok, Result} from "neverthrow";
+import {signatureLink} from "@cosmic-lab/prop-shop-sdk";
+import {getClusterFromConnection} from "@ellipsis-labs/phoenix-sdk";
 
 async function sendTransactionWithResult(
   instructions: InstructionReturn[],
@@ -72,6 +79,58 @@ async function sendTransactionWithResult(
       return err(res.value.error);
     } else {
       return ok(res.value.value);
+    }
+  } catch (e: any) {
+    throw new Error(e);
+  }
+}
+
+async function sendTx(
+  provider: AnchorProvider,
+  ixs: TransactionInstruction[],
+  signers: Signer[] = []
+): Promise<void> {
+  const instructions = [
+    ComputeBudgetProgram.setComputeUnitLimit({
+      units: 400_000,
+    }),
+    ComputeBudgetProgram.setComputeUnitPrice({
+      microLamports: 10_000,
+    }),
+    ...ixs,
+  ];
+
+  const recentBlockhash = await provider.connection
+    .getLatestBlockhash()
+    .then((res) => res.blockhash);
+  const msg = new anchor.web3.TransactionMessage({
+    payerKey: provider.publicKey,
+    recentBlockhash,
+    instructions,
+  }).compileToV0Message();
+  let tx = new anchor.web3.VersionedTransaction(msg);
+  const signer = walletToAsyncSigner(provider.wallet);
+  tx = await signer.sign(tx);
+  tx.sign(signers);
+
+  const sim = (
+    await provider.connection.simulateTransaction(tx, {
+      sigVerify: false,
+    })
+  ).value;
+  if (sim.err) {
+    console.log('simulation:', sim.logs);
+    throw new Error(JSON.stringify(sim.err));
+  }
+
+  try {
+    const sig = await provider.connection.sendTransaction(tx, {
+      skipPreflight: true,
+    });
+    console.log(signatureLink(sig, provider.connection));
+    const confirm = await provider.connection.confirmTransaction(sig);
+    if (confirm.value.err) {
+      throw new Error(JSON.stringify(confirm.value.err));
     }
   } catch (e: any) {
     throw new Error(e);
@@ -1143,13 +1202,13 @@ export async function bootstrapDevnetInvestor(params: {
   payer: AnchorProvider;
   programId: PublicKey;
   usdcMint: PublicKey;
+  usdc: number;
   signer: Keypair;
   driftClientConfig: Omit<DriftClientConfig, "connection" | "wallet">;
   vaultClientCliMode?: boolean;
 }): Promise<{
   signer: Keypair;
-  user: User;
-  userUSDCAccount: PublicKey;
+  usdcAta: PublicKey;
   driftClient: DriftClient;
   vaultClient: VaultClient;
   provider: AnchorProvider;
@@ -1173,7 +1232,7 @@ export async function bootstrapDevnetInvestor(params: {
   const signer = params.signer;
   const balance = (await payer.connection.getBalance(signer.publicKey)) / LAMPORTS_PER_SOL;
   if (balance < 0.01) {
-    throw new Error(`Signer has less than 0.01 devnet SOL (${balance}), get more here: https://faucet.solana.com/`);
+    throw new Error(`Signer (${signer.publicKey.toString()}) has less than 0.01 devnet SOL (${balance}), get more here: https://faucet.solana.com/`);
   }
 
   const driftClient = new DriftClient({
@@ -1188,6 +1247,7 @@ export async function bootstrapDevnetInvestor(params: {
     oracleInfos,
     accountSubscription,
   });
+  await driftClient.subscribe();
   const provider = new anchor.AnchorProvider(
     payer.connection,
     new anchor.Wallet(signer),
@@ -1202,23 +1262,83 @@ export async function bootstrapDevnetInvestor(params: {
     program,
     cliMode: vaultClientCliMode ?? true,
   });
-  const userUSDCAccount = await createUsdcAssociatedTokenAccount(
+  const usdcAta = await createUsdcAssociatedTokenAccount(
     usdcMint,
     payer,
     signer.publicKey,
   );
-  await driftClient.subscribe();
-  const user = new User({
-    driftClient,
-    userAccountPublicKey: await driftClient.getUserAccountPublicKey(),
-  });
-  await user.subscribe();
+  // const usdcBalance = await getTokenBalance(provider.connection, usdcAta);
+  // if (usdcBalance < params.usdc) {
+  //   await airdropDevnetUsdc(
+  //     provider,
+  //     driftClient,
+  //     Math.round(params.usdc - usdcBalance),
+  //     signer.publicKey
+  //   );
+  // }
+
   return {
     signer,
-    user,
-    userUSDCAccount,
+    usdcAta,
     driftClient,
     vaultClient,
     provider,
   };
+}
+
+async function airdropDevnetUsdc(
+  provider: AnchorProvider,
+  driftClient: DriftClient,
+  usdc: number,
+  owner: PublicKey
+): Promise<void> {
+  const cluster = await getClusterFromConnection(provider.connection);
+  if (cluster !== "devnet") {
+    throw new Error('Airdrop only supported on devnet');
+  }
+
+  const sm = driftClient.getSpotMarketAccount(0);
+  if (!sm) {
+    throw new Error('USDC spot market not found');
+  }
+  const usdcMint = sm.mint;
+  const usdcMintData = await splToken.getMint(provider.connection, usdcMint);
+  if (!usdcMintData.isInitialized) {
+    throw new Error('USDC mint not initialized');
+  }
+  if (usdcMintData.mintAuthority === null) {
+    throw new Error('Mint authority not found');
+  }
+  console.log('current usdc supply:', usdcMintData.supply.toString());
+
+  const amount = usdc * Math.pow(10, usdcMintData.decimals);
+
+  // Helper types and functions for interacting with the generic token faucet; only used for devnet testing.
+  const airdropSplInstructionDiscriminator = Buffer.from(
+    Uint8Array.from([133, 44, 125, 96, 172, 219, 228, 51])
+  );
+  const numberBuffer = new BN(amount).toBuffer("le", 8);
+  const data = Buffer.concat([
+    airdropSplInstructionDiscriminator,
+    numberBuffer,
+  ]);
+
+  const keys: AccountMeta[] = [
+    {pubkey: usdcMint, isSigner: false, isWritable: true},
+    {pubkey: usdcMintData.mintAuthority, isSigner: false, isWritable: false},
+    {pubkey: owner, isSigner: false, isWritable: true},
+    {
+      pubkey: splToken.TOKEN_PROGRAM_ID,
+      isSigner: false,
+      isWritable: false,
+    },
+  ];
+  const faucetProgramId = new PublicKey("FF2UnZt7Lce3S65tW5cMVKz8iVAPoCS8ETavmUhsWLJB");
+  const ix = new TransactionInstruction({keys, programId: faucetProgramId, data});
+
+  await sendTx(
+    provider,
+    [ix],
+  );
+  console.log(`Airdropped $${usdc} to ${owner.toString()}`);
 }
