@@ -173,6 +173,51 @@ export async function mockUserUSDCAssociatedTokenAccount(
   return userUSDCAccount;
 }
 
+export async function createUsdcAssociatedTokenAccount(
+  usdcMint: PublicKey,
+  provider: Provider,
+  owner: PublicKey,
+): Promise<PublicKey> {
+  // @ts-ignore
+  const funderSigner = walletToAsyncSigner(provider.wallet);
+
+  const ixs: InstructionReturn[] = [];
+
+  const usdcAta = getAssociatedTokenAddressSync(
+    usdcMint,
+    owner,
+    true,
+  );
+  const userAtaExists =
+    await provider.connection.getAccountInfo(usdcAta);
+  if (userAtaExists === null) {
+    const createAtaIx: InstructionReturn = () => {
+      return Promise.resolve({
+        instruction: createAssociatedTokenAccountInstruction(
+          funderSigner.publicKey(),
+          usdcAta,
+          owner,
+          usdcMint,
+        ),
+        signers: [funderSigner],
+      });
+    };
+    ixs.push(createAtaIx);
+  }
+
+  const res = await sendTransactionWithResult(
+    ixs,
+    funderSigner,
+    provider.connection,
+  );
+  if (res.isErr()) {
+    throw new Error(
+      `Error creating USDC ATA: ${JSON.stringify(res.error as TransactionError)}`,
+    );
+  }
+  return usdcAta;
+}
+
 export async function mockUserUSDCAccount(
   fakeUSDCMint: Keypair,
   usdcMintAmount: BN,
@@ -1079,6 +1124,90 @@ export async function bootstrapSignerClientAndUser(params: {
   } else {
     await driftClient.initializeUserAccount(activeSubAccountId ?? 0);
   }
+  const user = new User({
+    driftClient,
+    userAccountPublicKey: await driftClient.getUserAccountPublicKey(),
+  });
+  await user.subscribe();
+  return {
+    signer,
+    user,
+    userUSDCAccount,
+    driftClient,
+    vaultClient,
+    provider,
+  };
+}
+
+export async function bootstrapDevnetInvestor(params: {
+  payer: AnchorProvider;
+  programId: PublicKey;
+  usdcMint: PublicKey;
+  signer: Keypair;
+  driftClientConfig: Omit<DriftClientConfig, "connection" | "wallet">;
+  vaultClientCliMode?: boolean;
+}): Promise<{
+  signer: Keypair;
+  user: User;
+  userUSDCAccount: PublicKey;
+  driftClient: DriftClient;
+  vaultClient: VaultClient;
+  provider: AnchorProvider;
+}> {
+  const {
+    payer,
+    programId,
+    usdcMint,
+    vaultClientCliMode,
+    driftClientConfig,
+  } = params;
+  const {
+    accountSubscription,
+    opts,
+    activeSubAccountId,
+    perpMarketIndexes,
+    spotMarketIndexes,
+    oracleInfos,
+  } = driftClientConfig;
+
+  const signer = params.signer;
+  const balance = (await payer.connection.getBalance(signer.publicKey)) / LAMPORTS_PER_SOL;
+  if (balance < 0.01) {
+    throw new Error(`Signer has less than 0.01 devnet SOL (${balance}), get more here: https://faucet.solana.com/`);
+  }
+
+  const driftClient = new DriftClient({
+    connection: payer.connection,
+    wallet: new Wallet(signer),
+    opts: {
+      commitment: "confirmed",
+    },
+    activeSubAccountId,
+    perpMarketIndexes,
+    spotMarketIndexes,
+    oracleInfos,
+    accountSubscription,
+  });
+  const provider = new anchor.AnchorProvider(
+    payer.connection,
+    new anchor.Wallet(signer),
+    opts ?? {
+      commitment: "confirmed",
+    },
+  );
+  const program = new Program(IDL, programId, provider);
+  const vaultClient = new VaultClient({
+    // @ts-ignore
+    driftClient,
+    program,
+    cliMode: vaultClientCliMode ?? true,
+  });
+  const userUSDCAccount = await createUsdcAssociatedTokenAccount(
+    usdcMint,
+    payer,
+    signer.publicKey,
+  );
+  await driftClient.subscribe();
   const user = new User({
     driftClient,
     userAccountPublicKey: await driftClient.getUserAccountPublicKey(),

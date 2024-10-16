@@ -4,7 +4,6 @@ import {
   AdminClient,
   BASE_PRECISION,
   BN,
-  decodeName,
   getLimitOrderParams,
   OracleSource,
   PositionDirection,
@@ -35,9 +34,8 @@ import {
 } from "@drift-labs/vaults-sdk";
 import {bootstrapSignerClientAndUser} from "./driftHelpers";
 import {signatureLink} from "./phoenixHelpers";
-import {sleep} from "openai/core";
 
-describe("exampleBot", () => {
+describe("exampleLocalnetBot", () => {
   const opts: ConfirmOptions = {
     preflightCommitment: "confirmed",
     skipPreflight: false,
@@ -56,7 +54,6 @@ describe("exampleBot", () => {
 
   let admin: AdminClient;
   const manager = TEST_MANAGER;
-  // create random integer from 1-40
   const version = Math.floor(Math.random() * 1000);
   const fundName = `Drift Momentum Bot V${version}`;
   console.log('fund:', fundName);
@@ -77,13 +74,12 @@ describe("exampleBot", () => {
   const usdcMintAuth = TEST_USDC_MINT_AUTHORITY;
 
   before(async () => {
-    bot = await DriftMomentumBot.new(connection, manager, fundName);
+    bot = await DriftMomentumBot.fromKeypair(connection, manager, fundName);
 
     const marketAcct = bot.driftClient.getPerpMarketAccount(0);
     if (!marketAcct) {
       throw new Error("Perp market not found");
     }
-    console.log(`SOL perp market:`, decodeName(marketAcct.name));
     const perpMarketIndexes = [0];
     const spotMarketIndexes = [0];
     const oracleInfos = [
@@ -166,19 +162,13 @@ describe("exampleBot", () => {
     await admin.unsubscribe();
   });
 
-  it("Fetch Prices", async () => {
-    for (const _ of Array(10).keys()) {
-      const price = bot.perpMarketPrice(0);
-      console.log(`$${price}`);
-      await sleep(2000);
-    }
-
-    for (const pm of bot.driftClient.getPerpMarketAccounts()) {
-      const name = decodeName(pm.name);
-      const price = bot.perpMarketPrice(pm.marketIndex);
-      console.log(`${name}: $${price}`);
-    }
-  });
+  // it("Fetch Prices", async () => {
+  //   for (const pm of bot.driftClient.getPerpMarketAccounts()) {
+  //     const name = decodeName(pm.name);
+  //     const price = bot.perpMarketPrice(pm.marketIndex);
+  //     console.log(`${name}: $${price}`);
+  //   }
+  // });
 
   it("Create Fund", async () => {
     if (bot.fund !== undefined) {
@@ -212,11 +202,6 @@ describe("exampleBot", () => {
   });
 
   it("Initialize Investor", async () => {
-    const investorUserAcct = investorClient.driftClient
-      .getUserAccount(0, investor.publicKey);
-    if (!investorUserAcct) {
-      throw new Error("Investor user account not found");
-    }
     await investorClient.initializeVaultDepositor(bot.fundKey, investor.publicKey);
     const vaultDepositor = getVaultDepositorAddressSync(
       program.programId,
@@ -275,13 +260,17 @@ describe("exampleBot", () => {
     assert(investorAcct.vault.equals(bot.fundKey));
     assert(investorAcct.netDeposits.eq(usdcAmount));
     console.log('fund usdc:', bot.fund?.tvl ?? 0);
+
+    const investorUserAcct = investorClient.driftClient
+      .getUserAccount(0, investor.publicKey);
+    assert(investorUserAcct !== undefined);
   });
 
   it("Fund Long SOL-PERP", async () => {
     // fund taker order
     const snack = await bot.placeMarketPerpOrder(
       0,
-      bot.fundOrErr.tvl * 0.5,
+      bot.fundOrErr.tvl,
       PositionDirection.LONG
     );
     assert(snack.variant === "success");

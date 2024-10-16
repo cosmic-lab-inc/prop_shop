@@ -1,4 +1,11 @@
-import {ComputeBudgetProgram, Connection, Keypair, PublicKey, Signer, TransactionInstruction} from '@solana/web3.js';
+import web3, {
+  ComputeBudgetProgram,
+  Connection,
+  Keypair,
+  PublicKey,
+  Signer,
+  TransactionInstruction
+} from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import {
   CreatePropShopClientConfig,
@@ -8,7 +15,7 @@ import {
   signatureLink,
   SnackInfo
 } from "@cosmic-lab/prop-shop-sdk";
-import {AsyncSigner, keypairToAsyncSigner} from "@cosmic-lab/data-source";
+import {AsyncSigner, keypairToAsyncSigner, walletAdapterToAsyncSigner} from "@cosmic-lab/data-source";
 import {DriftVaults, getVaultAddressSync, Vault} from "@drift-labs/vaults-sdk";
 import {
   BN,
@@ -19,6 +26,10 @@ import {
   PRICE_PRECISION,
   QUOTE_PRECISION,
 } from "@drift-labs/sdk";
+import * as splToken from "@solana/spl-token";
+import {getClusterFromConnection} from "@ellipsis-labs/phoenix-sdk";
+import {WalletContextState} from "@solana/wallet-adapter-react";
+import {err, ok, Result} from "neverthrow";
 
 
 export class DriftMomentumBot {
@@ -29,18 +40,38 @@ export class DriftMomentumBot {
   readonly fundName: string;
 
   /**
-   * Create a new DriftMomentumBot and initialize in one step
+   * Create a new DriftMomentumBot from a keypair (bot) and initialize in one step
    * @param connection - Solana RPC connection
    * @param keypair - Transaction payer and authority of the Prop Shop fund
    * @param fundName - Name of the Prop Shop fund to manage
    */
-  static async new(
+  static async fromKeypair(
     connection: Connection,
     keypair: Keypair,
     fundName: string
   ): Promise<DriftMomentumBot> {
     const config: CreatePropShopClientConfig = {
       signer: keypairToAsyncSigner(keypair),
+      connection
+    };
+    const self = new DriftMomentumBot(config, fundName);
+    await self.initialize();
+    return self;
+  }
+
+  /**
+   * Create a new DriftMomentumBot from a wallet (UI) and initialize in one step
+   * @param connection - Solana RPC connection
+   * @param wallet - Transaction payer and authority of the Prop Shop fund
+   * @param fundName - Name of the Prop Shop fund to manage
+   */
+  static async fromWallet(
+    connection: Connection,
+    wallet: WalletContextState,
+    fundName: string
+  ): Promise<DriftMomentumBot> {
+    const config: CreatePropShopClientConfig = {
+      signer: walletAdapterToAsyncSigner(wallet),
       connection
     };
     const self = new DriftMomentumBot(config, fundName);
@@ -117,6 +148,27 @@ export class DriftMomentumBot {
     await this.driftClient.switchActiveUser(0, this.fundKey);
 
     return snack;
+  }
+
+  async usdcMintInfo(): Promise<Result<{
+    mint: PublicKey;
+    authority: PublicKey;
+    decimals: number;
+  }, string>> {
+    const sm = this.driftClient.getSpotMarketAccount(0);
+    if (!sm) {
+      return err('USDC spot market not found');
+    }
+    const usdcMint = sm.mint;
+    const usdcMintData = await splToken.getMint(this.conn, usdcMint);
+    if (usdcMintData.mintAuthority === null) {
+      return err('Mint authority not found');
+    }
+    return ok({
+      mint: usdcMint,
+      authority: usdcMintData.mintAuthority,
+      decimals: usdcMintData.decimals
+    });
   }
 
   async driftUsdcBalance(): Promise<number> {
@@ -198,6 +250,59 @@ export class DriftMomentumBot {
         message: errorMessage,
       };
     }
+  }
+
+  async airdropDevnetUsdc(): Promise<SnackInfo> {
+    const cluster = await getClusterFromConnection(this.conn);
+    if (cluster !== "devnet") {
+      return {
+        variant: 'error',
+        message: 'Airdrop only supported on devnet'
+      };
+    }
+    const mintInfoResult = await this.usdcMintInfo();
+    if (mintInfoResult.isErr()) {
+      return {
+        variant: 'error',
+        message: mintInfoResult.error
+      };
+    }
+    const {
+      mint,
+      authority,
+      decimals
+    } = mintInfoResult.value;
+
+    const amount = 1_000 * Math.pow(10, decimals);
+
+    // Helper types and functions for interacting with the generic token faucet; only used for devnet testing.
+    const airdropSplInstructionDiscriminator = Buffer.from(
+      Uint8Array.from([133, 44, 125, 96, 172, 219, 228, 51])
+    );
+    const numberBuffer = new BN(amount).toBuffer("le", 8);
+    const data = Buffer.concat([
+      airdropSplInstructionDiscriminator,
+      numberBuffer,
+    ]);
+
+    const keys: web3.AccountMeta[] = [
+      {pubkey: mint, isSigner: false, isWritable: true},
+      {pubkey: authority, isSigner: false, isWritable: false},
+      {pubkey: this.key, isSigner: false, isWritable: true},
+      {
+        pubkey: splToken.TOKEN_PROGRAM_ID,
+        isSigner: false,
+        isWritable: false,
+      },
+    ];
+    const faucetProgramId = new PublicKey("FF2UnZt7Lce3S65tW5cMVKz8iVAPoCS8ETavmUhsWLJB");
+    const ix = new TransactionInstruction({keys, programId: faucetProgramId, data});
+
+    return await this.sendTx(
+      [ix],
+      'Airdropped 1,000 USDC',
+      'Failed to airdrop USDC'
+    );
   }
 
   perpMarketPrice(marketIndex: number): number {
