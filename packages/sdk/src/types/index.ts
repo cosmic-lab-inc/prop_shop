@@ -6,3 +6,4 @@ export * from './driftSubscriber';
 export * from './phoenixSubscriber';
 export * from './misc';
 export * from './phoenix';
+export * from './order';

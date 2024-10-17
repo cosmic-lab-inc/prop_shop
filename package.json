@@ -10,9 +10,11 @@
   "scripts": {
     "clean": "yes | pnpm --filter prop-shop-app clean && pnpm --filter @cosmic-lab/prop-shop-sdk clean && rm -rf node_modules",
     "lint": "prettier --write \"./**/*.{ts,tsx}\" --loglevel silent",
-    "prettify:app": "pnpm --filter prop-shop-app prettify:fix",
+    "prettify:tests": "prettier --write './tests/**/*.ts'",
+    "prettify:app": "pnpm prettify:tests && pnpm --filter prop-shop-app prettify:fix",
     "prettify:sdk": "pnpm --filter @cosmic-lab/prop-shop-sdk prettify:fix",
-    "prettify": "pnpm prettify:sdk && pnpm prettify:app",
+    "prettify:examples": "pnpm --filter @cosmic-lab/prop-shop-examples prettify:fix",
+    "prettify": "pnpm prettify:sdk && pnpm prettify:app && pnpm prettify:examples",
     "link:phoenix-vaults-program": "cp ../phoenix-vaults/target/idl/phoenix_vaults.json deps/phoenix_vaults.json && cp ../phoenix-vaults/target/deploy/phoenix_vaults.so deps/phoenix_vaults.so",
     "link:all": "pnpm link:phoenix-vaults-program",
     "build:app": "pnpm --filter prop-shop-app build",

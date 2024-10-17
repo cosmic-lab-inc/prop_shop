@@ -1,6 +1,6 @@
 {
   "name": "@cosmic-lab/prop-shop-sdk",
-  "version": "0.2.15",
+  "version": "0.2.17",
   "author": "Drew Riester <epochsolana@gmail.com>",
   "description": "Frontend client for Prop Shop",
   "main": "src/index.ts",

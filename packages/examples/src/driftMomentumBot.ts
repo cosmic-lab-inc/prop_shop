@@ -1,28 +1,28 @@
-import {ComputeBudgetProgram, Connection, Keypair, PublicKey, Signer, TransactionInstruction} from '@solana/web3.js';
+import {Commitment, ComputeBudgetProgram, Connection, Keypair, PublicKey, Signer, TransactionInstruction,} from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
+import {CreatePropShopClientConfig, CreateVaultConfig, DriftVaultsClient, FundOverview, signatureLink, SnackInfo, UiBidAsk,} from '@cosmic-lab/prop-shop-sdk';
+import {AsyncSigner, keypairToAsyncSigner, walletAdapterToAsyncSigner,} from '@cosmic-lab/data-source';
+import {DriftVaults, getVaultAddressSync, Vault,} from '@drift-labs/vaults-sdk';
 import {
-  CreatePropShopClientConfig,
-  CreateVaultConfig,
-  DriftVaultsClient,
-  FundOverview,
-  signatureLink,
-  SnackInfo
-} from "@cosmic-lab/prop-shop-sdk";
-import {AsyncSigner, keypairToAsyncSigner, walletAdapterToAsyncSigner} from "@cosmic-lab/data-source";
-import {DriftVaults, getVaultAddressSync, Vault} from "@drift-labs/vaults-sdk";
-import {
-  BN,
-  DriftClient,
-  encodeName,
-  getMarketOrderParams,
-  PositionDirection,
-  PRICE_PRECISION,
-  QUOTE_PRECISION,
-} from "@drift-labs/sdk";
-import * as splToken from "@solana/spl-token";
-import {WalletContextState} from "@solana/wallet-adapter-react";
-import {err, ok, Result} from "neverthrow";
-
+	BASE_PRECISION,
+	BN,
+	DepositRecord,
+	DLOBSubscriber,
+	DriftClient,
+	encodeName,
+	EventSubscriber,
+	getMarketOrderParams,
+	isVariant,
+	MarketType,
+	OrderActionRecord,
+	OrderSubscriber,
+	PositionDirection,
+	PRICE_PRECISION,
+} from '@drift-labs/sdk';
+import * as splToken from '@solana/spl-token';
+import {WalletContextState} from '@solana/wallet-adapter-react';
+import {err, ok, Result} from 'neverthrow';
+import {EventSubscriptionOptions} from '@drift-labs/sdk/src/events/types';
 
 export class DriftMomentumBot {
   private readonly conn: Connection;
@@ -30,6 +30,9 @@ export class DriftMomentumBot {
   key: PublicKey;
   private client: DriftVaultsClient;
   readonly fundName: string;
+  private _eventSubscriber: EventSubscriber | undefined;
+  private _orderSubscriber: OrderSubscriber | undefined;
+  private _dlobSubscriber: DLOBSubscriber | undefined;
 
   /**
    * Create a new DriftMomentumBot from a keypair (bot) and initialize in one step
@@ -44,7 +47,7 @@ export class DriftMomentumBot {
   ): Promise<DriftMomentumBot> {
     const config: CreatePropShopClientConfig = {
       signer: keypairToAsyncSigner(keypair),
-      connection
+      connection,
     };
     const self = new DriftMomentumBot(config, fundName);
     await self.initialize();
@@ -64,7 +67,7 @@ export class DriftMomentumBot {
   ): Promise<DriftMomentumBot> {
     const config: CreatePropShopClientConfig = {
       signer: walletAdapterToAsyncSigner(wallet),
-      connection
+      connection,
     };
     const self = new DriftMomentumBot(config, fundName);
     await self.initialize();
@@ -81,22 +84,126 @@ export class DriftMomentumBot {
 
   async initialize(): Promise<void> {
     await this.client.initialize();
-
     if (this.fund !== undefined) {
       await this.driftClient.addUser(0, this.fundKey);
       await this.driftClient.switchActiveUser(0, this.fundKey);
     }
 
-    // todo: websocket sub + state management for Drift trades
+    //
+    // event subscriber
+    //
+    const options: EventSubscriptionOptions = {
+      eventTypes: ['DepositRecord', 'OrderRecord', 'OrderActionRecord'],
+      maxTx: 4096,
+      maxEventsPerType: 4096,
+      orderBy: 'blockchain',
+      orderDir: 'asc',
+      commitment: 'confirmed',
+      logProviderConfig: {
+        type: 'websocket',
+      },
+    };
+    this._eventSubscriber = new EventSubscriber(
+      this.conn,
+      this.driftProgram,
+      options
+    );
+    await this.eventSubscriber.subscribe();
+    this.eventSubscriber.eventEmitter.on('newEvent', (event) => {
+      if (event.eventType === 'OrderActionRecord') {
+        const _event = event as OrderActionRecord;
+        if (!isVariant(_event.action, 'fill')) {
+          if (!isVariant(_event.marketType, 'spot')) {
+            const info = {
+              baseFilled: _event.baseAssetAmountFilled?.toNumber() ?? 0,
+              quoteFilled: _event.quoteAssetAmountFilled?.toNumber() ?? 0,
+              marketIndex: _event.marketIndex,
+              price: _event.oraclePrice.toNumber() / PRICE_PRECISION.toNumber(),
+            };
+            console.log('FILL:', info);
+          }
+        }
+      }
+
+      if (event.eventType === 'DepositRecord') {
+        const _event = event as DepositRecord;
+        const info = {
+          direction: _event.direction,
+          marketIndex: _event.marketIndex,
+          amount: _event.amount.toNumber(),
+          marketDepositBalance: _event.marketDepositBalance.toNumber(),
+          marketWithdrawBalance: _event.marketWithdrawBalance.toNumber(),
+          price: _event.oraclePrice.toNumber() / PRICE_PRECISION.toNumber(),
+        };
+        console.log('WITHDRAW:', info);
+      }
+    });
+
+    //
+    // orderbook subscriber
+    //
+    const subscriptionConfig:
+      | {
+      type: 'polling';
+      frequency: number;
+      commitment?: Commitment;
+    }
+      | {
+      type: 'websocket';
+      skipInitialLoad?: boolean;
+      resubTimeoutMs?: number;
+      logResubMessages?: boolean;
+      resyncIntervalMs?: number;
+      commitment?: Commitment;
+    } = {
+      type: 'websocket',
+      commitment: 'confirmed',
+      resyncIntervalMs: 30_000,
+    };
+    this._orderSubscriber = new OrderSubscriber({
+      driftClient: this.driftClient,
+      subscriptionConfig,
+    });
+    await this.orderSubscriber.subscribe();
+    this._dlobSubscriber = new DLOBSubscriber({
+      driftClient: this.driftClient,
+      dlobSource: this.orderSubscriber, // or UserMap
+      slotSource: this.orderSubscriber, // or UserMap
+      updateFrequency: 1000,
+    });
+    await this.dlobSubscriber.subscribe();
   }
 
   async shutdown(): Promise<void> {
     await this.client.shutdown();
-    // todo: disconnect Drift trade state websockets
+    await this.eventSubscriber.unsubscribe();
+    await this.orderSubscriber.unsubscribe();
+    await this.dlobSubscriber.unsubscribe();
   }
 
   get driftClient(): DriftClient {
     return this.client.driftClient;
+  }
+
+  get eventSubscriber(): EventSubscriber {
+    if (!this._eventSubscriber) {
+      throw new Error('Event subscriber not initialized');
+    }
+    return this._eventSubscriber;
+  }
+
+  get orderSubscriber(): OrderSubscriber {
+    if (!this._orderSubscriber) {
+      throw new Error('Order subscriber not initialized');
+    }
+    return this._orderSubscriber;
+  }
+
+  get dlobSubscriber(): DLOBSubscriber {
+    if (!this._dlobSubscriber) {
+      throw new Error('DLOB subscriber not initialized');
+    }
+    return this._dlobSubscriber;
   }
 
   get program(): anchor.Program<DriftVaults> {
@@ -108,17 +215,20 @@ export class DriftMomentumBot {
   }
 
   get fundKey(): PublicKey {
-    return getVaultAddressSync(this.program.programId, encodeName(this.fundName));
+    return getVaultAddressSync(
+      this.program.programId,
+      encodeName(this.fundName)
+    );
   }
 
   get fund(): FundOverview | undefined {
     const funds = this.client.fundOverviews;
-    return funds.find(f => f.title === this.fundName);
+    return funds.find((f) => f.title === this.fundName);
   }
 
   get fundOrErr(): FundOverview {
     const funds = this.client.fundOverviews;
-    const fund = funds.find(f => f.title === this.fundName);
+    const fund = funds.find((f) => f.title === this.fundName);
     if (!fund) {
       throw new Error(`Fund ${this.fundName} not found`);
     }
@@ -135,7 +245,7 @@ export class DriftMomentumBot {
       console.warn(`Fund ${this.fundName} already exists`);
       return {
         variant: 'error',
-        message: `Fund ${this.fundName} already exists`
+        message: `Fund ${this.fundName} already exists`,
       };
     }
     const snack = (await this.client.createVault(config)).snack;
@@ -147,11 +257,16 @@ export class DriftMomentumBot {
     return snack;
   }
 
-  async usdcMintInfo(): Promise<Result<{
-    mint: PublicKey;
-    authority: PublicKey;
-    decimals: number;
-  }, string>> {
+  async usdcMintInfo(): Promise<
+    Result<
+      {
+        mint: PublicKey;
+        authority: PublicKey;
+        decimals: number;
+      },
+      string
+    >
+  > {
     const sm = this.driftClient.getSpotMarketAccount(0);
     if (!sm) {
       return err('USDC spot market not found');
@@ -164,20 +279,8 @@ export class DriftMomentumBot {
     return ok({
       mint: usdcMint,
       authority: usdcMintData.mintAuthority,
-      decimals: usdcMintData.decimals
+      decimals: usdcMintData.decimals,
     });
-  }
-
-  async driftUsdcBalance(): Promise<number> {
-    await this.driftClient.fetchAccounts();
-    const user = this.driftClient.getUser(0, this.key);
-    const usdcBN = user.getUserAccount()
-      .spotPositions.find(p => p.marketIndex === 0)?.scaledBalance;
-    if (!usdcBN) {
-      return 0;
-    } else {
-      return usdcBN.toNumber() / QUOTE_PRECISION.toNumber();
-    }
   }
 
   private async sendTx(
@@ -252,30 +355,81 @@ export class DriftMomentumBot {
   perpMarketPrice(marketIndex: number): number {
     const pm = this.driftClient.getPerpMarketAccount(marketIndex);
     if (!pm) {
-      throw new Error(`Market ${marketIndex} not found`);
+      throw new Error(`Perp market ${marketIndex} not found`);
     }
-    const spotOracle = this.driftClient.getOracleDataForPerpMarket(pm.marketIndex);
-    return spotOracle.price.toNumber() / PRICE_PRECISION.toNumber();
+    const oracle = this.driftClient.getOracleDataForPerpMarket(pm.marketIndex);
+    return oracle.price.toNumber() / PRICE_PRECISION.toNumber();
   }
 
-  async placeMarketPerpOrder(marketIndex: number, usdc: number, direction: PositionDirection, slippagePct = 0.5): Promise<SnackInfo> {
+  spotMarketPrice(marketIndex: number): number {
+    const sm = this.driftClient.getSpotMarketAccount(marketIndex);
+    if (!sm) {
+      throw new Error(`Spot market ${marketIndex} not found`);
+    }
+    const oracle = this.driftClient.getOracleDataForSpotMarket(sm.marketIndex);
+    return oracle.price.toNumber() / PRICE_PRECISION.toNumber();
+  }
+
+  spotMarketBidAsk(marketIndex: number): UiBidAsk {
+    const sm = this.driftClient
+      .getSpotMarketAccounts()
+      .find((m) => m.marketIndex === marketIndex);
+    if (!sm) {
+      throw new Error(`Spot market [${marketIndex}] not found`);
+    }
+    const l3 = this.dlobSubscriber.getL3({
+      marketIndex: sm.marketIndex,
+      marketType: MarketType.SPOT,
+    });
+    const bestAsk = l3.asks[0];
+    if (!bestAsk) {
+      throw new Error('No best ask');
+    }
+    const bestBid = l3.bids[0];
+    if (!bestBid) {
+      throw new Error('No best bid');
+    }
+    return {
+      ask: {
+        price: bestAsk.price.toNumber() / PRICE_PRECISION.toNumber(),
+        size: bestAsk.size.toNumber() / BASE_PRECISION.toNumber(),
+        maker: bestAsk.maker,
+        orderId: bestAsk.orderId,
+      },
+      bid: {
+        price: bestBid.price.toNumber() / PRICE_PRECISION.toNumber(),
+        size: bestBid.size.toNumber() / BASE_PRECISION.toNumber(),
+        maker: bestBid.maker,
+        orderId: bestBid.orderId,
+      },
+    };
+  }
+
+  async placeMarketPerpOrder(
+    marketIndex: number,
+    usdc: number,
+    direction: PositionDirection,
+    slippagePct = 0.5
+  ): Promise<SnackInfo> {
     const price = this.perpMarketPrice(marketIndex);
 
     let priceDiffBps;
     if (direction === PositionDirection.LONG) {
-      priceDiffBps = price * (1 + (slippagePct / 100));
+      priceDiffBps = price * (1 + slippagePct / 100);
     } else {
-      priceDiffBps = price * (1 - (slippagePct / 100));
+      priceDiffBps = price * (1 - slippagePct / 100);
     }
 
     const baseUnits = usdc / price;
 
-    const activeUser = this.driftClient.getUser(
-      0,
-      this.fundKey,
+    const activeUser = this.driftClient.getUser(0, this.fundKey);
+    const fundAcct = (await this.program.account.vault.fetch(
+      this.fundKey
+    )) as Vault;
+    console.log(
+      'fund user correct:',
+      fundAcct.user.equals(activeUser.getUserAccountPublicKey())
     );
-    const fundAcct = (await this.program.account.vault.fetch(this.fundKey)) as Vault;
-    console.log('fund user correct:', fundAcct.user.equals(activeUser.getUserAccountPublicKey()));
     console.log('fund delegate correct:', fundAcct.delegate.equals(this.key));
 
     const orderParams = getMarketOrderParams({
@@ -289,13 +443,11 @@ export class DriftMomentumBot {
       maxTs: new BN(Date.now() + 100),
     });
 
-    const remainingAccounts = this.driftClient.getRemainingAccounts(
-      {
-        userAccounts: [activeUser.getUserAccount()],
-        useMarketLastSlotCache: true,
-        writablePerpMarketIndexes: [marketIndex],
-      },
-    );
+    const remainingAccounts = this.driftClient.getRemainingAccounts({
+      userAccounts: [activeUser.getUserAccount()],
+      useMarketLastSlotCache: true,
+      writablePerpMarketIndexes: [marketIndex],
+    });
 
     try {
       const ix = await this.driftClient.program.methods
@@ -316,26 +468,8 @@ export class DriftMomentumBot {
       console.error(e);
       return {
         variant: 'error',
-        message: JSON.stringify(e)
+        message: JSON.stringify(e),
       };
     }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
