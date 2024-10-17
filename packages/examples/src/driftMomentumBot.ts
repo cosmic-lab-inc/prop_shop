@@ -4,20 +4,20 @@ import {CreatePropShopClientConfig, CreateVaultConfig, DriftVaultsClient, FundOv
 import {AsyncSigner, keypairToAsyncSigner, walletAdapterToAsyncSigner,} from '@cosmic-lab/data-source';
 import {DriftVaults, getVaultAddressSync, Vault,} from '@drift-labs/vaults-sdk';
 import {
-	BASE_PRECISION,
-	BN,
-	DepositRecord,
-	DLOBSubscriber,
-	DriftClient,
-	encodeName,
-	EventSubscriber,
-	getMarketOrderParams,
-	isVariant,
-	MarketType,
-	OrderActionRecord,
-	OrderSubscriber,
-	PositionDirection,
-	PRICE_PRECISION,
+  BN,
+  DepositRecord,
+  DLOBSubscriber,
+  DriftClient,
+  encodeName,
+  EventSubscriber,
+  getMarketOrderParams,
+  isVariant,
+  MarketType,
+  OrderActionRecord,
+  OrderSubscriber,
+  PositionDirection,
+  PRICE_PRECISION,
+  User,
 } from '@drift-labs/sdk';
 import * as splToken from '@solana/spl-token';
 import {WalletContextState} from '@solana/wallet-adapter-react';
@@ -84,10 +84,7 @@ export class DriftMomentumBot {
 
   async initialize(): Promise<void> {
     await this.client.initialize();
-    if (this.fund !== undefined) {
-      await this.driftClient.addUser(0, this.fundKey);
-      await this.driftClient.switchActiveUser(0, this.fundKey);
-    }
+    await this.switchToFundUser();
 
     //
     // event subscriber
@@ -114,9 +111,13 @@ export class DriftMomentumBot {
         const _event = event as OrderActionRecord;
         if (!isVariant(_event.action, 'fill')) {
           if (!isVariant(_event.marketType, 'spot')) {
+            const sm = this.driftClient.getSpotMarketAccount(_event.marketIndex);
+            if (!sm) {
+              return;
+            }
             const info = {
-              baseFilled: _event.baseAssetAmountFilled?.toNumber() ?? 0,
-              quoteFilled: _event.quoteAssetAmountFilled?.toNumber() ?? 0,
+              baseFilled: (_event.baseAssetAmountFilled ?? new BN(0)).div(new BN(Math.pow(10, sm.decimals))).toNumber(),
+              quoteFilled: (_event.quoteAssetAmountFilled ?? new BN(0)).div(new BN(Math.pow(10, sm.decimals))).toNumber(),
               marketIndex: _event.marketIndex,
               price: _event.oraclePrice.toNumber() / PRICE_PRECISION.toNumber(),
             };
@@ -127,12 +128,16 @@ export class DriftMomentumBot {
 
       if (event.eventType === 'DepositRecord') {
         const _event = event as DepositRecord;
+        const sm = this.driftClient.getSpotMarketAccount(_event.marketIndex);
+        if (!sm) {
+          return;
+        }
         const info = {
           direction: _event.direction,
           marketIndex: _event.marketIndex,
           amount: _event.amount.toNumber(),
-          marketDepositBalance: _event.marketDepositBalance.toNumber(),
-          marketWithdrawBalance: _event.marketWithdrawBalance.toNumber(),
+          marketDepositBalance: _event.marketDepositBalance.div(new BN(Math.pow(10, sm.decimals))).toNumber(),
+          marketWithdrawBalance: _event.marketWithdrawBalance.div(new BN(Math.pow(10, sm.decimals))).toNumber(),
           price: _event.oraclePrice.toNumber() / PRICE_PRECISION.toNumber(),
         };
         console.log('WITHDRAW:', info);
@@ -181,6 +186,15 @@ export class DriftMomentumBot {
     await this.dlobSubscriber.unsubscribe();
   }
 
+  async switchToFundUser(): Promise<void> {
+    const fund = await this.fetchFund();
+    if (fund !== undefined) {
+      await this.driftClient.addUser(0, this.fundKey);
+      await this.driftClient.switchActiveUser(0, this.fundKey);
+      console.log('switched active user');
+    }
+  }
+
   get driftClient(): DriftClient {
     return this.client.driftClient;
   }
@@ -226,6 +240,19 @@ export class DriftMomentumBot {
     return funds.find((f) => f.title === this.fundName);
   }
 
+  async fundUser(): Promise<User> {
+    const vault = this.client.vault(this.fundKey)?.data;
+    if (!vault) {
+      throw new Error(`Vault ${this.fundKey} not found`);
+    }
+    const user = new User({
+      driftClient: this.driftClient,
+      userAccountPublicKey: vault.user
+    });
+    await user.subscribe();
+    return user;
+  }
+
   get fundOrErr(): FundOverview {
     const funds = this.client.fundOverviews;
     const fund = funds.find((f) => f.title === this.fundName);
@@ -249,11 +276,8 @@ export class DriftMomentumBot {
       };
     }
     const snack = (await this.client.createVault(config)).snack;
-
     // delegate assumes control of vault user
-    await this.driftClient.addUser(0, this.fundKey);
-    await this.driftClient.switchActiveUser(0, this.fundKey);
-
+    await this.switchToFundUser();
     return snack;
   }
 
@@ -330,7 +354,7 @@ export class DriftMomentumBot {
       const sig = await this.conn.sendTransaction(tx, {
         skipPreflight: true,
       });
-      console.debug(`${successMessage}: ${signatureLink(sig)}`);
+      console.debug(`${successMessage}: ${signatureLink(sig, this.conn)}`);
       const confirm = await this.conn.confirmTransaction(sig);
       if (confirm.value.err) {
         console.error(`${errorMessage}: ${JSON.stringify(confirm.value.err)}`);
@@ -392,13 +416,13 @@ export class DriftMomentumBot {
     return {
       ask: {
         price: bestAsk.price.toNumber() / PRICE_PRECISION.toNumber(),
-        size: bestAsk.size.toNumber() / BASE_PRECISION.toNumber(),
+        size: bestAsk.size.toNumber() / Math.pow(10, sm.decimals),
         maker: bestAsk.maker,
         orderId: bestAsk.orderId,
       },
       bid: {
         price: bestBid.price.toNumber() / PRICE_PRECISION.toNumber(),
-        size: bestBid.size.toNumber() / BASE_PRECISION.toNumber(),
+        size: bestBid.size.toNumber() / Math.pow(10, sm.decimals),
         maker: bestBid.maker,
         orderId: bestBid.orderId,
       },
