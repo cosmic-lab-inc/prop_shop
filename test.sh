@@ -3,6 +3,7 @@
 detach=false
 no_test=false
 no_build=false
+no_validator=false
 dev=false
 custom_test=false
 test=
@@ -23,6 +24,7 @@ OPTIONS:
   --detach             - Once bootstrap and tests are complete, keep the validator running
   --no-test            - Skip running tests and only bootstrap the validator
   --no-build           - Skip building the rust and typescript code
+  --no-validator       - If running a devnet test (i.e. --test devnet-bot), pass this to skip running localnet
   --dev                - Symlink to local dependencies
   --test               - If provided, run tests specified as a comma-separated list (e.g., "phoenix,drift,demo")
 
@@ -41,6 +43,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --no-build ]]; then
       no_build=true
+      shift 1
+    elif [[ $1 = --no-validator ]]; then
+      no_validator=true
       shift 1
     elif [[ $1 = --dev ]]; then
       dev=true
@@ -92,15 +97,17 @@ if [[ -n $solana_pid ]]; then
   pkill -f solana
 fi
 
-# suppress output form anchor localnet
-# start anchor localnet in background
-bkg anchor localnet || kill_process
-# sleep to warmup validator
-sleep 10
+if [[ $no_validator == false ]]; then
+  # suppress output form anchor localnet
+  # start anchor localnet in background
+  bkg anchor localnet || kill_process
+  # sleep to warmup validator
+  sleep 10
 
-# run bootstrap.sh
-chmod +x ./bootstrap.sh
-./bootstrap.sh || exit 1
+  # run bootstrap.sh
+  chmod +x ./bootstrap.sh
+  ./bootstrap.sh || exit 1
+fi
 
 if [[ $no_test == false ]]; then
   export ANCHOR_WALLET="$HOME/.config/solana/cosmic_lab_inc.json"
@@ -118,6 +125,8 @@ if [[ $no_test == false ]]; then
     elif [[ $test == "demo" ]]; then
       pnpm test:drift || kill_process
       pnpm test:demo || kill_process
+    elif [[ $test == "devnet-bot" ]]; then
+      pnpm test:devnet-bot || kill_process
     else
       echo "Unknown test: $test"
       kill_process

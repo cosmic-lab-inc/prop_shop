@@ -2,7 +2,6 @@ import * as anchor from '@coral-xyz/anchor';
 import {Program} from '@coral-xyz/anchor';
 import {
   AdminClient,
-  BASE_PRECISION,
   BN,
   decodeName,
   DriftClient,
@@ -10,7 +9,6 @@ import {
   getUserStatsAccountPublicKey,
   PositionDirection,
   PostOnlyParams,
-  PRICE_PRECISION,
   PublicKey,
   QUOTE_PRECISION,
   TakerInfo,
@@ -18,14 +16,14 @@ import {
   UserAccount,
   WRAPPED_SOL_MINT,
 } from '@drift-labs/sdk';
-import {ConfirmOptions, Connection, LAMPORTS_PER_SOL, Signer, Transaction, TransactionInstruction,} from '@solana/web3.js';
+import {ConfirmOptions, LAMPORTS_PER_SOL, Signer, Transaction, TransactionInstruction,} from '@solana/web3.js';
 import {DRIFT_VAULTS_PROGRAM_ID, getTokenBalance, signatureLink, TEST_DRIFT_INVESTOR, TEST_MANAGER, Venue,} from '@cosmic-lab/prop-shop-sdk';
-import {DriftMomentumBot} from '@cosmic-lab/prop-shop-examples';
+import {DriftMomentumBot, StandardTimeframe} from '@cosmic-lab/prop-shop-examples';
 import {assert} from 'chai';
 import {DriftVaults, getVaultDepositorAddressSync, getVaultProtocolAddressSync, IDL as DRIFT_VAULTS_IDL, VaultClient,} from '@drift-labs/vaults-sdk';
 import {bootstrapDevnetInvestor, sendTx} from './driftHelpers';
 import {createCloseAccountInstruction} from '@solana/spl-token';
-
+import {MarketInfo} from '@cosmic-lab/prop-shop-examples/src/types';
 
 describe('exampleDevnetBot', () => {
   const opts: ConfirmOptions = {
@@ -34,9 +32,9 @@ describe('exampleDevnetBot', () => {
     commitment: 'confirmed',
   };
 
-  const connection = new Connection('https://api.devnet.solana.com');
-  const provider = anchor.AnchorProvider.local(connection.rpcEndpoint, opts);
+  const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
+  const connection = provider.connection;
 
   const program = new Program(
     DRIFT_VAULTS_IDL as any as anchor.Idl,
@@ -59,25 +57,20 @@ describe('exampleDevnetBot', () => {
   let usdcMint: PublicKey;
 
   before(async () => {
+    const genesisHash = await connection.getGenesisHash();
+    const devnetGenesisHash = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+    if (genesisHash !== devnetGenesisHash) {
+      throw new Error(
+        'This test is only for devnet, please change your ANCHOR_PROVIDER_URL env to be a devnet RPC endpoint'
+      );
+    }
+
     const managerSol =
       (await connection.getBalance(manager.publicKey)) / LAMPORTS_PER_SOL;
     console.log('manager SOL:', managerSol);
     const investorSol =
       (await connection.getBalance(investor.publicKey)) / LAMPORTS_PER_SOL;
     console.log('investor SOL:', investorSol);
-
-    bot = await DriftMomentumBot.fromKeypair(connection, manager, fundName);
-
-    const mintInfoResult = await bot.usdcMintInfo();
-    if (mintInfoResult.isErr()) {
-      throw mintInfoResult.error;
-    }
-    usdcMint = mintInfoResult.value.mint;
-
-    const marketAcct = bot.driftClient.getPerpMarketAccount(0);
-    if (!marketAcct) {
-      throw new Error('Perp market not found');
-    }
 
     admin = new AdminClient({
       connection,
@@ -91,6 +84,34 @@ describe('exampleDevnetBot', () => {
         resubTimeoutMs: 30_000,
       },
     });
+    await admin.subscribe();
+
+    const solPerpMarket = admin
+      .getPerpMarketAccounts()
+      .find((m) => decodeName(m.name) === 'SOL-PERP');
+    if (!solPerpMarket) {
+      throw new Error('SOL perp market not found');
+    }
+    const market = MarketInfo.perp(solPerpMarket.marketIndex);
+    bot = await DriftMomentumBot.fromKeypair({
+      connection,
+      keypair: manager,
+      fundName,
+      market,
+      simulate: true,
+      tf: StandardTimeframe.FIVE_SECONDS
+    });
+
+    const mintInfoResult = await bot.usdcMintInfo();
+    if (mintInfoResult.isErr()) {
+      throw mintInfoResult.error;
+    }
+    usdcMint = mintInfoResult.value.mint;
+
+    const marketAcct = bot.driftClient.getPerpMarketAccount(0);
+    if (!marketAcct) {
+      throw new Error('Perp market not found');
+    }
 
     // the VaultDepositor for the vault
     const bootstrapInvestor = await bootstrapDevnetInvestor({
@@ -179,6 +200,21 @@ describe('exampleDevnetBot', () => {
     assert(investorAcctAfter.vault.equals(bot.fundKey));
   });
 
+  /**
+   * START Workaround
+   * The following 3 tests are NOT needed for a localnet or mainnet, but are needed for a devnet.
+   * On localnet, USDC is a mint the test suite creates and can therefore be minted to the investor wallet.
+   * On mainnet, USDC can be easily acquired by swapping anything for it on any CEX/DEX.
+   * On devnet, the USDC faucet from Circle doesn't work, but the Solana SOL faucet does.
+   * Since no exchange hosts a devnet UI, we have to swap SOL into USDC via code.
+   * The following tests direct the investor to get SOL from the faucet if needed.
+   * Make sure you paste the investor address as the recipient (the test logs will tell you the address)!
+   * Then the following tests deposit the SOL onto the devnet Drift SOL/USDC market,
+   * swap for USDC, then withdraw back to the investor wallet.
+   * The test suite then continues as it would on localnet or mainnet
+   * -- the investor deposits USDC into the fund and the fund can trade with it.
+   */
+
   it('Cancel Open Orders', async () => {
     const ixs: TransactionInstruction[] = [];
     const markets = investorClient.driftClient.getSpotMarketAccounts();
@@ -187,7 +223,8 @@ describe('exampleDevnetBot', () => {
       if (!market) {
         throw new Error(`Market ${order.marketIndex} not found`);
       }
-      const base = order.baseAssetAmount.toNumber() / Math.pow(10, market.decimals);
+      const base =
+        order.baseAssetAmount.toNumber() / Math.pow(10, market.decimals);
       const name = decodeName(market.name);
       console.log(
         `${name} [${order.marketIndex}] open order before cancel: ${base}`
@@ -231,7 +268,9 @@ describe('exampleDevnetBot', () => {
   it('Investor Sell SOL for USDC', async () => {
     const tvl = bot.fund?.tvl ?? 0;
     if (tvl > 100) {
-      console.warn(`Fund has sufficient USDC ($${tvl}), skipping converting investor SOL to USDC to deposit into fund`);
+      console.warn(
+        `Fund has sufficient USDC ($${tvl}), skipping converting investor SOL to USDC to deposit into fund`
+      );
       return;
     }
 
@@ -250,14 +289,18 @@ describe('exampleDevnetBot', () => {
       if (!pos) {
         throw new Error('Position not found');
       }
-      const base = pos.scaledBalance.toNumber() / Math.pow(10, solSpotMarket.decimals);
+      const base =
+        pos.scaledBalance.toNumber() / Math.pow(10, solSpotMarket.decimals);
       const name = decodeName(solSpotMarket.name);
       console.log(`${name} [${pos.marketIndex}] position:`, base);
     }
 
-    const {price, size: takerSize, maker: taker, orderId: takerOrderId} = bot.spotMarketBidAsk(
-      solSpotMarket.marketIndex
-    ).bid;
+    const {
+      price,
+      size: takerSize,
+      maker: taker,
+      orderId: takerOrderId,
+    } = bot.marketBidAsk(MarketInfo.spot(solSpotMarket.marketIndex)).bid;
     console.log(`Best bid price: $${price}`);
 
     console.log(
@@ -273,10 +316,13 @@ describe('exampleDevnetBot', () => {
       `Investor SOL equity, $${freeUsdcCollateral} (~${availableSolToSell.toFixed(2)} SOL)`
     );
 
-    const takerUserAccount = (await investorClient.driftClient.program.account.user.fetch(taker)) as UserAccount;
+    const takerUserAccount =
+      (await investorClient.driftClient.program.account.user.fetch(
+        taker
+      )) as UserAccount;
     const takerUser = new User({
       driftClient: investorClient.driftClient,
-      userAccountPublicKey: taker
+      userAccountPublicKey: taker,
     });
     await takerUser.subscribe();
 
@@ -286,11 +332,26 @@ describe('exampleDevnetBot', () => {
         throw new Error('Position not found');
       }
       const name = decodeName(solSpotMarket.name);
-      const base = pos.scaledBalance.div(new BN(Math.pow(10, solSpotMarket.decimals))).toNumber();
-      const bids = pos.openBids.toNumber() / Math.pow(10, solSpotMarket.decimals);
-      const asks = pos.openAsks.toNumber() / Math.pow(10, solSpotMarket.decimals);
-      const deposits = pos.cumulativeDeposits.toNumber() / Math.pow(10, solSpotMarket.decimals);
-      console.log(`${name} [${pos.marketIndex}] taker position:`, base, 'bids:', bids, 'asks:', asks, 'deposits:', deposits);
+      const base = pos.scaledBalance
+        .div(new BN(Math.pow(10, solSpotMarket.decimals)))
+        .toNumber();
+      const bids =
+        pos.openBids.toNumber() / Math.pow(10, solSpotMarket.decimals);
+      const asks =
+        pos.openAsks.toNumber() / Math.pow(10, solSpotMarket.decimals);
+      const deposits =
+        pos.cumulativeDeposits.toNumber() /
+        Math.pow(10, solSpotMarket.decimals);
+      console.log(
+        `${name} [${pos.marketIndex}] taker position:`,
+        base,
+        'bids:',
+        bids,
+        'asks:',
+        asks,
+        'deposits:',
+        deposits
+      );
     }
 
     {
@@ -299,7 +360,8 @@ describe('exampleDevnetBot', () => {
         throw new Error('Order not found');
       }
       const name = decodeName(solSpotMarket.name);
-      const base = order.baseAssetAmount.toNumber() / Math.pow(10, solSpotMarket.decimals);
+      const base =
+        order.baseAssetAmount.toNumber() / Math.pow(10, solSpotMarket.decimals);
       console.log(
         `${name} [${order.marketIndex}] taker order: ${base}, post only: ${order.postOnly}, reduce only: ${order.reduceOnly}`
       );
@@ -309,7 +371,9 @@ describe('exampleDevnetBot', () => {
       investorClient.driftClient.program.programId,
       takerUserAccount.authority
     );
-    const takerOrder = takerUserAccount.orders.find((o) => o.orderId === takerOrderId);
+    const takerOrder = takerUserAccount.orders.find(
+      (o) => o.orderId === takerOrderId
+    );
     if (!takerOrder) {
       throw new Error(`Taker order ${takerOrderId} not found`);
     }
@@ -317,12 +381,14 @@ describe('exampleDevnetBot', () => {
       taker,
       takerStats,
       takerUserAccount,
-      order: takerOrder
+      order: takerOrder,
     };
 
     const solToSell = Math.min(availableSolToSell, takerSize);
     if (takerSize < availableSolToSell) {
-      console.warn(`Taker has ${takerSize} SOL to match investor's ${solToSell} SOL`);
+      console.warn(
+        `Taker has ${takerSize} SOL to match investor's ${solToSell} SOL`
+      );
     }
 
     const minOrderSize =
@@ -344,14 +410,14 @@ describe('exampleDevnetBot', () => {
         reduceOnly: true,
         userOrderId: 1,
         postOnly: PostOnlyParams.MUST_POST_ONLY,
-        immediateOrCancel: true
+        immediateOrCancel: true,
       });
 
       const simTx = (await investorClient.driftClient.buildTransaction(
         await investorClient.driftClient.getPlaceAndMakeSpotOrderIx(
           orderParams,
-          takerInfo,
-        ),
+          takerInfo
+        )
       )) as Transaction;
       simTx.sign(
         ...[
@@ -381,7 +447,8 @@ describe('exampleDevnetBot', () => {
       console.log('Place and make filled!');
     } else {
       const base =
-        openOrder.baseAssetAmount.toNumber() / Math.pow(10, solSpotMarket.decimals);
+        openOrder.baseAssetAmount.toNumber() /
+        Math.pow(10, solSpotMarket.decimals);
       const name = decodeName(solSpotMarket.name);
       console.log(`${name} open order:`, base);
     }
@@ -405,23 +472,27 @@ describe('exampleDevnetBot', () => {
       if (!pos) {
         throw new Error('Position not found');
       }
-      const base = pos.scaledBalance.toNumber() / Math.pow(10, solSpotMarket.decimals);
+      const base =
+        pos.scaledBalance.toNumber() / Math.pow(10, solSpotMarket.decimals);
       const name = decodeName(solSpotMarket.name);
       console.log(`${name} [${pos.marketIndex}] position:`, base);
-
     }
     {
-      const order = investorUser.getOpenOrders()
+      const order = investorUser
+        .getOpenOrders()
         .find((o) => o.marketIndex === solSpotMarket.marketIndex);
       if (order) {
-        const base = order.baseAssetAmount.toNumber() / Math.pow(10, solSpotMarket.decimals);
+        const base =
+          order.baseAssetAmount.toNumber() /
+          Math.pow(10, solSpotMarket.decimals);
+        const name = decodeName(solSpotMarket.name);
         console.warn(`${name} order still open:`, base);
       }
     }
 
-    const usdcToWithdraw = investorUser
-      .getSpotMarketAssetValue(0, 'Initial')
-      .toNumber() / QUOTE_PRECISION.toNumber();
+    const usdcToWithdraw =
+      investorUser.getSpotMarketAssetValue(0, 'Initial').toNumber() /
+      QUOTE_PRECISION.toNumber();
     console.log(`usdc available to withdraw: $${usdcToWithdraw}`);
 
     // withdraw
@@ -429,7 +500,7 @@ describe('exampleDevnetBot', () => {
       investorClient.driftClient,
       investorClient.driftClient.convertToSpotPrecision(0, usdcToWithdraw),
       0,
-      investorUsdcAta,
+      investorUsdcAta
     );
     const tx = (await investorClient.driftClient.buildTransaction(
       withdrawIxs
@@ -451,11 +522,18 @@ describe('exampleDevnetBot', () => {
       true
     );
 
-    const investorUsdcInWallet = await getTokenBalance(connection, investorUsdcAta);
+    const investorUsdcInWallet = await getTokenBalance(
+      connection,
+      investorUsdcAta
+    );
     console.log(`investor usdc in wallet: $${investorUsdcInWallet}`);
   });
 
-  it("Investor Deposit", async () => {
+  /**
+   * END Workaround
+   */
+
+  it('Investor Deposit', async () => {
     const tvl = bot.fund?.tvl ?? 0;
     if (tvl > 100) {
       return;
@@ -465,7 +543,7 @@ describe('exampleDevnetBot', () => {
     const vaultDepositor = getVaultDepositorAddressSync(
       program.programId,
       bot.fundKey,
-      investor.publicKey,
+      investor.publicKey
     );
     const remainingAccounts = investorClient.driftClient.getRemainingAccounts({
       userAccounts: [],
@@ -474,7 +552,7 @@ describe('exampleDevnetBot', () => {
     if (vaultAccount.vaultProtocol) {
       const vaultProtocol = getVaultProtocolAddressSync(
         bot.program.programId,
-        bot.fundKey,
+        bot.fundKey
       );
       remainingAccounts.push({
         pubkey: vaultProtocol,
@@ -485,7 +563,7 @@ describe('exampleDevnetBot', () => {
 
     const driftSpotMarketVault = bot.driftClient.getSpotMarketAccount(0)?.vault;
     if (!driftSpotMarketVault) {
-      throw new Error("Spot market not found");
+      throw new Error('Spot market not found');
     }
     const usdcToDeposit = await getTokenBalance(connection, investorUsdcAta);
     console.log(`investor usdc: $${usdcToDeposit}`);
@@ -511,56 +589,26 @@ describe('exampleDevnetBot', () => {
       .remainingAccounts(remainingAccounts)
       .rpc();
 
-    const investorAcct = await program.account.vaultDepositor.fetch(vaultDepositor);
+    const investorAcct =
+      await program.account.vaultDepositor.fetch(vaultDepositor);
     assert(investorAcct.vault.equals(bot.fundKey));
     // assert(investorAcct.netDeposits.eq(usdcToDepositBN));
     console.log('fund TVL in USDC:', (await bot.fetchFund())?.tvl ?? 0);
 
-    const investorUserAcct = investorClient.driftClient
-      .getUserAccount(0, investor.publicKey);
+    const investorUserAcct = investorClient.driftClient.getUserAccount(
+      0,
+      investor.publicKey
+    );
     assert(investorUserAcct !== undefined);
   });
 
-  it("Fund Long SOL-PERP", async () => {
-    const solPerpMarket = bot.driftClient
-      .getPerpMarketAccounts()
-      .find((m) => decodeName(m.name) === "SOL-PERP");
-    if (!solPerpMarket) {
-      throw new Error('SOL perp market not found');
-    }
-
-    const fundUser = await bot.fundUser();
-    const fundUsdc = fundUser
-      .getSpotMarketAssetValue(0, 'Initial')
-      .toNumber() / QUOTE_PRECISION.toNumber();
-    console.log(`fund USDC: $${fundUsdc}`);
-    if (fundUsdc < 1) {
-      console.warn('Fund has <$1, skipping SOL/USDC long order');
-      return;
-    }
-
-    // fund taker order
-    const snack = await bot.placeMarketPerpOrder(
-      solPerpMarket.marketIndex,
-      fundUsdc,
-      PositionDirection.LONG
-    );
-    assert(snack.variant === "success");
-
-    const user = bot.driftClient.getUser();
-    await user.fetchAccounts();
-    const order = user.getOpenOrders().find((o) => o.marketIndex === solPerpMarket.marketIndex);
-    if (order) {
-      const price = order.price.toNumber() / PRICE_PRECISION.toNumber();
-      const baseUnits = order.baseAssetAmount.toNumber() / BASE_PRECISION.toNumber();
-      const quoteUnits = baseUnits * price;
-      console.log(`fund SOL/USDC long price: $${price}`);
-      console.log(`fund SOL/USDC long: $${quoteUnits} (~${baseUnits.toFixed(2)} SOL)`);
-      assert(!order.postOnly);
-    } else {
-      console.log('Fund SOL/USDC long is filled!');
-    }
-  });
+  it(
+    'Fund Long SOL-PERP',
+    async () => {
+      await bot.start();
+    },
+    60_000 * 10
+  );
 });
 
 async function getWithdrawalIxs(
