@@ -1,31 +1,31 @@
 import * as anchor from '@coral-xyz/anchor';
 import {Program} from '@coral-xyz/anchor';
 import {
-  AdminClient,
-  BN,
-  decodeName,
-  DriftClient,
-  getLimitOrderParams,
-  getUserStatsAccountPublicKey,
-  PositionDirection,
-  PostOnlyParams,
-  PublicKey,
-  QUOTE_PRECISION,
-  TakerInfo,
-  User,
-  UserAccount,
-  WRAPPED_SOL_MINT,
+	AdminClient,
+	BN,
+	decodeName,
+	DriftClient,
+	getLimitOrderParams,
+	getUserStatsAccountPublicKey,
+	PositionDirection,
+	PostOnlyParams,
+	PublicKey,
+	QUOTE_PRECISION,
+	TakerInfo,
+	User,
+	UserAccount,
+	WRAPPED_SOL_MINT,
 } from '@drift-labs/sdk';
 import {ConfirmOptions, LAMPORTS_PER_SOL, Signer, Transaction, TransactionInstruction,} from '@solana/web3.js';
 import {DRIFT_VAULTS_PROGRAM_ID, getTokenBalance, signatureLink, TEST_DRIFT_INVESTOR, TEST_MANAGER, Venue,} from '@cosmic-lab/prop-shop-sdk';
-import {DriftMomentumBot, StandardTimeframe} from '@cosmic-lab/prop-shop-examples';
+import {DriftMomentumBot, StandardTimeframe,} from '@cosmic-lab/prop-shop-examples';
 import {assert} from 'chai';
 import {DriftVaults, getVaultDepositorAddressSync, getVaultProtocolAddressSync, IDL as DRIFT_VAULTS_IDL, VaultClient,} from '@drift-labs/vaults-sdk';
 import {bootstrapDevnetInvestor, sendTx} from './driftHelpers';
 import {createCloseAccountInstruction} from '@solana/spl-token';
 import {MarketInfo} from '@cosmic-lab/prop-shop-examples/src/types';
 
-describe('exampleDevnetBot', () => {
+describe('driftMomentumBot', () => {
   const opts: ConfirmOptions = {
     preflightCommitment: 'confirmed',
     skipPreflight: false,
@@ -58,7 +58,7 @@ describe('exampleDevnetBot', () => {
 
   before(async () => {
     const genesisHash = await connection.getGenesisHash();
-    const devnetGenesisHash = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+    const devnetGenesisHash = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
     if (genesisHash !== devnetGenesisHash) {
       throw new Error(
         'This test is only for devnet, please change your ANCHOR_PROVIDER_URL env to be a devnet RPC endpoint'
@@ -99,7 +99,7 @@ describe('exampleDevnetBot', () => {
       fundName,
       market,
       simulate: true,
-      tf: StandardTimeframe.FIVE_SECONDS
+      tf: StandardTimeframe.FIVE_SECONDS,
     });
 
     const mintInfoResult = await bot.usdcMintInfo();

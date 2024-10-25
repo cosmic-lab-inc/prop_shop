@@ -1,6 +1,6 @@
 import {Commitment, ComputeBudgetProgram, Connection, Keypair, PublicKey, TransactionInstruction,} from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
-import {CreateVaultConfig, DriftVaultsClient, FundOverview, signatureLink, sleep, SnackInfo, UiBidAsk,} from '@cosmic-lab/prop-shop-sdk';
+import {CreateVaultConfig, DriftVaultsClient, FundOverview, signatureLink, sleep, SnackInfo, UiL3BidAsk,} from '@cosmic-lab/prop-shop-sdk';
 import {AsyncSigner, keypairToAsyncSigner, walletAdapterToAsyncSigner,} from '@cosmic-lab/data-source';
 import {DriftVaults, getVaultAddressSync, Vault,} from '@drift-labs/vaults-sdk';
 import {
@@ -154,7 +154,9 @@ export class DriftMomentumBot {
     this.marketCache = new RingBuffer<MarketPriceInfo>(
       params.marketCacheSize ?? 3
     );
-    this.timeframe = new Timeframe(params.tf ?? StandardTimeframe.THIRTY_MINUTES);
+    this.timeframe = new Timeframe(
+      params.tf ?? StandardTimeframe.THIRTY_MINUTES
+    );
     this.simulate = params.simulate ?? false;
   }
 
@@ -307,8 +309,14 @@ export class DriftMomentumBot {
       const {bid, ask} = this.marketBidAsk();
       const oracle = this.oraclePrice();
       this.marketCache.push({
-        bid,
-        ask,
+        bid: {
+          price: bid.price,
+          size: bid.size,
+        },
+        ask: {
+          price: ask.price,
+          size: ask.size,
+        },
         oracle,
       });
       console.log(`
@@ -617,7 +625,7 @@ export class DriftMomentumBot {
     }
   }
 
-  marketBidAsk(market = this.market): UiBidAsk {
+  marketBidAsk(market = this.market): UiL3BidAsk {
     if (market.marketType === MarketType.SPOT) {
       const sm = this.driftClient
         .getSpotMarketAccounts()

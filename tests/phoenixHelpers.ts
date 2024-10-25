@@ -336,27 +336,6 @@ export async function outAmount(
 	return out;
 }
 
-export async function logLadder(conn: Connection, market: PublicKey) {
-	const marketState = await fetchMarketState(conn, market);
-	const ladder = marketState.getUiLadder(3, 0, 0);
-	if (ladder.bids.length === 0) {
-		console.log('no bids');
-	}
-	if (ladder.asks.length === 0) {
-		console.log('no asks');
-	}
-	for (const bid of ladder.bids) {
-		// const price = marketState.ticksToFloatPrice(bid.priceInTicks.toNumber());
-		const price = bid.price;
-		console.log(`bid: ${price}`);
-	}
-	for (const ask of ladder.asks) {
-		// const price = marketState.ticksToFloatPrice(ask.priceInTicks.toNumber());
-		const price = ask.price;
-		console.log(`ask: ${price}`);
-	}
-}
-
 export async function marketPrice(
 	conn: Connection,
 	market: PublicKey

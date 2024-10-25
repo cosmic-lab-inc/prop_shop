@@ -47,8 +47,8 @@ import {
 import {
 	CreateVaultConfig,
 	Data,
-	DriftSubscriber,
 	DriftVaultsAccountEvents,
+	DriftVaultsSubscriber,
 	FundOverview,
 	SnackInfo,
 	UpdateVaultConfig,
@@ -81,7 +81,7 @@ import {
 } from '@solana/spl-token';
 import { err, ok, Result } from 'neverthrow';
 import { AsyncSigner, InstructionReturn } from '@cosmic-lab/data-source';
-import { DriftWebsocketSubscriber } from '../subscriber';
+import { DriftVaultsWebsocketSubscriber } from '../subscriber';
 import { CreatePropShopClientConfig, UpdateWalletConfig } from './types';
 
 export class DriftVaultsClient {
@@ -98,7 +98,7 @@ export class DriftVaultsClient {
 		EventEmitter,
 		DriftVaultsAccountEvents
 	> = new EventEmitter();
-	private _cache: DriftSubscriber | undefined = undefined;
+	private _cache: DriftVaultsSubscriber | undefined = undefined;
 
 	private _vaults: Map<string, Vault> = new Map();
 	private _vaultDepositors: Map<string, VaultDepositor> = new Map();
@@ -227,7 +227,7 @@ export class DriftVaultsClient {
 		if (this.disableCache) {
 			return;
 		}
-		this._cache = new DriftWebsocketSubscriber(
+		this._cache = new DriftVaultsWebsocketSubscriber(
 			program,
 			{
 				filters: [

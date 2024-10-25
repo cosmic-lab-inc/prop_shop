@@ -8,7 +8,11 @@
     ]
   },
   "scripts": {
-    "clean": "yes | pnpm --filter prop-shop-app clean && pnpm --filter @cosmic-lab/prop-shop-sdk clean && rm -rf node_modules",
+    "clean:app": "pnpm --filter prop-shop-app clean",
+    "clean:sdk": "pnpm --filter @cosmic-lab/prop-shop-sdk clean",
+    "clean:examples": "pnpm --filter @cosmic-lab/prop-shop-examples clean",
+    "clean:root": "rm -rf node_modules",
+    "clean": "pnpm clean:app && pnpm clean:sdk && pnpm clean:examples && pnpm clean:root",
     "lint": "prettier --write \"./**/*.{ts,tsx}\" --loglevel silent",
     "prettify:tests": "prettier --write './tests/**/*.ts'",
     "prettify:app": "pnpm prettify:tests && pnpm --filter prop-shop-app prettify:fix",
@@ -43,7 +47,7 @@
     "@coral-xyz/anchor": "0.28.0",
     "@cosmic-lab/data-source": "^0.7.4",
     "@drift-labs/vaults-sdk": "0.1.468",
-    "@cosmic-lab/phoenix-vaults-sdk": "^0.1.6",
+    "@cosmic-lab/phoenix-vaults-sdk": "^0.1.7",
     "@ellipsis-labs/phoenix-sdk": "2.0.3",
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",

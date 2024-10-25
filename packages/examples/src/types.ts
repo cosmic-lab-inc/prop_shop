@@ -1,10 +1,10 @@
-import {UiL3Level} from '@cosmic-lab/prop-shop-sdk';
+import {UiL2Level} from '@cosmic-lab/prop-shop-sdk';
 import {MarketType} from '@drift-labs/sdk';
 import {err, ok, Result} from 'neverthrow';
 
 export interface MarketPriceInfo {
-  bid: UiL3Level;
-  ask: UiL3Level;
+  bid: UiL2Level;
+  ask: UiL2Level;
   oracle: number;
 }
 

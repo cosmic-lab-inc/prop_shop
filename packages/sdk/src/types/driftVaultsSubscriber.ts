@@ -5,7 +5,7 @@ import { DriftVaults, Vault, VaultDepositor } from '@drift-labs/vaults-sdk';
 import { Buffer } from 'buffer';
 import { Data } from './misc';
 
-export interface DriftSubscriber {
+export interface DriftVaultsSubscriber {
 	getAccount(
 		accountName: keyof AccountNamespace<DriftVaults>,
 		key: PublicKey

@@ -5,7 +5,7 @@ import { Investor, PhoenixVaults, Vault } from '@cosmic-lab/phoenix-vaults-sdk';
 import { Buffer } from 'buffer';
 import { Data } from './misc';
 
-export interface PhoenixSubscriber {
+export interface PhoenixVaultsSubscriber {
 	getAccount(
 		accountName: keyof AccountNamespace<PhoenixVaults>,
 		key: PublicKey

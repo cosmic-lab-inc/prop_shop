@@ -1,6 +1,6 @@
 {
   "name": "@cosmic-lab/prop-shop-sdk",
-  "version": "0.2.17",
+  "version": "0.2.19",
   "author": "Drew Riester <epochsolana@gmail.com>",
   "description": "Frontend client for Prop Shop",
   "main": "src/index.ts",
@@ -17,7 +17,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",
     "@cosmic-lab/data-source": "^0.7.4",
-    "@cosmic-lab/phoenix-vaults-sdk": "^0.1.6",
+    "@cosmic-lab/phoenix-vaults-sdk": "^0.1.7",
     "@drift-labs/sdk": "2.96.0-beta.14",
     "@drift-labs/vaults-sdk": "0.1.468",
     "@ellipsis-labs/phoenix-sdk": "2.0.3"
